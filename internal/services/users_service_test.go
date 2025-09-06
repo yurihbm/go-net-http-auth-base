@@ -1,0 +1,210 @@
+package services_test
+
+import (
+	"errors"
+	"testing"
+
+	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/mocks"
+	"go-net-http-auth-base/internal/services"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"golang.org/x/crypto/bcrypt"
+)
+
+func TestNewUserService(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo)
+	assert.NotNil(t, service)
+}
+
+func TestUsersService_GetByUUID(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo)
+
+	t.Run("success", func(t *testing.T) {
+		user := &domain.User{UUID: "some-uuid", Name: "Test User"}
+		repo.On("FindByUUID", "some-uuid").Return(user, nil).Once()
+
+		result, err := service.GetByUUID("some-uuid")
+
+		assert.NoError(t, err)
+		assert.Equal(t, user, result)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		repo.On("FindByUUID", "not-found-uuid").Return(nil, errors.New("not found")).Once()
+
+		result, err := service.GetByUUID("not-found-uuid")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		repo.AssertExpectations(t)
+	})
+}
+
+func TestUsersService_Create(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo)
+
+	t.Run("success with email auth", func(t *testing.T) {
+		password := "password123"
+		dto := &domain.CreateUserDTO{
+			Name:       "Test User",
+			Email:      "test@example.com",
+			AuthMethod: domain.AuthMethodEmail,
+			Password:   &password,
+		}
+
+		repo.On("Create", mock.AnythingOfType("*domain.User")).Return(nil).Once().Run(func(args mock.Arguments) {
+			userArg := args.Get(0).(*domain.User)
+			assert.Equal(t, dto.Name, userArg.Name)
+			assert.Equal(t, dto.Email, userArg.Email)
+			assert.Equal(t, dto.AuthMethod, userArg.AuthMethod)
+			err := bcrypt.CompareHashAndPassword([]byte(userArg.PasswordHash), []byte(password))
+			assert.NoError(t, err)
+		})
+
+		user, err := service.Create(dto)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, user)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("success with google auth", func(t *testing.T) {
+		dto := &domain.CreateUserDTO{
+			Name:       "Test User",
+			Email:      "test@example.com",
+			AuthMethod: domain.AuthMethodGoogle,
+		}
+
+		repo.On("Create", mock.AnythingOfType("*domain.User")).Return(nil).Once().Run(func(args mock.Arguments) {
+			userArg := args.Get(0).(*domain.User)
+			assert.Equal(t, dto.Name, userArg.Name)
+			assert.Equal(t, dto.Email, userArg.Email)
+			assert.Equal(t, dto.AuthMethod, userArg.AuthMethod)
+			assert.Empty(t, userArg.PasswordHash)
+		})
+
+		user, err := service.Create(dto)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, user)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("email auth without password", func(t *testing.T) {
+		dto := &domain.CreateUserDTO{
+			Name:       "Test User",
+			Email:      "test@example.com",
+			AuthMethod: domain.AuthMethodEmail,
+		}
+
+		user, err := service.Create(dto)
+
+		assert.Error(t, err)
+		assert.Equal(t, "user.create.password_required", err.Error())
+		assert.Nil(t, user)
+	})
+
+	t.Run("repository create error", func(t *testing.T) {
+		password := "password123"
+		dto := &domain.CreateUserDTO{
+			Name:       "Test User",
+			Email:      "test@example.com",
+			AuthMethod: domain.AuthMethodEmail,
+			Password:   &password,
+		}
+
+		repo.On("Create", mock.AnythingOfType("*domain.User")).Return(errors.New("db error")).Once()
+
+		user, err := service.Create(dto)
+
+		assert.Error(t, err)
+		assert.Equal(t, "db error", err.Error())
+		assert.Nil(t, user)
+		repo.AssertExpectations(t)
+	})
+}
+
+func TestUsersService_Update(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo)
+	uuid := "some-uuid"
+	originalUser := &domain.User{
+		UUID:  uuid,
+		Name:  "Original Name",
+		Email: "original@example.com",
+	}
+
+	t.Run("success", func(t *testing.T) {
+		newName := "New Name"
+		newEmail := "new@example.com"
+		dto := &domain.UserUpdateDTO{
+			Name:  &newName,
+			Email: &newEmail,
+		}
+
+		repo.On("FindByUUID", uuid).Return(originalUser, nil).Once()
+		repo.On("Update", mock.MatchedBy(func(u *domain.User) bool {
+			return u.Name == newName && u.Email == newEmail
+		})).Return(nil).Once()
+
+		err := service.Update(uuid, dto)
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("user not found", func(t *testing.T) {
+		dto := &domain.UserUpdateDTO{}
+		repo.On("FindByUUID", "not-found").Return(nil, errors.New("not found")).Once()
+
+		err := service.Update("not-found", dto)
+
+		assert.Error(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("update fails", func(t *testing.T) {
+		newName := "New Name"
+		dto := &domain.UserUpdateDTO{Name: &newName}
+
+		repo.On("FindByUUID", uuid).Return(originalUser, nil).Once()
+		repo.On("Update", mock.AnythingOfType("*domain.User")).Return(errors.New("db error")).Once()
+
+		err := service.Update(uuid, dto)
+
+		assert.Error(t, err)
+		assert.Equal(t, "db error", err.Error())
+		repo.AssertExpectations(t)
+	})
+}
+
+func TestUsersService_Delete(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo)
+	uuid := "some-uuid"
+
+	t.Run("success", func(t *testing.T) {
+		repo.On("Delete", uuid).Return(nil).Once()
+
+		err := service.Delete(uuid)
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("delete fails", func(t *testing.T) {
+		repo.On("Delete", uuid).Return(errors.New("db error")).Once()
+
+		err := service.Delete(uuid)
+
+		assert.Error(t, err)
+		assert.Equal(t, "db error", err.Error())
+		repo.AssertExpectations(t)
+	})
+}
