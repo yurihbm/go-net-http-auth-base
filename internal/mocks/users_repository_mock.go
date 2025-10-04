@@ -35,3 +35,11 @@ func (m *UsersRepositoryMock) Delete(uuid string) error {
 	return args.Error(0)
 }
 
+func (m *UsersRepositoryMock) FindByEmail(email string) (*domain.User, error) {
+	args := m.Called(email)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+

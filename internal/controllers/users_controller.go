@@ -6,25 +6,29 @@ import (
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/middlewares"
 )
 
 type UsersController struct {
-	userService domain.UsersService
+	userService    domain.UsersService
+	authMiddleware middlewares.Middleware
 }
 
 var _ Controller = (*UsersController)(nil)
 
-func NewUsersController(service domain.UsersService) *UsersController {
+func NewUsersController(service domain.UsersService, authMiddleware middlewares.Middleware) *UsersController {
 	return &UsersController{
-		userService: service,
+		userService:    service,
+		authMiddleware: authMiddleware,
 	}
 }
 
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users", c.CreateUser)
-	router.HandleFunc("GET /users/{uuid}", c.GetUserByUUID)
-	router.HandleFunc("PUT /users/{uuid}", c.UpdateUser)
-	router.HandleFunc("DELETE /users/{uuid}", c.DeleteUser)
+	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
+	router.HandleFunc("GET /users/{uuid}", c.authMiddleware.Use(c.GetUserByUUID))
+	router.HandleFunc("PUT /users/{uuid}", c.authMiddleware.Use(c.UpdateUser))
+	router.HandleFunc("DELETE /users/{uuid}", c.authMiddleware.Use(c.DeleteUser))
 }
 
 func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +55,31 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 	api.WriteJSONResponse(w, http.StatusCreated, api.ResponseBody[domain.User]{
 		Data:    *user,
 		Message: "user.create.success",
+	})
+}
+
+func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
+	userUUID, ok := r.Context().Value(middlewares.UserUUIDKey).(string)
+	if !ok {
+		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
+			Message: "user.get_me.unauthorized",
+			Error:   "user UUID not found in context",
+		})
+		return
+	}
+
+	user, err := c.userService.GetByUUID(userUUID)
+	if err != nil {
+		api.WriteJSONResponse(w, http.StatusNotFound, api.ResponseBody[any]{
+			Message: "user.get_me.not_found",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
+		Data:    *user,
+		Message: "user.get_me.success",
 	})
 }
 

@@ -38,6 +38,7 @@ type UsersService interface {
 
 type UsersRepository interface {
 	FindByUUID(uuid string) (*User, error)
+	FindByEmail(email string) (*User, error)
 	Create(user *User) error
 	Update(user *User) error
 	Delete(uuid string) error

@@ -21,6 +21,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	factories.UsersFactory(conn).RegisterRoutes(mux)
+	factories.AuthFactory(conn).RegisterRoutes(mux)
 
 	log.Println("Server listening on port :8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {

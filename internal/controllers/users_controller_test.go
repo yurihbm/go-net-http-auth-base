@@ -16,12 +16,32 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+func newControllerWithMocks() (*controllers.UsersController, *mocks.UsersServiceMock, *mocks.AuthMiddlewareMock) {
+	serviceMock := new(mocks.UsersServiceMock)
+	middlewareMock := new(mocks.AuthMiddlewareMock)
+	controller := controllers.NewUsersController(serviceMock, middlewareMock)
+
+	return controller, serviceMock, middlewareMock
+}
+
 func getControllerArgs(method string, endpoint string, body any) (*httptest.ResponseRecorder, *http.Request) {
 	buf, _ := json.Marshal(body)
 	req, _ := http.NewRequest(method, endpoint, bytes.NewBuffer(buf))
 	w := httptest.NewRecorder()
 
 	return w, req
+}
+
+func TestRegisterRoutes(t *testing.T) {
+	t.Run("should register routes with auth middleware", func(t *testing.T) {
+		router := http.NewServeMux()
+		controller, _, authMiddleware := newControllerWithMocks()
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(4)
+
+		controller.RegisterRoutes(router)
+
+		authMiddleware.AssertNumberOfCalls(t, "Use", 4)
+	})
 }
 
 func TestCreateUser(t *testing.T) {
@@ -36,8 +56,7 @@ func TestCreateUser(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
 
 		serviceMock.On("Create", &dto).Return(user, nil)
 		w, req := getControllerArgs(
@@ -58,8 +77,7 @@ func TestCreateUser(t *testing.T) {
 	})
 
 	t.Run("bad request", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
 
 		w, req := getControllerArgs(
 			"POST",
@@ -80,8 +98,8 @@ func TestCreateUser(t *testing.T) {
 	})
 
 	t.Run("service error", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
+
 		serviceMock.On("Create", &dto).Return(nil, assert.AnError)
 
 		w, req := getControllerArgs(
@@ -111,8 +129,8 @@ func TestGetUserByUUID(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
+
 		serviceMock.On("GetByUUID", mock.Anything).Return(user, nil)
 
 		w, req := getControllerArgs("GET", "/users/", nil)
@@ -129,8 +147,8 @@ func TestGetUserByUUID(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
+
 		serviceMock.On("GetByUUID", mock.Anything).Return(nil, assert.AnError)
 
 		w, req := getControllerArgs("GET", "/users/", nil)
@@ -153,8 +171,8 @@ func TestUpdateUser(t *testing.T) {
 	dto := domain.UserUpdateDTO{Name: &name}
 
 	t.Run("success", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
+
 		serviceMock.On("Update", uuid, &dto).Return(nil)
 
 		w, req := getControllerArgs("PUT", "/users/", dto)
@@ -167,8 +185,7 @@ func TestUpdateUser(t *testing.T) {
 	})
 
 	t.Run("bad request", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
 
 		w, req := getControllerArgs("PUT", "/users/", struct {
 			Test string
@@ -182,8 +199,8 @@ func TestUpdateUser(t *testing.T) {
 	})
 
 	t.Run("service error", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
+
 		serviceMock.On("Update", uuid, &dto).Return(assert.AnError)
 
 		w, req := getControllerArgs("PUT", "/users/", dto)
@@ -201,8 +218,8 @@ func TestDeleteUser(t *testing.T) {
 	uuid := "test-uuid"
 
 	t.Run("success", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
+
 		serviceMock.On("Delete", "test-uuid").Return(nil)
 
 		w, req := getControllerArgs("DELETE", "/users/", nil)
@@ -215,8 +232,8 @@ func TestDeleteUser(t *testing.T) {
 	})
 
 	t.Run("service error", func(t *testing.T) {
-		serviceMock := new(mocks.UsersServiceMock)
-		controller := controllers.NewUsersController(serviceMock)
+		controller, serviceMock, _ := newControllerWithMocks()
+
 		serviceMock.On("Delete", "test-uuid").Return(assert.AnError)
 
 		w, req := getControllerArgs("DELETE", "/users/", nil)

@@ -33,6 +33,15 @@ func (r *UsersPostgresRepository) FindByUUID(uuidStr string) (*domain.User, erro
 	return toDomainUser(user), nil
 }
 
+func (r *UsersPostgresRepository) FindByEmail(email string) (*domain.User, error) {
+	user, err := r.q.GetUserByEmail(context.Background(), email)
+	if err != nil {
+		return nil, err
+	}
+
+	return toDomainUser(user), nil
+}
+
 func (r *UsersPostgresRepository) Create(user *domain.User) error {
 	params := postgres.CreateUserParams{
 		Name:       user.Name,
