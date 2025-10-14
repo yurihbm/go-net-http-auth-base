@@ -1,10 +1,8 @@
 package controllers_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
@@ -16,7 +14,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func newControllerWithMocks() (*controllers.UsersController, *mocks.UsersServiceMock, *mocks.AuthMiddlewareMock) {
+func newTestUsersController() (*controllers.UsersController, *mocks.UsersServiceMock, *mocks.AuthMiddlewareMock) {
 	serviceMock := new(mocks.UsersServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
 	controller := controllers.NewUsersController(serviceMock, middlewareMock)
@@ -24,18 +22,10 @@ func newControllerWithMocks() (*controllers.UsersController, *mocks.UsersService
 	return controller, serviceMock, middlewareMock
 }
 
-func getControllerArgs(method string, endpoint string, body any) (*httptest.ResponseRecorder, *http.Request) {
-	buf, _ := json.Marshal(body)
-	req, _ := http.NewRequest(method, endpoint, bytes.NewBuffer(buf))
-	w := httptest.NewRecorder()
-
-	return w, req
-}
-
-func TestRegisterRoutes(t *testing.T) {
+func TestUsersControllerRegisterRoutes(t *testing.T) {
 	t.Run("should register routes with auth middleware", func(t *testing.T) {
 		router := http.NewServeMux()
-		controller, _, authMiddleware := newControllerWithMocks()
+		controller, _, authMiddleware := newTestUsersController()
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(4)
 
 		controller.RegisterRoutes(router)
@@ -56,7 +46,7 @@ func TestCreateUser(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		serviceMock.On("Create", &dto).Return(user, nil)
 		w, req := getControllerArgs(
@@ -77,7 +67,7 @@ func TestCreateUser(t *testing.T) {
 	})
 
 	t.Run("bad request", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		w, req := getControllerArgs(
 			"POST",
@@ -98,7 +88,7 @@ func TestCreateUser(t *testing.T) {
 	})
 
 	t.Run("service error", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		serviceMock.On("Create", &dto).Return(nil, assert.AnError)
 
@@ -129,7 +119,7 @@ func TestGetUserByUUID(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		serviceMock.On("GetByUUID", mock.Anything).Return(user, nil)
 
@@ -147,7 +137,7 @@ func TestGetUserByUUID(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		serviceMock.On("GetByUUID", mock.Anything).Return(nil, assert.AnError)
 
@@ -171,7 +161,7 @@ func TestUpdateUser(t *testing.T) {
 	dto := domain.UserUpdateDTO{Name: &name}
 
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		serviceMock.On("Update", uuid, &dto).Return(nil)
 
@@ -185,7 +175,7 @@ func TestUpdateUser(t *testing.T) {
 	})
 
 	t.Run("bad request", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		w, req := getControllerArgs("PUT", "/users/", struct {
 			Test string
@@ -199,7 +189,7 @@ func TestUpdateUser(t *testing.T) {
 	})
 
 	t.Run("service error", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		serviceMock.On("Update", uuid, &dto).Return(assert.AnError)
 
@@ -218,7 +208,7 @@ func TestDeleteUser(t *testing.T) {
 	uuid := "test-uuid"
 
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		serviceMock.On("Delete", "test-uuid").Return(nil)
 
@@ -232,7 +222,7 @@ func TestDeleteUser(t *testing.T) {
 	})
 
 	t.Run("service error", func(t *testing.T) {
-		controller, serviceMock, _ := newControllerWithMocks()
+		controller, serviceMock, _ := newTestUsersController()
 
 		serviceMock.On("Delete", "test-uuid").Return(assert.AnError)
 

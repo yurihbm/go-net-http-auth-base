@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"net/http"
+
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 )
@@ -55,12 +56,10 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		RefreshToken string `json:"refresh_token"`
-	}
+	var dto domain.RefreshTokenDTO
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil {
+	if err := decoder.Decode(&dto); err != nil {
 		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
 			Message: "auth.refresh.bad_request",
 			Error:   err.Error(),
@@ -68,7 +67,7 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, newRefreshToken, err := c.authService.RefreshToken(body.RefreshToken)
+	accessToken, newRefreshToken, err := c.authService.RefreshToken(dto.RefreshToken)
 	if err != nil {
 		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 			Message: "auth.refresh.failed",

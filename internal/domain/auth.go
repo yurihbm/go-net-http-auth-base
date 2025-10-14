@@ -5,6 +5,10 @@ type AuthDTO struct {
 	Password string `json:"password"`
 }
 
+type RefreshTokenDTO struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
 type AuthService interface {
 	Authenticate(dto AuthDTO) (string, string, error)
 	VerifyToken(token string) (string, error)
