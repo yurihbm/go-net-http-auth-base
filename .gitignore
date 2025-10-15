@@ -11,6 +11,7 @@
 *.log
 *.tmp
 bin/
+tmp/
 
 # Output of the go command
 gowork.sum
