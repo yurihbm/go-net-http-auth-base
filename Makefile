@@ -5,7 +5,7 @@ TOOLS = \
 	github.com/air-verse/air@v1.62.0 \
 	github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
 
-.PHONY: install-tools tidy setup build dev migrate-create migrate-up migrate-down sqlc-gen
+.PHONY: install-tools tidy setup build migrate-create migrate-up migrate-down sqlc-gen
 
 install-tools:
 	@echo "Installing tools..."
