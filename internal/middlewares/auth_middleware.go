@@ -3,7 +3,6 @@ package middlewares
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
@@ -27,8 +26,8 @@ func NewAuthMiddleware(authService domain.AuthService) *AuthMiddleware {
 
 func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
+		accessToken, err := r.Cookie("access_token")
+		if err != nil {
 			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 				Message: "auth.unauthorized",
 				Error:   "missing authorization header",
@@ -36,17 +35,8 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		if tokenString == authHeader {
-			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-				Message: "auth.unauthorized",
-				Error:   "invalid token format",
-			})
-			return
-		}
-
 		userUUID, err := m.authService.VerifyToken(domain.VerifyTokenDTO{
-			Token:    tokenString,
+			Token:    accessToken.Value,
 			Audience: domain.TokenAudienceAccess,
 		})
 		if err != nil {

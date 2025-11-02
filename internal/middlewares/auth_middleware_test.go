@@ -56,9 +56,12 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		// Wrap the handler with middleware
 		wrappedHandler := middleware.Use(nextHandler)
 
-		// Create request with authorization header
+		// Create request with access_token cookie
 		req := httptest.NewRequest("GET", "/test", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.AddCookie(&http.Cookie{
+			Name:  "access_token",
+			Value: token,
+		})
 		w := httptest.NewRecorder()
 
 		// Execute the handler
@@ -83,7 +86,7 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		wrappedHandler := middleware.Use(nextHandler)
 
 		req := httptest.NewRequest("GET", "/test", nil)
-		// No Authorization header set
+		// No cookie set
 		w := httptest.NewRecorder()
 
 		wrappedHandler.ServeHTTP(w, req)
@@ -96,33 +99,6 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "auth.unauthorized", response.Message)
 		assert.Equal(t, "missing authorization header", response.Error)
-		serviceMock.AssertNotCalled(t, "VerifyToken", mock.Anything)
-	})
-
-	t.Run("unauthorized - invalid token format (missing Bearer prefix)", func(t *testing.T) {
-		middleware, serviceMock := getTestAuthMiddleware()
-
-		handlerCalled := false
-		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			handlerCalled = true
-		})
-
-		wrappedHandler := middleware.Use(nextHandler)
-
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.Header.Set("Authorization", "InvalidTokenFormat")
-		w := httptest.NewRecorder()
-
-		wrappedHandler.ServeHTTP(w, req)
-
-		assert.False(t, handlerCalled)
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-		var response api.ResponseBody[any]
-		err := json.Unmarshal(w.Body.Bytes(), &response)
-		assert.NoError(t, err)
-		assert.Equal(t, "auth.unauthorized", response.Message)
-		assert.Equal(t, "invalid token format", response.Error)
 		serviceMock.AssertNotCalled(t, "VerifyToken", mock.Anything)
 	})
 
@@ -144,7 +120,10 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		wrappedHandler := middleware.Use(nextHandler)
 
 		req := httptest.NewRequest("GET", "/test", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.AddCookie(&http.Cookie{
+			Name:  "access_token",
+			Value: token,
+		})
 		w := httptest.NewRecorder()
 
 		wrappedHandler.ServeHTTP(w, req)
@@ -180,7 +159,10 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		wrappedHandler := middleware.Use(nextHandler)
 
 		req := httptest.NewRequest("GET", "/test", nil)
-		req.Header.Set("Authorization", "Bearer ")
+		req.AddCookie(&http.Cookie{
+			Name:  "access_token",
+			Value: "",
+		})
 		w := httptest.NewRecorder()
 
 		wrappedHandler.ServeHTTP(w, req)
@@ -225,14 +207,20 @@ func TestAuthMiddlewareUse(t *testing.T) {
 
 		// First request
 		req1 := httptest.NewRequest("GET", "/test", nil)
-		req1.Header.Set("Authorization", "Bearer "+token1)
+		req1.AddCookie(&http.Cookie{
+			Name:  "access_token",
+			Value: token1,
+		})
 		w1 := httptest.NewRecorder()
 		wrappedHandler.ServeHTTP(w1, req1)
 		assert.Equal(t, http.StatusOK, w1.Code)
 
 		// Second request
 		req2 := httptest.NewRequest("GET", "/test", nil)
-		req2.Header.Set("Authorization", "Bearer "+token2)
+		req2.AddCookie(&http.Cookie{
+			Name:  "access_token",
+			Value: token2,
+		})
 		w2 := httptest.NewRecorder()
 		wrappedHandler.ServeHTTP(w2, req2)
 		assert.Equal(t, http.StatusOK, w2.Code)
