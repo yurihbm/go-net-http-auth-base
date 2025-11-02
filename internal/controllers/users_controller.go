@@ -11,12 +11,12 @@ import (
 
 type UsersController struct {
 	userService    domain.UsersService
-	authMiddleware middlewares.Middleware
+	authMiddleware middlewares.HandlerMiddleware
 }
 
 var _ Controller = (*UsersController)(nil)
 
-func NewUsersController(service domain.UsersService, authMiddleware middlewares.Middleware) *UsersController {
+func NewUsersController(service domain.UsersService, authMiddleware middlewares.HandlerMiddleware) *UsersController {
 	return &UsersController{
 		userService:    service,
 		authMiddleware: authMiddleware,

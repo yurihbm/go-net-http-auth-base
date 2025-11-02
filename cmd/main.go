@@ -27,9 +27,12 @@ func main() {
 	factories.UsersFactory(conn).RegisterRoutes(mux)
 	factories.AuthFactory(conn).RegisterRoutes(mux)
 
+	corsMiddleware := factories.CORSFactory()
+	corsHandler := corsMiddleware.Use(mux)
+
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: mux,
+		Handler: corsHandler,
 	}
 
 	go func() {

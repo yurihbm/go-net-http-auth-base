@@ -19,7 +19,7 @@ type AuthMiddleware struct {
 	authService domain.AuthService
 }
 
-var _ Middleware = (*AuthMiddleware)(nil)
+var _ HandlerMiddleware = (*AuthMiddleware)(nil)
 
 func NewAuthMiddleware(authService domain.AuthService) *AuthMiddleware {
 	return &AuthMiddleware{authService: authService}
