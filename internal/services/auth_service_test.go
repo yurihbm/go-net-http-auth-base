@@ -16,14 +16,14 @@ import (
 )
 
 func TestNewAuthService(t *testing.T) {
-	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewAuthService(repo)
+	usersService := new(mocks.UsersServiceMock)
+	service := services.NewAuthService(usersService)
 	assert.NotNil(t, service)
 }
 
 func TestAuthService_CredentialsLogin(t *testing.T) {
-	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewAuthService(repo)
+	usersService := new(mocks.UsersServiceMock)
+	service := services.NewAuthService(usersService)
 
 	// Set JWT_SECRET for token generation
 	_ = os.Setenv("JWT_SECRET", "test-secret-key")
@@ -46,14 +46,14 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 			Password: password,
 		}
 
-		repo.On("FindByEmail", dto.Email).Return(user, nil).Once()
+		usersService.On("GetByEmail", dto.Email).Return(user, nil).Once()
 
 		tokens, err := service.CredentialsLogin(dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, tokens.AccessToken)
 		assert.NotEmpty(t, tokens.RefreshToken)
-		repo.AssertExpectations(t)
+		usersService.AssertExpectations(t)
 	})
 
 	t.Run("user not found", func(t *testing.T) {
@@ -62,7 +62,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 			Password: "password123",
 		}
 
-		repo.On("FindByEmail", dto.Email).Return(nil, nil).Once()
+		usersService.On("GetByEmail", dto.Email).Return(nil, nil).Once()
 
 		tokens, err := service.CredentialsLogin(dto)
 
@@ -70,7 +70,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 		assert.Equal(t, "auth.authenticate.user_not_found", err.Error())
 		assert.Empty(t, tokens.AccessToken)
 		assert.Empty(t, tokens.RefreshToken)
-		repo.AssertExpectations(t)
+		usersService.AssertExpectations(t)
 	})
 
 	t.Run("repository error", func(t *testing.T) {
@@ -79,7 +79,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 			Password: "password123",
 		}
 
-		repo.On("FindByEmail", dto.Email).Return(nil, errors.New("db error")).Once()
+		usersService.On("GetByEmail", dto.Email).Return(nil, errors.New("db error")).Once()
 
 		tokens, err := service.CredentialsLogin(dto)
 
@@ -87,7 +87,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 		assert.Equal(t, "auth.authenticate.user_not_found", err.Error())
 		assert.Empty(t, tokens.AccessToken)
 		assert.Empty(t, tokens.RefreshToken)
-		repo.AssertExpectations(t)
+		usersService.AssertExpectations(t)
 	})
 
 	t.Run("invalid credentials", func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 			Password: "wrong-password",
 		}
 
-		repo.On("FindByEmail", dto.Email).Return(user, nil).Once()
+		usersService.On("GetByEmail", dto.Email).Return(user, nil).Once()
 
 		tokens, err := service.CredentialsLogin(dto)
 
@@ -112,13 +112,13 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 		assert.Equal(t, "auth.authenticate.invalid_credentials", err.Error())
 		assert.Empty(t, tokens.AccessToken)
 		assert.Empty(t, tokens.RefreshToken)
-		repo.AssertExpectations(t)
+		usersService.AssertExpectations(t)
 	})
 }
 
 func TestAuthService_VerifyToken(t *testing.T) {
-	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewAuthService(repo)
+	usersService := new(mocks.UsersServiceMock)
+	service := services.NewAuthService(usersService)
 
 	// Set JWT_SECRET for token generation/verification
 	_ = os.Setenv("JWT_SECRET", "test-secret-key")
@@ -239,8 +239,8 @@ func TestAuthService_VerifyToken(t *testing.T) {
 }
 
 func TestAuthService_RefreshToken(t *testing.T) {
-	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewAuthService(repo)
+	usersService := new(mocks.UsersServiceMock)
+	service := services.NewAuthService(usersService)
 
 	// Set JWT_SECRET for token generation/verification
 	_ = os.Setenv("JWT_SECRET", "test-secret-key")
@@ -319,8 +319,8 @@ func TestAuthService_RefreshToken(t *testing.T) {
 }
 
 func TestAuthService_GenerateToken(t *testing.T) {
-	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewAuthService(repo)
+	usersService := new(mocks.UsersServiceMock)
+	service := services.NewAuthService(usersService)
 
 	// Set JWT_SECRET for token generation
 	_ = os.Setenv("JWT_SECRET", "test-secret-key")

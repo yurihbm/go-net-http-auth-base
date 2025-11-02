@@ -43,7 +43,7 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := c.userService.Create(&dto)
+	user, err := c.userService.Create(dto)
 	if err != nil {
 		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
 			Message: "user.create.failed",
@@ -117,7 +117,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.userService.Update(uuid, &dto); err != nil {
+	if err := c.userService.Update(uuid, dto); err != nil {
 		api.WriteJSONResponse(w, http.StatusInternalServerError,
 			api.ResponseBody[any]{
 				Message: "user.update.failed",

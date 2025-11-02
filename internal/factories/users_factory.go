@@ -12,7 +12,7 @@ import (
 func UsersFactory(conn *pgx.Conn) *controllers.UsersController {
 	userRepository := repositories.NewUsersPostgresRepository(conn)
 	userService := services.NewUserService(userRepository)
-	authService := services.NewAuthService(userRepository)
+	authService := services.NewAuthService(userService)
 	authMiddleware := middlewares.NewAuthMiddleware(authService)
 	return controllers.NewUsersController(userService, authMiddleware)
 }

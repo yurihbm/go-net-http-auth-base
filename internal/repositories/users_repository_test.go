@@ -26,31 +26,31 @@ func TestUsersPostgresRepository(t *testing.T) {
 
 	t.Run("Create", func(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
-			user := &domain.User{
+			user := domain.User{
 				Name:         "John Doe",
 				Email:        "john.doe@example.com",
 				PasswordHash: "hashed_password",
-				AuthMethod:   "email",
 			}
 
-			err := repo.Create(user)
+			var err error
+			createdUser, err = repo.Create(user)
 			require.NoError(t, err)
-			assert.NotEmpty(t, user.UUID)
-			assert.NotEqual(t, user.CreatedAt, 0)
-			assert.NotEqual(t, user.UpdatedAt, 0)
-
-			createdUser = user // Save for later tests
+			assert.NotEmpty(t, createdUser.UUID)
+			assert.NotEqual(t, createdUser.CreatedAt, 0)
+			assert.NotEqual(t, createdUser.UpdatedAt, 0)
+			assert.Equal(t, user.Name, createdUser.Name)
+			assert.Equal(t, user.Email, createdUser.Email)
+			assert.Equal(t, user.PasswordHash, createdUser.PasswordHash)
 		})
 
 		t.Run("duplicate email", func(t *testing.T) {
-			user := &domain.User{
+			user := domain.User{
 				Name:         "Jane Doe",
 				Email:        "john.doe@example.com", // Same email
 				PasswordHash: "another_password",
-				AuthMethod:   "email",
 			}
 
-			err := repo.Create(user)
+			_, err := repo.Create(user)
 			assert.Error(t, err)
 		})
 	})
@@ -84,7 +84,7 @@ func TestUsersPostgresRepository(t *testing.T) {
 			createdUser.Name = "John Doe Updated"
 			createdUser.Email = "john.doe.updated@example.com"
 
-			err := repo.Update(createdUser)
+			err := repo.Update(*createdUser)
 			require.NoError(t, err)
 
 			updatedUser, err := repo.FindByUUID(createdUser.UUID)
@@ -95,7 +95,7 @@ func TestUsersPostgresRepository(t *testing.T) {
 		})
 
 		t.Run("invalid uuid", func(t *testing.T) {
-			invalidUser := &domain.User{UUID: "invalid"}
+			invalidUser := domain.User{UUID: "invalid"}
 			err := repo.Update(invalidUser)
 			assert.Error(t, err)
 		})

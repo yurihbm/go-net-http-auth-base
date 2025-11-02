@@ -20,21 +20,6 @@ func (m *UsersRepositoryMock) FindByUUID(uuid string) (*domain.User, error) {
 	return nil, args.Error(1)
 }
 
-func (m *UsersRepositoryMock) Create(user *domain.User) error {
-	args := m.Called(user)
-	return args.Error(0)
-}
-
-func (m *UsersRepositoryMock) Update(user *domain.User) error {
-	args := m.Called(user)
-	return args.Error(0)
-}
-
-func (m *UsersRepositoryMock) Delete(uuid string) error {
-	args := m.Called(uuid)
-	return args.Error(0)
-}
-
 func (m *UsersRepositoryMock) FindByEmail(email string) (*domain.User, error) {
 	args := m.Called(email)
 	if args.Get(0) != nil {
@@ -43,3 +28,20 @@ func (m *UsersRepositoryMock) FindByEmail(email string) (*domain.User, error) {
 	return nil, args.Error(1)
 }
 
+func (m *UsersRepositoryMock) Create(user domain.User) (*domain.User, error) {
+	args := m.Called(user)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *UsersRepositoryMock) Update(user domain.User) error {
+	args := m.Called(user)
+	return args.Error(0)
+}
+
+func (m *UsersRepositoryMock) Delete(uuid string) error {
+	args := m.Called(uuid)
+	return args.Error(0)
+}

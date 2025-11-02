@@ -20,7 +20,15 @@ func (m *UsersServiceMock) GetByUUID(uuid string) (*domain.User, error) {
 	return nil, args.Error(1)
 }
 
-func (m *UsersServiceMock) Create(dto *domain.CreateUserDTO) (*domain.User, error) {
+func (m *UsersServiceMock) GetByEmail(email string) (*domain.User, error) {
+	args := m.Called(email)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *UsersServiceMock) Create(dto domain.CreateUserDTO) (*domain.User, error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {
 		return args.Get(0).(*domain.User), args.Error(1)
@@ -28,7 +36,7 @@ func (m *UsersServiceMock) Create(dto *domain.CreateUserDTO) (*domain.User, erro
 	return nil, args.Error(1)
 }
 
-func (m *UsersServiceMock) Update(uuid string, dto *domain.UserUpdateDTO) error {
+func (m *UsersServiceMock) Update(uuid string, dto domain.UserUpdateDTO) error {
 	args := m.Called(uuid, dto)
 	return args.Error(0)
 }

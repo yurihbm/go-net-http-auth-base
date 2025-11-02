@@ -14,17 +14,17 @@ import (
 const JWT_SECRET_KEY = "JWT_SECRET"
 
 type authService struct {
-	usersRepo domain.UsersRepository
+	usersService domain.UsersService
 }
 
-func NewAuthService(usersRepo domain.UsersRepository) domain.AuthService {
+func NewAuthService(usersService domain.UsersService) domain.AuthService {
 	return &authService{
-		usersRepo: usersRepo,
+		usersService: usersService,
 	}
 }
 
 func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.AuthTokens, error) {
-	user, err := s.usersRepo.FindByEmail(dto.Email)
+	user, err := s.usersService.GetByEmail(dto.Email)
 	if err != nil || user == nil {
 		return domain.AuthTokens{}, errors.New("auth.authenticate.user_not_found")
 	}

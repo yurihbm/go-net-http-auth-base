@@ -48,7 +48,7 @@ func TestCreateUser(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, _ := newTestUsersController()
 
-		serviceMock.On("Create", &dto).Return(user, nil)
+		serviceMock.On("Create", dto).Return(user, nil)
 		w, req := getControllerArgs(
 			"POST",
 			"/users/",
@@ -63,7 +63,7 @@ func TestCreateUser(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.Equal(t, response.Data, *user)
-		serviceMock.AssertCalled(t, "Create", &dto)
+		serviceMock.AssertCalled(t, "Create", dto)
 	})
 
 	t.Run("bad request", func(t *testing.T) {
@@ -90,7 +90,7 @@ func TestCreateUser(t *testing.T) {
 	t.Run("service error", func(t *testing.T) {
 		controller, serviceMock, _ := newTestUsersController()
 
-		serviceMock.On("Create", &dto).Return(nil, assert.AnError)
+		serviceMock.On("Create", dto).Return(nil, assert.AnError)
 
 		w, req := getControllerArgs(
 			"POST",
@@ -105,7 +105,7 @@ func TestCreateUser(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		serviceMock.AssertCalled(t, "Create", &dto)
+		serviceMock.AssertCalled(t, "Create", dto)
 	})
 
 }
@@ -163,7 +163,7 @@ func TestUpdateUser(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, _ := newTestUsersController()
 
-		serviceMock.On("Update", uuid, &dto).Return(nil)
+		serviceMock.On("Update", uuid, dto).Return(nil)
 
 		w, req := getControllerArgs("PUT", "/users/", dto)
 		req.SetPathValue("uuid", uuid)
@@ -171,7 +171,7 @@ func TestUpdateUser(t *testing.T) {
 		controller.UpdateUser(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		serviceMock.AssertCalled(t, "Update", uuid, &dto)
+		serviceMock.AssertCalled(t, "Update", uuid, dto)
 	})
 
 	t.Run("bad request", func(t *testing.T) {
@@ -191,7 +191,7 @@ func TestUpdateUser(t *testing.T) {
 	t.Run("service error", func(t *testing.T) {
 		controller, serviceMock, _ := newTestUsersController()
 
-		serviceMock.On("Update", uuid, &dto).Return(assert.AnError)
+		serviceMock.On("Update", uuid, dto).Return(assert.AnError)
 
 		w, req := getControllerArgs("PUT", "/users/", dto)
 		req.SetPathValue("uuid", uuid)
@@ -199,7 +199,7 @@ func TestUpdateUser(t *testing.T) {
 		controller.UpdateUser(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		serviceMock.AssertCalled(t, "Update", uuid, &dto)
+		serviceMock.AssertCalled(t, "Update", uuid, dto)
 	})
 
 }

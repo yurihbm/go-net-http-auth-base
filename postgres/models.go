@@ -11,46 +11,45 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type AuthMethodEnum string
+type OauthProvider string
 
 const (
-	AuthMethodEnumEmail  AuthMethodEnum = "email"
-	AuthMethodEnumGoogle AuthMethodEnum = "google"
+	OauthProviderGoogle OauthProvider = "google"
 )
 
-func (e *AuthMethodEnum) Scan(src interface{}) error {
+func (e *OauthProvider) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = AuthMethodEnum(s)
+		*e = OauthProvider(s)
 	case string:
-		*e = AuthMethodEnum(s)
+		*e = OauthProvider(s)
 	default:
-		return fmt.Errorf("unsupported scan type for AuthMethodEnum: %T", src)
+		return fmt.Errorf("unsupported scan type for OauthProvider: %T", src)
 	}
 	return nil
 }
 
-type NullAuthMethodEnum struct {
-	AuthMethodEnum AuthMethodEnum
-	Valid          bool // Valid is true if AuthMethodEnum is not NULL
+type NullOauthProvider struct {
+	OauthProvider OauthProvider
+	Valid         bool // Valid is true if OauthProvider is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullAuthMethodEnum) Scan(value interface{}) error {
+func (ns *NullOauthProvider) Scan(value interface{}) error {
 	if value == nil {
-		ns.AuthMethodEnum, ns.Valid = "", false
+		ns.OauthProvider, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.AuthMethodEnum.Scan(value)
+	return ns.OauthProvider.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullAuthMethodEnum) Value() (driver.Value, error) {
+func (ns NullOauthProvider) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.AuthMethodEnum), nil
+	return string(ns.OauthProvider), nil
 }
 
 type User struct {
@@ -60,5 +59,13 @@ type User struct {
 	PasswordHash pgtype.Text
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
-	AuthMethod   AuthMethodEnum
+}
+
+type UserOauthProvider struct {
+	Uuid           pgtype.UUID
+	UserUuid       pgtype.UUID
+	Provider       OauthProvider
+	ProviderUserID string
+	ProviderEmail  string
+	CreatedAt      pgtype.Timestamptz
 }

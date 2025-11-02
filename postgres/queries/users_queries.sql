@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO users (name, email, password_hash, auth_method)
-    VALUES ($1, $2, $3, $4)
+INSERT INTO users (name, email, password_hash)
+    VALUES ($1, $2, $3)
 RETURNING
     *;
 
@@ -18,7 +18,7 @@ SELECT
 FROM
     users
 WHERE
-    email = $1;
+   email = $1;
 
 -- name: ListUsers :many
 SELECT
@@ -35,12 +35,13 @@ UPDATE
 SET
     name = COALESCE($2, name),
     email = COALESCE($3, email),
-    password_hash = COALESCE($4, password_hash),
-    auth_method = COALESCE($5, auth_method)
+    password_hash = COALESCE($4, password_hash)
 WHERE
     uuid = $1;
 
 -- name: DeleteUser :exec
-DELETE FROM users
-WHERE uuid = $1;
+DELETE FROM 
+    users
+WHERE 
+    uuid = $1;
 
