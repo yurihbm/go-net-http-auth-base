@@ -39,15 +39,15 @@ migrate-create:
 # Run database migrations
 migrate-up:
 	@echo "Running database migrations..."
-	migrate -database "$$DATABASE_URL" -path postgres/migrations up
+	migrate -database $(DATABASE_URL) -path postgres/migrations up
 
 # Run last database migration
 migrate-down:
 	@echo "Reverting last database migration..."
-	migrate -database "$$DATABASE_URL" -path postgres/migrations down 1
+	migrate -database $(DATABASE_URL) -path postgres/migrations down 1
 
 # Generate code with sqlc
 sqlc-gen:
 	@echo "Generating code with sqlc..."
-	sqlc generate
+	DATABASE_URL=$(DATABASE_URL) sqlc generate
 
