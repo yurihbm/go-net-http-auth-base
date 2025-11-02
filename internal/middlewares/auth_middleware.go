@@ -45,7 +45,10 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		userUUID, err := m.authService.VerifyToken(tokenString)
+		userUUID, err := m.authService.VerifyToken(domain.VerifyTokenDTO{
+			Token:    tokenString,
+			Audience: domain.TokenAudienceAccess,
+		})
 		if err != nil {
 			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 				Message: "auth.unauthorized",

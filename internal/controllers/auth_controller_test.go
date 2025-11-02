@@ -20,25 +20,28 @@ func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMoc
 }
 
 func TestLogin(t *testing.T) {
-	dto := &domain.AuthDTO{
+	dto := &domain.CredentialsLoginDTO{
 		Email:    "test@mail.com",
 		Password: "password123",
 	}
 
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock := newTestAuthController()
-		serviceMock.On("Authenticate", *dto).Return("access-token", "refresh-token", nil)
+		serviceMock.On("CredentialsLogin", *dto).Return(domain.AuthTokens{
+			AccessToken:  "access-token",
+			RefreshToken: "refresh-token",
+		}, nil)
 		w, req := getControllerArgs("POST", "/auth/login", dto)
 
 		controller.Login(w, req)
 
-		var response api.ResponseBody[map[string]string]
+		var response api.ResponseBody[domain.AuthTokens]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, response.Data["access_token"], "access-token")
-		assert.Equal(t, response.Data["refresh_token"], "refresh-token")
+		assert.Equal(t, response.Data.AccessToken, "access-token")
+		assert.Equal(t, response.Data.RefreshToken, "refresh-token")
 		serviceMock.AssertExpectations(t)
 	})
 
@@ -62,7 +65,7 @@ func TestLogin(t *testing.T) {
 
 	t.Run("unauthorized", func(t *testing.T) {
 		controller, serviceMock := newTestAuthController()
-		serviceMock.On("Authenticate", *dto).Return("", "", assert.AnError)
+		serviceMock.On("CredentialsLogin", *dto).Return(domain.AuthTokens{}, assert.AnError)
 		w, req := getControllerArgs("POST", "/auth/login", dto)
 
 		controller.Login(w, req)
@@ -85,18 +88,21 @@ func TestRefreshToken(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock := newTestAuthController()
-		serviceMock.On("RefreshToken", dto.RefreshToken).Return("new-access-token", "new-refresh-token", nil)
+		serviceMock.On("RefreshToken", *dto).Return(domain.AuthTokens{
+			AccessToken:  "new-access-token",
+			RefreshToken: "new-refresh-token",
+		}, nil)
 		w, req := getControllerArgs("POST", "/auth/refresh", dto)
 
 		controller.RefreshToken(w, req)
 
-		var response api.ResponseBody[map[string]string]
+		var response api.ResponseBody[domain.AuthTokens]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, response.Data["access_token"], "new-access-token")
-		assert.Equal(t, response.Data["refresh_token"], "new-refresh-token")
+		assert.Equal(t, response.Data.AccessToken, "new-access-token")
+		assert.Equal(t, response.Data.RefreshToken, "new-refresh-token")
 		serviceMock.AssertExpectations(t)
 	})
 
@@ -120,7 +126,7 @@ func TestRefreshToken(t *testing.T) {
 
 	t.Run("unauthorized", func(t *testing.T) {
 		controller, serviceMock := newTestAuthController()
-		serviceMock.On("RefreshToken", dto.RefreshToken).Return("", "", assert.AnError)
+		serviceMock.On("RefreshToken", *dto).Return(domain.AuthTokens{}, assert.AnError)
 		w, req := getControllerArgs("POST", "/auth/refresh", dto)
 
 		controller.RefreshToken(w, req)

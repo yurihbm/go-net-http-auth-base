@@ -26,7 +26,7 @@ func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 }
 
 func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
-	var dto domain.AuthDTO
+	var dto domain.CredentialsLoginDTO
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&dto); err != nil {
@@ -37,7 +37,7 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, refreshToken, err := c.authService.Authenticate(dto)
+	tokens, err := c.authService.CredentialsLogin(dto)
 	if err != nil {
 		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 			Message: "auth.login.failed",
@@ -46,11 +46,8 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[map[string]string]{
-		Data: map[string]string{
-			"access_token":  accessToken,
-			"refresh_token": refreshToken,
-		},
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.AuthTokens]{
+		Data:    tokens,
 		Message: "auth.login.success",
 	})
 }
@@ -67,7 +64,9 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, newRefreshToken, err := c.authService.RefreshToken(dto.RefreshToken)
+	tokens, err := c.authService.RefreshToken(domain.RefreshTokenDTO{
+		RefreshToken: dto.RefreshToken,
+	})
 	if err != nil {
 		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 			Message: "auth.refresh.failed",
@@ -76,11 +75,8 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[map[string]string]{
-		Data: map[string]string{
-			"access_token":  accessToken,
-			"refresh_token": newRefreshToken,
-		},
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.AuthTokens]{
+		Data:    tokens,
 		Message: "auth.refresh.success",
 	})
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
 	"go-net-http-auth-base/internal/mocks"
 
@@ -37,7 +38,10 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		userUUID := "test-user-uuid"
 		token := "valid-token"
 
-		serviceMock.On("VerifyToken", token).Return(userUUID, nil)
+		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceAccess,
+		}).Return(userUUID, nil)
 
 		// Create a test handler that will be wrapped by the middleware
 		handlerCalled := false
@@ -62,7 +66,10 @@ func TestAuthMiddlewareUse(t *testing.T) {
 
 		assert.True(t, handlerCalled)
 		assert.Equal(t, http.StatusOK, w.Code)
-		serviceMock.AssertCalled(t, "VerifyToken", token)
+		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceAccess,
+		})
 	})
 
 	t.Run("unauthorized - missing authorization header", func(t *testing.T) {
@@ -124,7 +131,10 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		token := "invalid-token"
 		errTokenExpired := errors.New("token expired")
 
-		serviceMock.On("VerifyToken", token).Return("", errTokenExpired)
+		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceAccess,
+		}).Return("", errTokenExpired)
 
 		handlerCalled := false
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -147,14 +157,20 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "auth.unauthorized", response.Message)
 		assert.Equal(t, "token expired", response.Error)
-		serviceMock.AssertCalled(t, "VerifyToken", token)
+		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceAccess,
+		})
 	})
 
 	t.Run("unauthorized - empty token after Bearer prefix", func(t *testing.T) {
 		middleware, serviceMock := getTestAuthMiddleware()
 
 		// Mock the VerifyToken call with empty string to return error
-		serviceMock.On("VerifyToken", "").Return("", errors.New("invalid token"))
+		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    "",
+			Audience: domain.TokenAudienceAccess,
+		}).Return("", errors.New("invalid token"))
 
 		handlerCalled := false
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +194,10 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		assert.Equal(t, "auth.unauthorized", response.Message)
 		assert.Equal(t, "invalid token", response.Error)
 		// VerifyToken should still be called with empty string
-		serviceMock.AssertCalled(t, "VerifyToken", "")
+		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
+			Token:    "",
+			Audience: domain.TokenAudienceAccess,
+		})
 	})
 
 	t.Run("success - multiple requests with different tokens", func(t *testing.T) {
@@ -189,8 +208,14 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		token2 := "token-2"
 		userUUID2 := "user-uuid-2"
 
-		serviceMock.On("VerifyToken", token1).Return(userUUID1, nil).Once()
-		serviceMock.On("VerifyToken", token2).Return(userUUID2, nil).Once()
+		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    token1,
+			Audience: domain.TokenAudienceAccess,
+		}).Return(userUUID1, nil).Once()
+		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    token2,
+			Audience: domain.TokenAudienceAccess,
+		}).Return(userUUID2, nil).Once()
 
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)

@@ -21,7 +21,7 @@ func TestNewAuthService(t *testing.T) {
 	assert.NotNil(t, service)
 }
 
-func TestAuthService_Authenticate(t *testing.T) {
+func TestAuthService_CredentialsLogin(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
 	service := services.NewAuthService(repo)
 
@@ -41,52 +41,52 @@ func TestAuthService_Authenticate(t *testing.T) {
 			PasswordHash: string(hashedPassword),
 		}
 
-		dto := domain.AuthDTO{
+		dto := domain.CredentialsLoginDTO{
 			Email:    "test@example.com",
 			Password: password,
 		}
 
 		repo.On("FindByEmail", dto.Email).Return(user, nil).Once()
 
-		accessToken, refreshToken, err := service.Authenticate(dto)
+		tokens, err := service.CredentialsLogin(dto)
 
 		assert.NoError(t, err)
-		assert.NotEmpty(t, accessToken)
-		assert.NotEmpty(t, refreshToken)
+		assert.NotEmpty(t, tokens.AccessToken)
+		assert.NotEmpty(t, tokens.RefreshToken)
 		repo.AssertExpectations(t)
 	})
 
 	t.Run("user not found", func(t *testing.T) {
-		dto := domain.AuthDTO{
+		dto := domain.CredentialsLoginDTO{
 			Email:    "notfound@example.com",
 			Password: "password123",
 		}
 
 		repo.On("FindByEmail", dto.Email).Return(nil, nil).Once()
 
-		accessToken, refreshToken, err := service.Authenticate(dto)
+		tokens, err := service.CredentialsLogin(dto)
 
 		assert.Error(t, err)
 		assert.Equal(t, "auth.authenticate.user_not_found", err.Error())
-		assert.Empty(t, accessToken)
-		assert.Empty(t, refreshToken)
+		assert.Empty(t, tokens.AccessToken)
+		assert.Empty(t, tokens.RefreshToken)
 		repo.AssertExpectations(t)
 	})
 
 	t.Run("repository error", func(t *testing.T) {
-		dto := domain.AuthDTO{
+		dto := domain.CredentialsLoginDTO{
 			Email:    "test@example.com",
 			Password: "password123",
 		}
 
 		repo.On("FindByEmail", dto.Email).Return(nil, errors.New("db error")).Once()
 
-		accessToken, refreshToken, err := service.Authenticate(dto)
+		tokens, err := service.CredentialsLogin(dto)
 
 		assert.Error(t, err)
-		assert.Equal(t, "db error", err.Error())
-		assert.Empty(t, accessToken)
-		assert.Empty(t, refreshToken)
+		assert.Equal(t, "auth.authenticate.user_not_found", err.Error())
+		assert.Empty(t, tokens.AccessToken)
+		assert.Empty(t, tokens.RefreshToken)
 		repo.AssertExpectations(t)
 	})
 
@@ -99,19 +99,19 @@ func TestAuthService_Authenticate(t *testing.T) {
 			PasswordHash: string(hashedPassword),
 		}
 
-		dto := domain.AuthDTO{
+		dto := domain.CredentialsLoginDTO{
 			Email:    "test@example.com",
 			Password: "wrong-password",
 		}
 
 		repo.On("FindByEmail", dto.Email).Return(user, nil).Once()
 
-		accessToken, refreshToken, err := service.Authenticate(dto)
+		tokens, err := service.CredentialsLogin(dto)
 
 		assert.Error(t, err)
 		assert.Equal(t, "auth.authenticate.invalid_credentials", err.Error())
-		assert.Empty(t, accessToken)
-		assert.Empty(t, refreshToken)
+		assert.Empty(t, tokens.AccessToken)
+		assert.Empty(t, tokens.RefreshToken)
 		repo.AssertExpectations(t)
 	})
 }
@@ -131,11 +131,16 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		claims := jwt.MapClaims{
 			"sub": userUUID,
 			"exp": time.Now().Add(time.Hour * 1).Unix(),
+			"aud": domain.TokenAudienceAccess,
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		tokenString, _ := token.SignedString([]byte("test-secret-key"))
 
-		result, err := service.VerifyToken(tokenString)
+		dto := domain.VerifyTokenDTO{
+			Token:    tokenString,
+			Audience: domain.TokenAudienceAccess,
+		}
+		result, err := service.VerifyToken(dto)
 
 		assert.NoError(t, err)
 		assert.Equal(t, userUUID, result)
@@ -145,19 +150,28 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		userUUID := "user-uuid-123"
 		claims := jwt.MapClaims{
 			"sub": userUUID,
-			"exp": time.Now().Add(-time.Hour * 1).Unix(), // expired 1 hour ago
+			"exp": time.Now().Add(-time.Hour * 1).Unix(),
+			"aud": domain.TokenAudienceAccess,
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		tokenString, _ := token.SignedString([]byte("test-secret-key"))
 
-		result, err := service.VerifyToken(tokenString)
+		dto := domain.VerifyTokenDTO{
+			Token:    tokenString,
+			Audience: domain.TokenAudienceAccess,
+		}
+		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
 		assert.Empty(t, result)
 	})
 
 	t.Run("invalid token format", func(t *testing.T) {
-		result, err := service.VerifyToken("invalid-token")
+		dto := domain.VerifyTokenDTO{
+			Token:    "invalid-token",
+			Audience: domain.TokenAudienceAccess,
+		}
+		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
 		assert.Empty(t, result)
@@ -168,12 +182,16 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		claims := jwt.MapClaims{
 			"sub": userUUID,
 			"exp": time.Now().Add(time.Hour * 1).Unix(),
+			"aud": domain.TokenAudienceAccess,
 		}
-		// Sign with RSA instead of HMAC
 		token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
 		tokenString, _ := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
 
-		result, err := service.VerifyToken(tokenString)
+		dto := domain.VerifyTokenDTO{
+			Token:    tokenString,
+			Audience: domain.TokenAudienceAccess,
+		}
+		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
 		assert.Empty(t, result)
@@ -184,11 +202,36 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		claims := jwt.MapClaims{
 			"sub": userUUID,
 			"exp": time.Now().Add(time.Hour * 1).Unix(),
+			"aud": domain.TokenAudienceAccess,
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		tokenString, _ := token.SignedString([]byte("different-secret-key"))
 
-		result, err := service.VerifyToken(tokenString)
+		dto := domain.VerifyTokenDTO{
+			Token:    tokenString,
+			Audience: domain.TokenAudienceAccess,
+		}
+		result, err := service.VerifyToken(dto)
+
+		assert.Error(t, err)
+		assert.Empty(t, result)
+	})
+
+	t.Run("wrong audience", func(t *testing.T) {
+		userUUID := "user-uuid-123"
+		claims := jwt.MapClaims{
+			"sub": userUUID,
+			"exp": time.Now().Add(time.Hour * 1).Unix(),
+			"aud": domain.TokenAudienceRefresh,
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, _ := token.SignedString([]byte("test-secret-key"))
+
+		dto := domain.VerifyTokenDTO{
+			Token:    tokenString,
+			Audience: domain.TokenAudienceAccess,
+		}
+		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
 		assert.Empty(t, result)
@@ -210,48 +253,141 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		claims := jwt.MapClaims{
 			"sub": userUUID,
 			"exp": time.Now().Add(time.Hour * 24 * 7).Unix(),
+			"aud": domain.TokenAudienceRefresh,
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		refreshTokenString, _ := token.SignedString([]byte("test-secret-key"))
 
-		accessToken, newRefreshToken, err := service.RefreshToken(refreshTokenString)
+		dto := domain.RefreshTokenDTO{
+			RefreshToken: refreshTokenString,
+		}
+		tokens, err := service.RefreshToken(dto)
 
 		assert.NoError(t, err)
-		assert.NotEmpty(t, accessToken)
-		assert.NotEmpty(t, newRefreshToken)
+		assert.NotEmpty(t, tokens.AccessToken)
+		assert.NotEmpty(t, tokens.RefreshToken)
 
 		// Verify the new access token contains the correct user UUID
-		verifiedUUID, err := service.VerifyToken(accessToken)
+		verifyDTO := domain.VerifyTokenDTO{
+			Token:    tokens.AccessToken,
+			Audience: domain.TokenAudienceAccess,
+		}
+		verifiedUUID, err := service.VerifyToken(verifyDTO)
 		assert.NoError(t, err)
 		assert.Equal(t, userUUID, verifiedUUID)
 
 		// Verify the new refresh token contains the correct user UUID
-		verifiedUUID, err = service.VerifyToken(newRefreshToken)
+		verifyDTO = domain.VerifyTokenDTO{
+			Token:    tokens.RefreshToken,
+			Audience: domain.TokenAudienceRefresh,
+		}
+		verifiedUUID, err = service.VerifyToken(verifyDTO)
 		assert.NoError(t, err)
 		assert.Equal(t, userUUID, verifiedUUID)
 	})
 
 	t.Run("invalid refresh token", func(t *testing.T) {
-		accessToken, refreshToken, err := service.RefreshToken("invalid-token")
+		dto := domain.RefreshTokenDTO{
+			RefreshToken: "invalid-token",
+		}
+		tokens, err := service.RefreshToken(dto)
 
 		assert.Error(t, err)
-		assert.Empty(t, accessToken)
-		assert.Empty(t, refreshToken)
+		assert.Empty(t, tokens.AccessToken)
+		assert.Empty(t, tokens.RefreshToken)
 	})
 
 	t.Run("expired refresh token", func(t *testing.T) {
 		userUUID := "user-uuid-123"
 		claims := jwt.MapClaims{
 			"sub": userUUID,
-			"exp": time.Now().Add(-time.Hour * 1).Unix(), // expired
+			"exp": time.Now().Add(-time.Hour * 1).Unix(),
+			"aud": domain.TokenAudienceRefresh,
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		refreshTokenString, _ := token.SignedString([]byte("test-secret-key"))
 
-		accessToken, newRefreshToken, err := service.RefreshToken(refreshTokenString)
+		dto := domain.RefreshTokenDTO{
+			RefreshToken: refreshTokenString,
+		}
+		tokens, err := service.RefreshToken(dto)
 
 		assert.Error(t, err)
-		assert.Empty(t, accessToken)
-		assert.Empty(t, newRefreshToken)
+		assert.Empty(t, tokens.AccessToken)
+		assert.Empty(t, tokens.RefreshToken)
+	})
+}
+
+func TestAuthService_GenerateToken(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewAuthService(repo)
+
+	// Set JWT_SECRET for token generation
+	_ = os.Setenv("JWT_SECRET", "test-secret-key")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("JWT_SECRET")
+	})
+
+	t.Run("success with access token audience", func(t *testing.T) {
+		dto := domain.GenerateTokenDTO{
+			Subject:  "user-uuid-123",
+			Audience: domain.TokenAudienceAccess,
+		}
+
+		token, err := service.GenerateToken(dto)
+
+		assert.NoError(t, err)
+		assert.NotEmpty(t, token)
+
+		// Verify the token is valid
+		verifyDTO := domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceAccess,
+		}
+		verifiedUUID, err := service.VerifyToken(verifyDTO)
+		assert.NoError(t, err)
+		assert.Equal(t, "user-uuid-123", verifiedUUID)
+	})
+
+	t.Run("success with refresh token audience", func(t *testing.T) {
+		dto := domain.GenerateTokenDTO{
+			Subject:  "user-uuid-456",
+			Audience: domain.TokenAudienceRefresh,
+		}
+
+		token, err := service.GenerateToken(dto)
+
+		assert.NoError(t, err)
+		assert.NotEmpty(t, token)
+
+		// Verify the token is valid
+		verifyDTO := domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceRefresh,
+		}
+		verifiedUUID, err := service.VerifyToken(verifyDTO)
+		assert.NoError(t, err)
+		assert.Equal(t, "user-uuid-456", verifiedUUID)
+	})
+
+	t.Run("success with exchange token audience", func(t *testing.T) {
+		dto := domain.GenerateTokenDTO{
+			Subject:  "user-uuid-789",
+			Audience: domain.TokenAudienceExchange,
+		}
+
+		token, err := service.GenerateToken(dto)
+
+		assert.NoError(t, err)
+		assert.NotEmpty(t, token)
+
+		// Verify the token is valid
+		verifyDTO := domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceExchange,
+		}
+		verifiedUUID, err := service.VerifyToken(verifyDTO)
+		assert.NoError(t, err)
+		assert.Equal(t, "user-uuid-789", verifiedUUID)
 	})
 }

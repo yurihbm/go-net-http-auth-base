@@ -16,26 +16,34 @@ var _ domain.AuthService = (*AuthServiceMock)(nil)
 
 var errNotImplemented = errors.New("not implemented")
 
-func (m *AuthServiceMock) Authenticate(dto domain.AuthDTO) (string, string, error) {
+func (m *AuthServiceMock) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.AuthTokens, error) {
 	args := m.Called(dto)
-	if args.Get(0) != nil {
-		return args.String(0), args.String(1), args.Error(2)
+	if tokens, ok := args.Get(0).(domain.AuthTokens); ok {
+		return tokens, args.Error(1)
 	}
-	return "", "", errNotImplemented
+	return domain.AuthTokens{}, errNotImplemented
 }
 
-func (m *AuthServiceMock) VerifyToken(tokenString string) (string, error) {
-	args := m.Called(tokenString)
+func (m *AuthServiceMock) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthTokens, error) {
+	args := m.Called(dto)
+	if tokens, ok := args.Get(0).(domain.AuthTokens); ok {
+		return tokens, args.Error(1)
+	}
+	return domain.AuthTokens{}, errNotImplemented
+}
+
+func (m *AuthServiceMock) VerifyToken(dto domain.VerifyTokenDTO) (string, error) {
+	args := m.Called(dto)
 	if args.Get(0) != nil {
 		return args.String(0), args.Error(1)
 	}
 	return "", errNotImplemented
 }
 
-func (m *AuthServiceMock) RefreshToken(refreshToken string) (string, string, error) {
-	args := m.Called(refreshToken)
+func (m *AuthServiceMock) GenerateToken(dto domain.GenerateTokenDTO) (string, error) {
+	args := m.Called(dto)
 	if args.Get(0) != nil {
-		return args.String(0), args.String(1), args.Error(2)
+		return args.String(0), args.Error(1)
 	}
-	return "", "", errNotImplemented
+	return "", errNotImplemented
 }

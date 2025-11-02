@@ -3,8 +3,9 @@ package services
 import (
 	"errors"
 	"os"
-	"go-net-http-auth-base/internal/domain"
 	"time"
+
+	"go-net-http-auth-base/internal/domain"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -22,34 +23,40 @@ func NewAuthService(usersRepo domain.UsersRepository) domain.AuthService {
 	}
 }
 
-func (s *authService) Authenticate(dto domain.AuthDTO) (string, string, error) {
+func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.AuthTokens, error) {
 	user, err := s.usersRepo.FindByEmail(dto.Email)
-	if err != nil {
-		return "", "", err
-	}
-	if user == nil {
-		return "", "", errors.New("auth.authenticate.user_not_found")
+	if err != nil || user == nil {
+		return domain.AuthTokens{}, errors.New("auth.authenticate.user_not_found")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(dto.Password)); err != nil {
-		return "", "", errors.New("auth.authenticate.invalid_credentials")
+		return domain.AuthTokens{}, errors.New("auth.authenticate.invalid_credentials")
 	}
 
-	accessToken, err := s.generateAccessToken(user.UUID)
+	accessToken, err := s.GenerateToken(domain.GenerateTokenDTO{
+		Subject:  user.UUID,
+		Audience: domain.TokenAudienceAccess,
+	})
 	if err != nil {
-		return "", "", err
+		return domain.AuthTokens{}, err
 	}
 
-	refreshToken, err := s.generateRefreshToken(user.UUID)
+	refreshToken, err := s.GenerateToken(domain.GenerateTokenDTO{
+		Subject:  user.UUID,
+		Audience: domain.TokenAudienceRefresh,
+	})
 	if err != nil {
-		return "", "", err
+		return domain.AuthTokens{}, err
 	}
 
-	return accessToken, refreshToken, nil
+	return domain.AuthTokens{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
 }
 
-func (s *authService) VerifyToken(tokenString string) (string, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
+func (s *authService) VerifyToken(dto domain.VerifyTokenDTO) (string, error) {
+	token, err := jwt.Parse(dto.Token, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
@@ -60,46 +67,68 @@ func (s *authService) VerifyToken(tokenString string) (string, error) {
 		return "", err
 	}
 
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		return claims["sub"].(string), nil
+	claims, ok := token.Claims.(jwt.MapClaims)
+	sub := claims["sub"].(string)
+	aud := domain.TokenAudience(claims["aud"].(string))
+	if ok && token.Valid && aud == dto.Audience {
+		return sub, nil
 	}
 
 	return "", errors.New("invalid token")
 }
 
-func (s *authService) RefreshToken(refreshTokenString string) (string, string, error) {
-	userUUID, err := s.VerifyToken(refreshTokenString)
+func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthTokens, error) {
+	userUUID, err := s.VerifyToken(domain.VerifyTokenDTO{
+		Token:    dto.RefreshToken,
+		Audience: domain.TokenAudienceRefresh,
+	})
 	if err != nil {
-		return "", "", err
+		return domain.AuthTokens{}, err
 	}
 
-	accessToken, err := s.generateAccessToken(userUUID)
+	newAccessToken, err := s.GenerateToken(domain.GenerateTokenDTO{
+		Subject:  userUUID,
+		Audience: domain.TokenAudienceAccess,
+	})
 	if err != nil {
-		return "", "", err
+		return domain.AuthTokens{}, err
 	}
 
-	newRefreshToken, err := s.generateRefreshToken(userUUID)
+	newRefreshToken, err := s.GenerateToken(domain.GenerateTokenDTO{
+		Subject:  userUUID,
+		Audience: domain.TokenAudienceRefresh,
+	})
 	if err != nil {
-		return "", "", err
+		return domain.AuthTokens{}, err
 	}
 
-	return accessToken, newRefreshToken, nil
+	return domain.AuthTokens{
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
+	}, nil
 }
 
-func (s *authService) generateAccessToken(userUUID string) (string, error) {
+func (s *authService) GenerateToken(dto domain.GenerateTokenDTO) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": userUUID,
-		"exp": time.Now().Add(time.Hour * 1).Unix(), // 1 hour
+		"sub": dto.Subject,
+		"exp": getTokenExpiration(dto.Audience),
+		"aud": dto.Audience,
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(os.Getenv(JWT_SECRET_KEY)))
+
 }
 
-func (s *authService) generateRefreshToken(userUUID string) (string, error) {
-	claims := jwt.MapClaims{
-		"sub": userUUID,
-		"exp": time.Now().Add(time.Hour * 24 * 7).Unix(), // 7 days
+func getTokenExpiration(audience domain.TokenAudience) int64 {
+	switch audience {
+	case domain.TokenAudienceRefresh:
+		return time.Now().Add(domain.TokenExpirationRefresh).Unix()
+	case domain.TokenAudienceExchange:
+		return time.Now().Add(domain.TokenExpirationExchange).Unix()
+	case domain.TokenAudienceOAuthState:
+		return time.Now().Add(domain.TokenExpirationOAuthState).Unix()
+	default:
+		return time.Now().Add(domain.TokenExpirationAccess).Unix()
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(os.Getenv(JWT_SECRET_KEY)))
 }
