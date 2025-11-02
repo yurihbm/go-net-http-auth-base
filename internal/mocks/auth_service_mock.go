@@ -47,3 +47,32 @@ func (m *AuthServiceMock) GenerateToken(dto domain.GenerateTokenDTO) (string, er
 	}
 	return "", errNotImplemented
 }
+
+func (m *AuthServiceMock) AddUserOAuthProvider(dto domain.AddUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
+	args := m.Called(dto)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.UserOAuthProvider), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *AuthServiceMock) GetUserOAuthProvider(dto domain.GetUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
+	args := m.Called(dto)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.UserOAuthProvider), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *AuthServiceMock) RemoveUserOAuthProvider(dto domain.RemoveUserOAuthProviderDTO) error {
+	args := m.Called(dto)
+	return args.Error(0)
+}
+
+func (m *AuthServiceMock) GetUserOAuthProvidersByUserUUID(userUUID string) ([]domain.UserOAuthProvider, error) {
+	args := m.Called(userUUID)
+	if args.Get(0) != nil {
+		return args.Get(0).([]domain.UserOAuthProvider), args.Error(1)
+	}
+	return nil, args.Error(1)
+}

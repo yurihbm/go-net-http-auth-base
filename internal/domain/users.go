@@ -21,17 +21,17 @@ type UserUpdateDTO struct {
 }
 
 type UsersService interface {
-	GetByUUID(uuid string) (*User, error)
-	GetByEmail(email string) (*User, error)
-	Create(user CreateUserDTO) (*User, error)
-	Update(uuid string, user UserUpdateDTO) error
-	Delete(uuid string) error
+	GetByUUID(string) (*User, error)
+	GetByEmail(string) (*User, error)
+	Create(CreateUserDTO) (*User, error)
+	Update(string, UserUpdateDTO) error
+	Delete(string) error
 }
 
 type UsersRepository interface {
-	FindByUUID(uuid string) (*User, error)
-	FindByEmail(email string) (*User, error)
-	Create(user User) (*User, error)
-	Update(user User) error
-	Delete(uuid string) error
+	FindByUUID(string) (*User, error)
+	FindByEmail(string) (*User, error)
+	Create(User) (*User, error)
+	Update(User) error
+	Delete(string) error
 }

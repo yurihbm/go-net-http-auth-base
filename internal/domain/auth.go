@@ -42,9 +42,52 @@ type GenerateTokenDTO struct {
 	Audience TokenAudience `json:"token_audience" validate:"required,oneof=access_token refresh_token exchange_token oauth_state_token"`
 }
 
+type OAuthProvider string
+
+const (
+	OAuthProviderGoogle OAuthProvider = "google"
+)
+
+type UserOAuthProvider struct {
+	UUID           string        `json:"uuid"`
+	UserUUID       string        `json:"user_uuid"`
+	Provider       OAuthProvider `json:"provider"`
+	ProviderUserID string        `json:"provider_user_id"`
+	ProviderEmail  string        `json:"provider_email"`
+	CreatedAt      int64         `json:"created_at"`
+}
+
+type AddUserOAuthProviderDTO struct {
+	UserUUID       string        `json:"user_uuid" validate:"required"`
+	Provider       OAuthProvider `json:"provider" validate:"required,oneof=google"`
+	ProviderUserID string        `json:"provider_user_id" validate:"required"`
+	ProviderEmail  string        `json:"provider_email" validate:"required,email"`
+}
+
+type GetUserOAuthProviderDTO struct {
+	Provider       OAuthProvider `json:"provider" validate:"required,oneof=google"`
+	ProviderUserID string        `json:"provider_user_id" validate:"required"`
+}
+
+type RemoveUserOAuthProviderDTO struct {
+	UserUUID     string `json:"user_uuid" validate:"required"`
+	ProviderUUID string `json:"provider_uuid" validate:"required"`
+}
+
 type AuthService interface {
 	CredentialsLogin(CredentialsLoginDTO) (AuthTokens, error)
 	RefreshToken(RefreshTokenDTO) (AuthTokens, error)
 	VerifyToken(VerifyTokenDTO) (string, error)
 	GenerateToken(GenerateTokenDTO) (string, error)
+	AddUserOAuthProvider(AddUserOAuthProviderDTO) (*UserOAuthProvider, error)
+	GetUserOAuthProvider(GetUserOAuthProviderDTO) (*UserOAuthProvider, error)
+	RemoveUserOAuthProvider(RemoveUserOAuthProviderDTO) error
+	GetUserOAuthProvidersByUserUUID(userUUID string) ([]UserOAuthProvider, error)
+}
+
+type AuthRepository interface {
+	CreateUserOAuthProvider(UserOAuthProvider) (*UserOAuthProvider, error)
+	GetUserOAuthProviderByProviderAndProviderUserID(OAuthProvider, string) (*UserOAuthProvider, error)
+	DeleteUserOAuthProvider(string) error
+	ListUserOAuthProvidersByUserUUID(string) ([]UserOAuthProvider, error)
 }

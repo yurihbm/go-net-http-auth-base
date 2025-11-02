@@ -14,12 +14,14 @@ import (
 const JWT_SECRET_KEY = "JWT_SECRET"
 
 type authService struct {
-	usersService domain.UsersService
+	usersService     domain.UsersService
+	authRepository   domain.AuthRepository
 }
 
-func NewAuthService(usersService domain.UsersService) domain.AuthService {
+func NewAuthService(usersService domain.UsersService, authRepository domain.AuthRepository) domain.AuthService {
 	return &authService{
-		usersService: usersService,
+		usersService:     usersService,
+		authRepository:   authRepository,
 	}
 }
 
@@ -118,6 +120,29 @@ func (s *authService) GenerateToken(dto domain.GenerateTokenDTO) (string, error)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(os.Getenv(JWT_SECRET_KEY)))
 
+}
+
+func (s *authService) AddUserOAuthProvider(dto domain.AddUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
+	provider := domain.UserOAuthProvider{
+		UserUUID:       dto.UserUUID,
+		Provider:       dto.Provider,
+		ProviderUserID: dto.ProviderUserID,
+		ProviderEmail:  dto.ProviderEmail,
+	}
+
+	return s.authRepository.CreateUserOAuthProvider(provider)
+}
+
+func (s *authService) GetUserOAuthProvider(dto domain.GetUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
+	return s.authRepository.GetUserOAuthProviderByProviderAndProviderUserID(dto.Provider, dto.ProviderUserID)
+}
+
+func (s *authService) RemoveUserOAuthProvider(dto domain.RemoveUserOAuthProviderDTO) error {
+	return s.authRepository.DeleteUserOAuthProvider(dto.ProviderUUID)
+}
+
+func (s *authService) GetUserOAuthProvidersByUserUUID(userUUID string) ([]domain.UserOAuthProvider, error) {
+	return s.authRepository.ListUserOAuthProvidersByUserUUID(userUUID)
 }
 
 func getTokenExpiration(audience domain.TokenAudience) int64 {
