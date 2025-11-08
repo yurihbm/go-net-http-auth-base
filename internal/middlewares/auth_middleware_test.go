@@ -41,7 +41,9 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
-		}).Return(userUUID, nil)
+		}).Return(&domain.VerifiedTokenData{
+			Subject: userUUID,
+		}, nil)
 
 		// Create a test handler that will be wrapped by the middleware
 		handlerCalled := false
@@ -110,7 +112,7 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
-		}).Return("", errTokenExpired)
+		}).Return(nil, errTokenExpired)
 
 		handlerCalled := false
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +151,7 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
 			Token:    "",
 			Audience: domain.TokenAudienceAccess,
-		}).Return("", errors.New("invalid token"))
+		}).Return(nil, errors.New("invalid token"))
 
 		handlerCalled := false
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -193,11 +195,15 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
 			Token:    token1,
 			Audience: domain.TokenAudienceAccess,
-		}).Return(userUUID1, nil).Once()
+		}).Return(&domain.VerifiedTokenData{
+			Subject: userUUID1,
+		}, nil).Once()
 		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
 			Token:    token2,
 			Audience: domain.TokenAudienceAccess,
-		}).Return(userUUID2, nil).Once()
+		}).Return(&domain.VerifiedTokenData{
+			Subject: userUUID2,
+		}, nil).Once()
 
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)

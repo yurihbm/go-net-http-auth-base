@@ -1,8 +1,6 @@
 package services
 
 import (
-	"errors"
-
 	"go-net-http-auth-base/internal/domain"
 
 	"golang.org/x/crypto/bcrypt"
@@ -25,20 +23,20 @@ func (s *usersService) GetByEmail(email string) (*domain.User, error) {
 }
 
 func (s *usersService) Create(dto domain.CreateUserDTO) (*domain.User, error) {
-	if dto.Password == "" {
-		return nil, errors.New("user.create.password_required")
+	user := domain.User{
+		Name:  dto.Name,
+		Email: dto.Email,
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
+	if dto.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, err
+		}
+		user.PasswordHash = string(hash)
 	}
 
-	createdUser, err := s.repo.Create(domain.User{
-		Name:         dto.Name,
-		Email:        dto.Email,
-		PasswordHash: string(hash),
-	})
+	createdUser, err := s.repo.Create(user)
 	if err != nil {
 		return nil, err
 	}

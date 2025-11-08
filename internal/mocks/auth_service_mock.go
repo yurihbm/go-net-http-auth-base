@@ -32,12 +32,12 @@ func (m *AuthServiceMock) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthT
 	return domain.AuthTokens{}, errNotImplemented
 }
 
-func (m *AuthServiceMock) VerifyToken(dto domain.VerifyTokenDTO) (string, error) {
+func (m *AuthServiceMock) VerifyToken(dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {
-		return args.String(0), args.Error(1)
+		return args.Get(0).(*domain.VerifiedTokenData), args.Error(1)
 	}
-	return "", errNotImplemented
+	return nil, args.Error(1)
 }
 
 func (m *AuthServiceMock) GenerateToken(dto domain.GenerateTokenDTO) (string, error) {

@@ -14,14 +14,14 @@ import (
 const JWT_SECRET_KEY = "JWT_SECRET"
 
 type authService struct {
-	usersService     domain.UsersService
-	authRepository   domain.AuthRepository
+	usersService   domain.UsersService
+	authRepository domain.AuthRepository
 }
 
 func NewAuthService(usersService domain.UsersService, authRepository domain.AuthRepository) domain.AuthService {
 	return &authService{
-		usersService:     usersService,
-		authRepository:   authRepository,
+		usersService:   usersService,
+		authRepository: authRepository,
 	}
 }
 
@@ -57,7 +57,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 	}, nil
 }
 
-func (s *authService) VerifyToken(dto domain.VerifyTokenDTO) (string, error) {
+func (s *authService) VerifyToken(dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
 	token, err := jwt.Parse(dto.Token, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
@@ -66,27 +66,35 @@ func (s *authService) VerifyToken(dto domain.VerifyTokenDTO) (string, error) {
 	})
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	sub := claims["sub"].(string)
 	aud := domain.TokenAudience(claims["aud"].(string))
+	exp := int64(claims["exp"].(float64))
+	payload := claims["payload"]
 	if ok && token.Valid && aud == dto.Audience {
-		return sub, nil
+		return &domain.VerifiedTokenData{
+			Subject:    sub,
+			Audience:   aud,
+			Expiration: exp,
+			Payload:    payload,
+		}, nil
 	}
 
-	return "", errors.New("invalid token")
+	return nil, errors.New("invalid token")
 }
 
 func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthTokens, error) {
-	userUUID, err := s.VerifyToken(domain.VerifyTokenDTO{
+	tokenData, err := s.VerifyToken(domain.VerifyTokenDTO{
 		Token:    dto.RefreshToken,
 		Audience: domain.TokenAudienceRefresh,
 	})
 	if err != nil {
 		return domain.AuthTokens{}, err
 	}
+	userUUID := tokenData.Subject
 
 	newAccessToken, err := s.GenerateToken(domain.GenerateTokenDTO{
 		Subject:  userUUID,
@@ -112,9 +120,10 @@ func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthToken
 
 func (s *authService) GenerateToken(dto domain.GenerateTokenDTO) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": dto.Subject,
-		"exp": getTokenExpiration(dto.Audience),
-		"aud": dto.Audience,
+		"sub":     dto.Subject,
+		"exp":     getTokenExpiration(dto.Audience),
+		"aud":     dto.Audience,
+		"payload": dto.Payload,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

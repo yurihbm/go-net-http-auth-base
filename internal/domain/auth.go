@@ -37,9 +37,17 @@ type VerifyTokenDTO struct {
 	Audience TokenAudience `json:"audience" validate:"required,oneof=access_token refresh_token exchange_token oauth_state_token"`
 }
 
+type VerifiedTokenData struct {
+	Subject    string        `json:"subject"`
+	Audience   TokenAudience `json:"audience"`
+	Expiration int64         `json:"expiration"`
+	Payload    any           `json:"payload,omitempty"`
+}
+
 type GenerateTokenDTO struct {
 	Subject  string        `json:"subject" validate:"required"`
 	Audience TokenAudience `json:"token_audience" validate:"required,oneof=access_token refresh_token exchange_token oauth_state_token"`
+	Payload  any           `json:"payload,omitempty"`
 }
 
 type OAuthProvider string
@@ -47,6 +55,21 @@ type OAuthProvider string
 const (
 	OAuthProviderGoogle OAuthProvider = "google"
 )
+
+func (e OAuthProvider) IsValid() bool {
+	switch e {
+	case OAuthProviderGoogle:
+		return true
+	default:
+		return false
+	}
+}
+
+type OAuthProviderUserInfo struct {
+	Id    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
 
 type UserOAuthProvider struct {
 	UUID           string        `json:"uuid"`
@@ -77,7 +100,7 @@ type RemoveUserOAuthProviderDTO struct {
 type AuthService interface {
 	CredentialsLogin(CredentialsLoginDTO) (AuthTokens, error)
 	RefreshToken(RefreshTokenDTO) (AuthTokens, error)
-	VerifyToken(VerifyTokenDTO) (string, error)
+	VerifyToken(VerifyTokenDTO) (*VerifiedTokenData, error)
 	GenerateToken(GenerateTokenDTO) (string, error)
 	AddUserOAuthProvider(AddUserOAuthProviderDTO) (*UserOAuthProvider, error)
 	GetUserOAuthProvider(GetUserOAuthProviderDTO) (*UserOAuthProvider, error)

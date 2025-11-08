@@ -147,7 +147,8 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		result, err := service.VerifyToken(dto)
 
 		assert.NoError(t, err)
-		assert.Equal(t, userUUID, result)
+		assert.NotNil(t, result)
+		assert.Equal(t, userUUID, result.Subject)
 	})
 
 	t.Run("expired token", func(t *testing.T) {
@@ -167,7 +168,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
-		assert.Empty(t, result)
+		assert.Nil(t, result)
 	})
 
 	t.Run("invalid token format", func(t *testing.T) {
@@ -178,7 +179,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
-		assert.Empty(t, result)
+		assert.Nil(t, result)
 	})
 
 	t.Run("token with wrong signing method", func(t *testing.T) {
@@ -198,7 +199,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
-		assert.Empty(t, result)
+		assert.Nil(t, result)
 	})
 
 	t.Run("token signed with different secret", func(t *testing.T) {
@@ -218,7 +219,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
-		assert.Empty(t, result)
+		assert.Nil(t, result)
 	})
 
 	t.Run("wrong audience", func(t *testing.T) {
@@ -238,7 +239,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		result, err := service.VerifyToken(dto)
 
 		assert.Error(t, err)
-		assert.Empty(t, result)
+		assert.Nil(t, result)
 	})
 }
 
@@ -277,18 +278,20 @@ func TestAuthService_RefreshToken(t *testing.T) {
 			Token:    tokens.AccessToken,
 			Audience: domain.TokenAudienceAccess,
 		}
-		verifiedUUID, err := service.VerifyToken(verifyDTO)
+		verifiedToken, err := service.VerifyToken(verifyDTO)
 		assert.NoError(t, err)
-		assert.Equal(t, userUUID, verifiedUUID)
+		assert.NotNil(t, verifiedToken)
+		assert.Equal(t, userUUID, verifiedToken.Subject)
 
 		// Verify the new refresh token contains the correct user UUID
 		verifyDTO = domain.VerifyTokenDTO{
 			Token:    tokens.RefreshToken,
 			Audience: domain.TokenAudienceRefresh,
 		}
-		verifiedUUID, err = service.VerifyToken(verifyDTO)
+		verifiedToken, err = service.VerifyToken(verifyDTO)
 		assert.NoError(t, err)
-		assert.Equal(t, userUUID, verifiedUUID)
+		assert.NotNil(t, verifiedToken)
+		assert.Equal(t, userUUID, verifiedToken.Subject)
 	})
 
 	t.Run("invalid refresh token", func(t *testing.T) {
@@ -350,9 +353,10 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
 		}
-		verifiedUUID, err := service.VerifyToken(verifyDTO)
+		verifiedToken, err := service.VerifyToken(verifyDTO)
 		assert.NoError(t, err)
-		assert.Equal(t, "user-uuid-123", verifiedUUID)
+		assert.NotNil(t, verifiedToken)
+		assert.Equal(t, "user-uuid-123", verifiedToken.Subject)
 	})
 
 	t.Run("success with refresh token audience", func(t *testing.T) {
@@ -371,9 +375,10 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Token:    token,
 			Audience: domain.TokenAudienceRefresh,
 		}
-		verifiedUUID, err := service.VerifyToken(verifyDTO)
+		verifiedToken, err := service.VerifyToken(verifyDTO)
 		assert.NoError(t, err)
-		assert.Equal(t, "user-uuid-456", verifiedUUID)
+		assert.NotNil(t, verifiedToken)
+		assert.Equal(t, "user-uuid-456", verifiedToken.Subject)
 	})
 
 	t.Run("success with exchange token audience", func(t *testing.T) {
@@ -392,9 +397,10 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Token:    token,
 			Audience: domain.TokenAudienceExchange,
 		}
-		verifiedUUID, err := service.VerifyToken(verifyDTO)
+		verifiedToken, err := service.VerifyToken(verifyDTO)
 		assert.NoError(t, err)
-		assert.Equal(t, "user-uuid-789", verifiedUUID)
+		assert.NotNil(t, verifiedToken)
+		assert.Equal(t, "user-uuid-789", verifiedToken.Subject)
 	})
 }
 

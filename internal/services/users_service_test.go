@@ -76,17 +76,30 @@ func TestUsersService_Create(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("error without password", func(t *testing.T) {
+	t.Run("success without password", func(t *testing.T) {
 		dto := domain.CreateUserDTO{
 			Name:  "Test User",
 			Email: "test@example.com",
 		}
 
+		repo.On("Create", mock.AnythingOfType("domain.User")).Return(&domain.User{
+			UUID:         "generated-uuid",
+			Name:         "Test User",
+			Email:        "test@example.com",
+			PasswordHash: "",
+			CreatedAt:    1234567890,
+		}, nil).Once()
+
 		user, err := service.Create(dto)
 
-		assert.Error(t, err)
-		assert.Equal(t, "user.create.password_required", err.Error())
-		assert.Nil(t, user)
+		assert.NoError(t, err)
+		assert.NotNil(t, user)
+		assert.Equal(t, "generated-uuid", user.UUID)
+		assert.Equal(t, dto.Name, user.Name)
+		assert.Equal(t, dto.Email, user.Email)
+		assert.Equal(t, "", user.PasswordHash)
+		assert.Equal(t, int64(1234567890), user.CreatedAt)
+		repo.AssertExpectations(t)
 	})
 
 	t.Run("repository create error", func(t *testing.T) {

@@ -2,6 +2,7 @@ package controllers_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -14,10 +15,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMock) {
-	serviceMock := new(mocks.AuthServiceMock)
-	controller := controllers.NewAuthController(serviceMock)
-	return controller, serviceMock
+func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.UsersServiceMock) {
+	authServiceMock := new(mocks.AuthServiceMock)
+	usersServiceMock := new(mocks.UsersServiceMock)
+	controller := controllers.NewAuthController(authServiceMock, usersServiceMock)
+	return controller, authServiceMock, usersServiceMock
 }
 
 func TestLogin(t *testing.T) {
@@ -27,7 +29,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock := newTestAuthController()
+		controller, serviceMock, _ := newTestAuthController()
 		serviceMock.On("CredentialsLogin", *dto).Return(domain.AuthTokens{
 			AccessToken:  "access-token",
 			RefreshToken: "refresh-token",
@@ -65,7 +67,7 @@ func TestLogin(t *testing.T) {
 	})
 
 	t.Run("bad request", func(t *testing.T) {
-		controller, _ := newTestAuthController()
+		controller, _, _ := newTestAuthController()
 		w, req := getControllerArgs("POST", "/auth/login", map[string]string{
 			"invalid_field": "value",
 		})
@@ -83,7 +85,7 @@ func TestLogin(t *testing.T) {
 	})
 
 	t.Run("unauthorized", func(t *testing.T) {
-		controller, serviceMock := newTestAuthController()
+		controller, serviceMock, _ := newTestAuthController()
 		serviceMock.On("CredentialsLogin", *dto).Return(domain.AuthTokens{}, assert.AnError)
 		w, req := getControllerArgs("POST", "/auth/login", dto)
 
@@ -102,7 +104,7 @@ func TestLogin(t *testing.T) {
 
 func TestRefreshToken(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock := newTestAuthController()
+		controller, serviceMock, _ := newTestAuthController()
 		refreshTokenValue := "refresh-token"
 		dto := domain.RefreshTokenDTO{
 			RefreshToken: refreshTokenValue,
@@ -149,7 +151,7 @@ func TestRefreshToken(t *testing.T) {
 	})
 
 	t.Run("bad request - missing refresh token cookie", func(t *testing.T) {
-		controller, _ := newTestAuthController()
+		controller, _, _ := newTestAuthController()
 		w, req := getControllerArgs("POST", "/auth/refresh", nil)
 		// No cookie set
 
@@ -166,7 +168,7 @@ func TestRefreshToken(t *testing.T) {
 	})
 
 	t.Run("unauthorized - invalid token", func(t *testing.T) {
-		controller, serviceMock := newTestAuthController()
+		controller, serviceMock, _ := newTestAuthController()
 		refreshTokenValue := "invalid-token"
 		dto := domain.RefreshTokenDTO{
 			RefreshToken: refreshTokenValue,
@@ -194,7 +196,7 @@ func TestRefreshToken(t *testing.T) {
 
 func TestLogout(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		controller, _ := newTestAuthController()
+		controller, _, _ := newTestAuthController()
 		w, req := getControllerArgs("POST", "/auth/logout", nil)
 
 		controller.Logout(w, req)
@@ -227,5 +229,171 @@ func TestLogout(t *testing.T) {
 		// Check that cookies are expired (set to past time)
 		assert.True(t, accessTokenCookie.Expires.Before(time.Now()))
 		assert.True(t, refreshTokenCookie.Expires.Before(time.Now()))
+	})
+}
+
+func TestLoginWithOAuthProvider(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, _ := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		redirectURI := "http://localhost:3000/callback"
+		stateToken := "valid-state-token"
+
+		serviceMock.On("GenerateToken", domain.GenerateTokenDTO{
+			Audience: domain.TokenAudienceOAuthState,
+			Subject:  string(provider),
+			Payload: map[string]string{
+				"redirect_uri": redirectURI,
+			},
+		}).Return(stateToken, nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/login?redirect_uri="+redirectURI, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.LoginWithOAuthProvider(w, req)
+
+		// Should redirect to OAuth provider
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.NotEmpty(t, w.Header().Get("Location"))
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("bad request - invalid provider", func(t *testing.T) {
+		controller, _, _ := newTestAuthController()
+		w, req := getControllerArgs("GET", "/auth/invalid-provider/login", nil)
+		req.SetPathValue("provider", "invalid-provider")
+
+		controller.LoginWithOAuthProvider(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_login.bad_request")
+		assert.Equal(t, response.Error, "invalid OAuth provider")
+	})
+
+	t.Run("internal server error - token generation fails", func(t *testing.T) {
+		controller, serviceMock, _ := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		redirectURI := "http://localhost:3000/callback"
+
+		serviceMock.On("GenerateToken", domain.GenerateTokenDTO{
+			Audience: domain.TokenAudienceOAuthState,
+			Subject:  string(provider),
+			Payload: map[string]string{
+				"redirect_uri": redirectURI,
+			},
+		}).Return("", errors.New("token generation failed")).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/login?redirect_uri="+redirectURI, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.LoginWithOAuthProvider(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_login.failed")
+		assert.NotEmpty(t, response.Error)
+		serviceMock.AssertExpectations(t)
+	})
+}
+
+func TestOAuthProviderCallback(t *testing.T) {
+	t.Run("bad request - invalid provider", func(t *testing.T) {
+		controller, _, _ := newTestAuthController()
+		w, req := getControllerArgs("GET", "/auth/invalid/callback?state=state&code=code", nil)
+		req.SetPathValue("provider", "invalid")
+
+		controller.OAuthProviderCallback(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_callback.bad_request")
+		assert.Equal(t, response.Error, "invalid OAuth provider")
+	})
+
+	t.Run("bad request - missing state or code", func(t *testing.T) {
+		controller, _, _ := newTestAuthController()
+		w, req := getControllerArgs("GET", "/auth/google/callback", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+
+		controller.OAuthProviderCallback(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_callback.bad_request")
+		assert.Contains(t, response.Error, "missing state or code")
+	})
+
+	t.Run("unauthorized - invalid state token", func(t *testing.T) {
+		controller, serviceMock, _ := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "invalid-state"
+		code := "auth-code"
+
+		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(nil, errors.New("invalid token")).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_callback.invalid_state")
+		assert.NotEmpty(t, response.Error)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("bad request - invalid redirect_uri in state", func(t *testing.T) {
+		controller, serviceMock, _ := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				// Missing redirect_uri
+			},
+		}
+
+		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_callback.invalid_state")
+		assert.Contains(t, response.Error, "invalid redirect_uri")
+		serviceMock.AssertExpectations(t)
 	})
 }

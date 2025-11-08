@@ -35,7 +35,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		userUUID, err := m.authService.VerifyToken(domain.VerifyTokenDTO{
+		tokenData, err := m.authService.VerifyToken(domain.VerifyTokenDTO{
 			Token:    accessToken.Value,
 			Audience: domain.TokenAudienceAccess,
 		})
@@ -47,7 +47,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), UserUUIDKey, userUUID)
+		ctx := context.WithValue(r.Context(), UserUUIDKey, tokenData.Subject)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
