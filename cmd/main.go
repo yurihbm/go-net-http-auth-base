@@ -11,9 +11,16 @@ import (
 
 	"go-net-http-auth-base/internal/factories"
 	"go-net-http-auth-base/postgres"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Warning: .env file not found or failed to load")
+	}
+
 	ctx := context.Background()
 	conn := postgres.NewConnection(ctx)
 

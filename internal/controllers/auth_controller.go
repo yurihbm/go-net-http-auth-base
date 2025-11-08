@@ -125,7 +125,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	providerConfig := config.OAuthConfig[provider]
+	providerConfig := config.GetOAuthConfig(provider)
 
 	authURL := providerConfig.AuthCodeURL(state)
 	http.Redirect(w, r, authURL, http.StatusFound)
@@ -174,7 +174,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	providerConfig := config.OAuthConfig[provider]
+	providerConfig := config.GetOAuthConfig(provider)
 	token, err := providerConfig.Exchange(r.Context(), code)
 	if err != nil {
 		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{

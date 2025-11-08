@@ -8,15 +8,20 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-var OAuthConfig = map[domain.OAuthProvider]oauth2.Config{
-	domain.OAuthProviderGoogle: {
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("API_URL") + "/auth/google/callback",
-		Endpoint:     google.Endpoint,
-		Scopes: []string{
-			"https://www.googleapis.com/auth/userinfo.email",
-			"https://www.googleapis.com/auth/userinfo.profile",
-		},
-	},
+func GetOAuthConfig(provider domain.OAuthProvider) *oauth2.Config {
+	switch provider {
+	case domain.OAuthProviderGoogle:
+		return &oauth2.Config{
+			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+			RedirectURL:  os.Getenv("API_URL") + "/auth/google/callback",
+			Endpoint:     google.Endpoint,
+			Scopes: []string{
+				"https://www.googleapis.com/auth/userinfo.email",
+				"https://www.googleapis.com/auth/userinfo.profile",
+			},
+		}
+	default:
+		return nil
+	}
 }
