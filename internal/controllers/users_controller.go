@@ -43,6 +43,14 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if dto.Password == "" || len(dto.Password) < 8 {
+		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
+			Message: "user.create.invalid_password",
+			Error:   "password must be at least 8 characters long",
+		})
+		return
+	}
+
 	user, err := c.userService.Create(dto)
 	if err != nil {
 		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{

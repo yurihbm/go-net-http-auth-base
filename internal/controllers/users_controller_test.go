@@ -41,8 +41,9 @@ func TestCreateUser(t *testing.T) {
 		Email: "john.doe@example.com",
 	}
 	dto := domain.CreateUserDTO{
-		Name:  "John Doe",
-		Email: "john.doe@example.com",
+		Name:     "John Doe",
+		Email:    "john.doe@example.com",
+		Password: "password123",
 	}
 
 	t.Run("success", func(t *testing.T) {
@@ -72,6 +73,31 @@ func TestCreateUser(t *testing.T) {
 		w, req := getControllerArgs(
 			"POST",
 			"/users/",
+			domain.CreateUserDTO{
+				Name:     "John Doe",
+				Email:    "john@mail.com",
+				Password: "1234556",
+			},
+		)
+
+		controller.CreateUser(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, response.Message, "user.create.invalid_password")
+		assert.NotEmpty(t, response.Error)
+		serviceMock.AssertNotCalled(t, "Create")
+	})
+
+	t.Run("short password", func(t *testing.T) {
+		controller, serviceMock, _ := newTestUsersController()
+
+		w, req := getControllerArgs(
+			"POST",
+			"/users/",
 			struct{ Test string }{
 				Test: "invalid",
 			},
@@ -85,6 +111,7 @@ func TestCreateUser(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		serviceMock.AssertNotCalled(t, "Create")
+
 	})
 
 	t.Run("service error", func(t *testing.T) {
