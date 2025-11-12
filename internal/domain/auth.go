@@ -18,14 +18,44 @@ const (
 	TokenExpirationOAuthState = time.Minute * 5    // 5 minutes
 )
 
-type AuthTokens struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+type OAuthProviderName string
+
+const (
+	OAuthProviderGoogle OAuthProviderName = "google"
+)
+
+func (e OAuthProviderName) IsValid() bool {
+	switch e {
+	case OAuthProviderGoogle:
+		return true
+	default:
+		return false
+	}
+}
+
+type OAuthProviderUserInfo struct {
+	Id    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type UserOAuthProvider struct {
+	UUID           string            `json:"uuid"`
+	UserUUID       string            `json:"user_uuid"`
+	Provider       OAuthProviderName `json:"provider"`
+	ProviderUserID string            `json:"provider_user_id"`
+	ProviderEmail  string            `json:"provider_email"`
+	CreatedAt      int64             `json:"created_at"`
 }
 
 type CredentialsLoginDTO struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password"`
+}
+
+type AuthTokens struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 type RefreshTokenDTO struct {
@@ -50,46 +80,16 @@ type GenerateTokenDTO struct {
 	Payload  any           `json:"payload,omitempty"`
 }
 
-type OAuthProvider string
-
-const (
-	OAuthProviderGoogle OAuthProvider = "google"
-)
-
-func (e OAuthProvider) IsValid() bool {
-	switch e {
-	case OAuthProviderGoogle:
-		return true
-	default:
-		return false
-	}
-}
-
-type OAuthProviderUserInfo struct {
-	Id    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-}
-
-type UserOAuthProvider struct {
-	UUID           string        `json:"uuid"`
-	UserUUID       string        `json:"user_uuid"`
-	Provider       OAuthProvider `json:"provider"`
-	ProviderUserID string        `json:"provider_user_id"`
-	ProviderEmail  string        `json:"provider_email"`
-	CreatedAt      int64         `json:"created_at"`
-}
-
 type AddUserOAuthProviderDTO struct {
-	UserUUID       string        `json:"user_uuid" validate:"required"`
-	Provider       OAuthProvider `json:"provider" validate:"required,oneof=google"`
-	ProviderUserID string        `json:"provider_user_id" validate:"required"`
-	ProviderEmail  string        `json:"provider_email" validate:"required,email"`
+	UserUUID       string            `json:"user_uuid" validate:"required"`
+	Provider       OAuthProviderName `json:"provider" validate:"required,oneof=google"`
+	ProviderUserID string            `json:"provider_user_id" validate:"required"`
+	ProviderEmail  string            `json:"provider_email" validate:"required,email"`
 }
 
 type GetUserOAuthProviderDTO struct {
-	Provider       OAuthProvider `json:"provider" validate:"required,oneof=google"`
-	ProviderUserID string        `json:"provider_user_id" validate:"required"`
+	Provider       OAuthProviderName `json:"provider" validate:"required,oneof=google"`
+	ProviderUserID string            `json:"provider_user_id" validate:"required"`
 }
 
 type RemoveUserOAuthProviderDTO struct {
@@ -110,7 +110,7 @@ type AuthService interface {
 
 type AuthRepository interface {
 	CreateUserOAuthProvider(UserOAuthProvider) (*UserOAuthProvider, error)
-	GetUserOAuthProviderByProviderAndProviderUserID(OAuthProvider, string) (*UserOAuthProvider, error)
+	GetUserOAuthProviderByProviderAndProviderUserID(OAuthProviderName, string) (*UserOAuthProvider, error)
 	DeleteUserOAuthProvider(string) error
 	ListUserOAuthProvidersByUserUUID(string) ([]UserOAuthProvider, error)
 }

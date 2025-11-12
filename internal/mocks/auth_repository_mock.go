@@ -20,7 +20,7 @@ func (m *AuthRepositoryMock) CreateUserOAuthProvider(provider domain.UserOAuthPr
 	return nil, args.Error(1)
 }
 
-func (m *AuthRepositoryMock) GetUserOAuthProviderByProviderAndProviderUserID(provider domain.OAuthProvider, providerUserID string) (*domain.UserOAuthProvider, error) {
+func (m *AuthRepositoryMock) GetUserOAuthProviderByProviderAndProviderUserID(provider domain.OAuthProviderName, providerUserID string) (*domain.UserOAuthProvider, error) {
 	args := m.Called(provider, providerUserID)
 	if args.Get(0) != nil {
 		return args.Get(0).(*domain.UserOAuthProvider), args.Error(1)

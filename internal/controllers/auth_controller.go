@@ -99,8 +99,8 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.Request) {
-	provider := domain.OAuthProvider(r.PathValue("provider"))
-	isValidProvider := domain.OAuthProvider.IsValid(provider)
+	provider := domain.OAuthProviderName(r.PathValue("provider"))
+	isValidProvider := domain.OAuthProviderName.IsValid(provider)
 	if !isValidProvider {
 		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
 			Message: "auth.provider_login.bad_request",
@@ -132,7 +132,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 }
 
 func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Request) {
-	provider := domain.OAuthProvider(r.PathValue("provider"))
+	provider := domain.OAuthProviderName(r.PathValue("provider"))
 	isValidProvider := provider.IsValid()
 	if !isValidProvider {
 		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
@@ -346,7 +346,7 @@ func (c *AuthController) deleteAuthCookies(w http.ResponseWriter) {
 const googleUserInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 func (c *AuthController) getOAuthProviderUserInfo(
-	provider domain.OAuthProvider,
+	provider domain.OAuthProviderName,
 	accessToken string,
 ) (*domain.OAuthProviderUserInfo, error) {
 	switch provider {

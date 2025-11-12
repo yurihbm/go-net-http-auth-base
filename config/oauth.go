@@ -8,7 +8,7 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-func GetOAuthConfig(provider domain.OAuthProvider) *oauth2.Config {
+func GetOAuthConfig(provider domain.OAuthProviderName) *oauth2.Config {
 	switch provider {
 	case domain.OAuthProviderGoogle:
 		return &oauth2.Config{

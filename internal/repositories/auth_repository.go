@@ -44,7 +44,7 @@ func (r *AuthPostgresRepository) CreateUserOAuthProvider(provider domain.UserOAu
 	return &domainProvider, nil
 }
 
-func (r *AuthPostgresRepository) GetUserOAuthProviderByProviderAndProviderUserID(provider domain.OAuthProvider, providerUserID string) (*domain.UserOAuthProvider, error) {
+func (r *AuthPostgresRepository) GetUserOAuthProviderByProviderAndProviderUserID(provider domain.OAuthProviderName, providerUserID string) (*domain.UserOAuthProvider, error) {
 	params := postgres.GetUserOAuthProviderByProviderAndProviderUserIDParams{
 		Provider:       postgres.OauthProvider(provider),
 		ProviderUserID: providerUserID,
@@ -93,7 +93,7 @@ func toDomainUserOAuthProvider(provider postgres.UserOauthProvider) domain.UserO
 	return domain.UserOAuthProvider{
 		UUID:           uuid.UUID(uuidBytes).String(),
 		UserUUID:       uuid.UUID(userUuidBytes).String(),
-		Provider:       domain.OAuthProvider(provider.Provider),
+		Provider:       domain.OAuthProviderName(provider.Provider),
 		ProviderUserID: provider.ProviderUserID,
 		ProviderEmail:  provider.ProviderEmail,
 		CreatedAt:      provider.CreatedAt.Time.Unix(),
