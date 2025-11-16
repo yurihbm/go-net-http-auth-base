@@ -62,11 +62,23 @@ func (p *googleOAuthProvider) GetUserInfo(ctx context.Context, code string) (*do
 		return nil, errors.New("failed to fetch user info from Google")
 	}
 
-	var userInfo domain.OAuthProviderUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+	var googleUser googleUserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&googleUser); err != nil {
 		return nil, err
 	}
 
-	return &userInfo, nil
+	userInfo := &domain.OAuthProviderUserInfo{
+		ID:    googleUser.ID,
+		Name:  googleUser.Name,
+		Email: googleUser.Email,
+	}
 
+	return userInfo, nil
+
+}
+
+type googleUserInfo struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }

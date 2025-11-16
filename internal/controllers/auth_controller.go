@@ -2,27 +2,30 @@ package controllers
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
-	"go-net-http-auth-base/config"
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 )
 
 type AuthController struct {
-	authService  domain.AuthService
-	usersService domain.UsersService
+	authService    domain.AuthService
+	usersService   domain.UsersService
+	oauthProviders map[domain.OAuthProviderName]domain.OAuthProvider
 }
 
 var _ Controller = (*AuthController)(nil)
 
-func NewAuthController(authService domain.AuthService, usersService domain.UsersService) *AuthController {
+func NewAuthController(
+	authService domain.AuthService,
+	usersService domain.UsersService,
+	oauthProviders map[domain.OAuthProviderName]domain.OAuthProvider,
+) *AuthController {
 	return &AuthController{
-		authService:  authService,
-		usersService: usersService,
+		authService,
+		usersService,
+		oauthProviders,
 	}
 }
 
@@ -99,8 +102,8 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.Request) {
-	provider := domain.OAuthProviderName(r.PathValue("provider"))
-	isValidProvider := domain.OAuthProviderName.IsValid(provider)
+	providerName := domain.OAuthProviderName(r.PathValue("provider"))
+	isValidProvider := domain.OAuthProviderName.IsValid(providerName)
 	if !isValidProvider {
 		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
 			Message: "auth.provider_login.bad_request",
@@ -111,7 +114,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 
 	state, err := c.authService.GenerateToken(domain.GenerateTokenDTO{
 		Audience: domain.TokenAudienceOAuthState,
-		Subject:  string(provider),
+		Subject:  string(providerName),
 		Payload: map[string]string{
 			"redirect_uri": r.URL.Query().Get("redirect_uri"),
 		},
@@ -125,15 +128,15 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	providerConfig := config.GetOAuthConfig(provider)
+	providerConfig := c.oauthProviders[providerName]
 
-	authURL := providerConfig.AuthCodeURL(state)
+	authURL := providerConfig.GetAuthURL(state)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
 func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Request) {
-	provider := domain.OAuthProviderName(r.PathValue("provider"))
-	isValidProvider := provider.IsValid()
+	providerName := domain.OAuthProviderName(r.PathValue("provider"))
+	isValidProvider := providerName.IsValid()
 	if !isValidProvider {
 		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
 			Message: "auth.provider_callback.bad_request",
@@ -174,20 +177,11 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	providerConfig := config.GetOAuthConfig(provider)
-	token, err := providerConfig.Exchange(r.Context(), code)
+	provider := c.oauthProviders[providerName]
+	userInfo, err := provider.GetUserInfo(r.Context(), code)
 	if err != nil {
 		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 			Message: "auth.provider_callback.token_exchange_failed",
-			Error:   err.Error(),
-		})
-		return
-	}
-
-	userInfo, err := c.getOAuthProviderUserInfo(provider, token.AccessToken)
-	if err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "auth.provider_callback.user_info_failed",
 			Error:   err.Error(),
 		})
 		return
@@ -202,7 +196,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	}
 
 	userOAuthProvider, _ := c.authService.GetUserOAuthProvider(domain.GetUserOAuthProviderDTO{
-		Provider:       provider,
+		Provider:       providerName,
 		ProviderUserID: userInfo.ID,
 	})
 
@@ -227,7 +221,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 			authenticatedUser = existingUser
 			_, err := c.authService.AddUserOAuthProvider(domain.AddUserOAuthProviderDTO{
 				UserUUID:       existingUser.UUID,
-				Provider:       provider,
+				Provider:       providerName,
 				ProviderUserID: userInfo.ID,
 				ProviderEmail:  userInfo.Email,
 			})
@@ -255,7 +249,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 
 			_, err = c.authService.AddUserOAuthProvider(domain.AddUserOAuthProviderDTO{
 				UserUUID:       newUser.UUID,
-				Provider:       provider,
+				Provider:       providerName,
 				ProviderUserID: userInfo.ID,
 				ProviderEmail:  userInfo.Email,
 			})
@@ -341,51 +335,4 @@ func (c *AuthController) deleteAuthCookies(w http.ResponseWriter) {
 		HttpOnly: true,
 		Expires:  time.Unix(0, 0),
 	})
-}
-
-const googleUserInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
-
-func (c *AuthController) getOAuthProviderUserInfo(
-	provider domain.OAuthProviderName,
-	accessToken string,
-) (*domain.OAuthProviderUserInfo, error) {
-	switch provider {
-	case domain.OAuthProviderGoogle:
-		return c.getGoogleUserInfo(accessToken)
-	default:
-		return nil, errors.New("unsupported OAuth provider")
-	}
-}
-
-func (c *AuthController) getGoogleUserInfo(accessToken string) (*domain.OAuthProviderUserInfo, error) {
-	req, err := http.NewRequest("GET", googleUserInfoURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			fmt.Println("Failed to close response body:", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("failed to fetch user info from Google")
-	}
-
-	var userInfo domain.OAuthProviderUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return nil, err
-	}
-
-	return &userInfo, nil
 }

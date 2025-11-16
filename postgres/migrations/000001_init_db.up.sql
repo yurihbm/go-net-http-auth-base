@@ -25,7 +25,9 @@ FOR EACH ROW
 EXECUTE PROCEDURE update_updated_at_column();
 
 CREATE TYPE oauth_provider AS ENUM (
-    'google'
+    'google',
+    'microsoft',
+    'github'
 );
 
 CREATE TABLE user_oauth_providers (

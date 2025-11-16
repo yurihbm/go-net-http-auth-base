@@ -1,7 +1,6 @@
 package config
 
 import (
-	"go-net-http-auth-base/internal/domain"
 	"os"
 
 	"golang.org/x/oauth2"
@@ -10,48 +9,39 @@ import (
 	"golang.org/x/oauth2/microsoft"
 )
 
-func GetOAuthConfig(provider domain.OAuthProviderName) *oauth2.Config {
-	switch provider {
-	case domain.OAuthProviderGoogle:
-		return &oauth2.Config{
-			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-			RedirectURL:  os.Getenv("API_URL") + "/auth/google/callback",
-			Endpoint:     google.Endpoint,
-			Scopes: []string{
-				"https://www.googleapis.com/auth/userinfo.email",
-				"https://www.googleapis.com/auth/userinfo.profile",
-			},
-		}
-	default:
-		return nil
+func NewGoogleOAuthConfig() oauth2.Config {
+	return oauth2.Config{
+		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("API_URL") + "/auth/google/callback",
+		Endpoint:     google.Endpoint,
+		Scopes: []string{
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
 	}
 }
 
-var GoogleOAuthConfig = oauth2.Config{
-	ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-	ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-	RedirectURL:  os.Getenv("API_URL") + "/auth/google/callback",
-	Endpoint:     google.Endpoint,
-	Scopes: []string{
-		"https://www.googleapis.com/auth/userinfo.email",
-		"https://www.googleapis.com/auth/userinfo.profile",
-	},
+func NewGitHubOAuthConfig() oauth2.Config {
+	return oauth2.Config{
+		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("API_URL") + "/auth/github/callback",
+		Endpoint:     github.Endpoint,
+		Scopes: []string{
+			"read:user",
+		},
+	}
 }
 
-var GitHubOAuthConfig = oauth2.Config{
-	ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-	ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
-	RedirectURL:  os.Getenv("API_URL") + "/auth/github/callback",
-	Endpoint:     github.Endpoint,
-	Scopes: []string{
-		"read:user",
-	},
-}
-
-var MicrosoftOAuthConfig = oauth2.Config{
-	ClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
-	ClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
-	RedirectURL:  os.Getenv("API_URL") + "/auth/microsoft/callback",
-	Endpoint:     microsoft.AzureADEndpoint(""),
+func NewMicrosoftOAuthConfig() oauth2.Config {
+	return oauth2.Config{
+		ClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
+		ClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
+		RedirectURL:  os.Getenv("API_URL") + "/auth/microsoft/callback",
+		Endpoint:     microsoft.AzureADEndpoint(""),
+		Scopes: []string{
+			"User.Read",
+		},
+	}
 }

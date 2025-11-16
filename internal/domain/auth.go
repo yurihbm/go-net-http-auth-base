@@ -24,12 +24,18 @@ const (
 type OAuthProviderName string
 
 const (
-	OAuthProviderGoogle OAuthProviderName = "google"
+	OAuthProviderGoogle    OAuthProviderName = "google"
+	OAuthProviderMicrosoft OAuthProviderName = "microsoft"
+	OAuthProviderGitHub    OAuthProviderName = "github"
 )
 
 func (e OAuthProviderName) IsValid() bool {
 	switch e {
 	case OAuthProviderGoogle:
+		return true
+	case OAuthProviderMicrosoft:
+		return true
+	case OAuthProviderGitHub:
 		return true
 	default:
 		return false

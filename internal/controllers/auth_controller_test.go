@@ -13,12 +13,18 @@ import (
 	"go-net-http-auth-base/internal/mocks"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.UsersServiceMock) {
 	authServiceMock := new(mocks.AuthServiceMock)
 	usersServiceMock := new(mocks.UsersServiceMock)
-	controller := controllers.NewAuthController(authServiceMock, usersServiceMock)
+	oauthProviders := make(map[domain.OAuthProviderName]domain.OAuthProvider)
+	googleProvider := new(mocks.OAuthProviderMock)
+	googleProvider.On("GetAuthURL", "valid-state-token").Return("https://accounts.google.com/o/oauth2/v2/auth?state=valid-state-token").Maybe()
+	oauthProviders[domain.OAuthProviderGoogle] = googleProvider
+
+	controller := controllers.NewAuthController(authServiceMock, usersServiceMock, oauthProviders)
 	return controller, authServiceMock, usersServiceMock
 }
 
@@ -255,6 +261,7 @@ func TestLoginWithOAuthProvider(t *testing.T) {
 		// Should redirect to OAuth provider
 		assert.Equal(t, http.StatusFound, w.Code)
 		assert.NotEmpty(t, w.Header().Get("Location"))
+		assert.Contains(t, w.Header().Get("Location"), "state="+stateToken)
 		serviceMock.AssertExpectations(t)
 	})
 
@@ -372,7 +379,7 @@ func TestOAuthProviderCallback(t *testing.T) {
 			Subject:    string(provider),
 			Audience:   domain.TokenAudienceOAuthState,
 			Expiration: time.Now().Add(time.Hour).Unix(),
-			Payload: map[string]any{
+			Payload:    map[string]any{
 				// Missing redirect_uri
 			},
 		}
@@ -395,5 +402,105 @@ func TestOAuthProviderCallback(t *testing.T) {
 		assert.Equal(t, response.Message, "auth.provider_callback.invalid_state")
 		assert.Contains(t, response.Error, "invalid redirect_uri")
 		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("unauthorized - provider GetUserInfo fails", func(t *testing.T) {
+		authServiceMock := new(mocks.AuthServiceMock)
+		usersServiceMock := new(mocks.UsersServiceMock)
+		oauthProviderMock := new(mocks.OAuthProviderMock)
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		oauthProviderMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).
+			Return(nil, errors.New("provider error")).Once()
+
+		oauthProviders := make(map[domain.OAuthProviderName]domain.OAuthProvider)
+		oauthProviders[provider] = oauthProviderMock
+
+		controller := controllers.NewAuthController(authServiceMock, usersServiceMock, oauthProviders)
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_callback.token_exchange_failed")
+		assert.NotEmpty(t, response.Error)
+		authServiceMock.AssertExpectations(t)
+		oauthProviderMock.AssertExpectations(t)
+	})
+
+	t.Run("internal server error - missing required fields from provider", func(t *testing.T) {
+		authServiceMock := new(mocks.AuthServiceMock)
+		usersServiceMock := new(mocks.UsersServiceMock)
+		oauthProviderMock := new(mocks.OAuthProviderMock)
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    "",
+			Name:  "Test User",
+			Email: "test@example.com",
+		}
+
+		oauthProviderMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).
+			Return(userInfo, nil).Once()
+
+		oauthProviders := make(map[domain.OAuthProviderName]domain.OAuthProvider)
+		oauthProviders[provider] = oauthProviderMock
+
+		controller := controllers.NewAuthController(authServiceMock, usersServiceMock, oauthProviders)
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_callback.invalid_user_info")
+		assert.Contains(t, response.Error, "missing required fields")
+		authServiceMock.AssertExpectations(t)
+		oauthProviderMock.AssertExpectations(t)
 	})
 }
