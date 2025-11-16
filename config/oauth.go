@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
 )
 
@@ -34,5 +35,15 @@ var GoogleOAuthConfig = oauth2.Config{
 	Scopes: []string{
 		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/userinfo.profile",
+	},
+}
+
+var GitHubOAuthConfig = oauth2.Config{
+	ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+	ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+	RedirectURL:  os.Getenv("API_URL") + "/auth/github/callback",
+	Endpoint:     github.Endpoint,
+	Scopes: []string{
+		"read:user",
 	},
 }

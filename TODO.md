@@ -25,7 +25,7 @@ High-impact, low-effort work that immediately improves the project.
   - [x] `GetUserInfo(code string) (*domain.OAuthProviderUserInfo, error)`
 - [x] Create providers module: `internal/providers/oauth.go`
 - [x] Implement GoogleOAuthProvider
-- [ ] Implement GitHubOAuthProvider
+- [x] Implement GitHubOAuthProvider
 - [ ] Implement MicrosoftOAuthProvider
 - [ ] Update AuthService to use providers
 - [ ] Update AuthController to use methods from AuthService

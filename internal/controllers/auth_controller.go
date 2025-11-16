@@ -193,7 +193,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if userInfo.Id == "" || userInfo.Email == "" {
+	if userInfo.ID == "" || userInfo.Email == "" {
 		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
 			Message: "auth.provider_callback.invalid_user_info",
 			Error:   "missing required fields from provider",
@@ -203,7 +203,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 
 	userOAuthProvider, _ := c.authService.GetUserOAuthProvider(domain.GetUserOAuthProviderDTO{
 		Provider:       provider,
-		ProviderUserID: userInfo.Id,
+		ProviderUserID: userInfo.ID,
 	})
 
 	var authenticatedUser *domain.User
@@ -228,7 +228,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 			_, err := c.authService.AddUserOAuthProvider(domain.AddUserOAuthProviderDTO{
 				UserUUID:       existingUser.UUID,
 				Provider:       provider,
-				ProviderUserID: userInfo.Id,
+				ProviderUserID: userInfo.ID,
 				ProviderEmail:  userInfo.Email,
 			})
 			if err != nil {
@@ -256,7 +256,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 			_, err = c.authService.AddUserOAuthProvider(domain.AddUserOAuthProviderDTO{
 				UserUUID:       newUser.UUID,
 				Provider:       provider,
-				ProviderUserID: userInfo.Id,
+				ProviderUserID: userInfo.ID,
 				ProviderEmail:  userInfo.Email,
 			})
 			if err != nil {

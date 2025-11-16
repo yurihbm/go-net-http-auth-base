@@ -37,7 +37,7 @@ func (e OAuthProviderName) IsValid() bool {
 }
 
 type OAuthProviderUserInfo struct {
-	Id    string `json:"id"`
+	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
 }
