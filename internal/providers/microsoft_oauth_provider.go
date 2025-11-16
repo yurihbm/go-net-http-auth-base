@@ -12,27 +12,27 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type githubOAuthProvider struct {
+type microsoftOAuthProvider struct {
 	config  oauth2.Config
 	infoURL string
 }
 
-func NewGitHubOAuthProvider(config oauth2.Config, infoURL ...string) domain.OAuthProvider {
-	urlToUse := "https://api.github.com/user"
+func NewMicrosoftOAuthProvider(config oauth2.Config, infoURL ...string) domain.OAuthProvider {
+	urlToUse := "https://graph.microsoft.com/oidc/userinfo"
 	if len(infoURL) > 0 && infoURL[0] != "" {
 		urlToUse = infoURL[0]
 	}
-	return &githubOAuthProvider{
+	return &microsoftOAuthProvider{
 		config,
 		urlToUse,
 	}
 }
 
-func (p *githubOAuthProvider) GetAuthURL(state string) string {
+func (p *microsoftOAuthProvider) GetAuthURL(state string) string {
 	return p.config.AuthCodeURL(state)
 }
 
-func (p *githubOAuthProvider) GetUserInfo(ctx context.Context, code string) (*domain.OAuthProviderUserInfo, error) {
+func (p *microsoftOAuthProvider) GetUserInfo(ctx context.Context, code string) (*domain.OAuthProviderUserInfo, error) {
 	tokens, err := p.config.Exchange(ctx, code)
 	if err != nil {
 		return nil, err
@@ -44,8 +44,6 @@ func (p *githubOAuthProvider) GetUserInfo(ctx context.Context, code string) (*do
 	}
 
 	req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -61,25 +59,26 @@ func (p *githubOAuthProvider) GetUserInfo(ctx context.Context, code string) (*do
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("failed to fetch user info from GitHub")
+		return nil, errors.New("failed to fetch user info from Microsoft")
 	}
 
-	var githubUser githubUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&githubUser); err != nil {
+	var microsoftUser microsoftUserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&microsoftUser); err != nil {
 		return nil, err
 	}
 
 	userInfo := &domain.OAuthProviderUserInfo{
-		ID:    fmt.Sprintf("%d", githubUser.ID),
-		Name:  githubUser.Name,
-		Email: githubUser.Email,
+		ID:    microsoftUser.ID,
+		Name:  microsoftUser.Name,
+		Email: microsoftUser.Email,
 	}
 
 	return userInfo, nil
+
 }
 
-type githubUserInfo struct {
-	ID    int    `json:"id"`
+type microsoftUserInfo struct {
+	ID    string `json:"sub"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
 }
