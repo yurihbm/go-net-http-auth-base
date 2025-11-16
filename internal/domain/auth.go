@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type TokenAudience string
 
@@ -113,4 +116,9 @@ type AuthRepository interface {
 	GetUserOAuthProviderByProviderAndProviderUserID(OAuthProviderName, string) (*UserOAuthProvider, error)
 	DeleteUserOAuthProvider(string) error
 	ListUserOAuthProvidersByUserUUID(string) ([]UserOAuthProvider, error)
+}
+
+type OAuthProvider interface {
+	GetAuthURL(string) string
+	GetUserInfo(context.Context, string) (*OAuthProviderUserInfo, error)
 }
