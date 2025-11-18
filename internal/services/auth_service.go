@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"os"
 	"time"
@@ -14,14 +15,20 @@ import (
 const JWT_SECRET_KEY = "JWT_SECRET"
 
 type authService struct {
-	usersService   domain.UsersService
-	authRepository domain.AuthRepository
+	usersService          domain.UsersService
+	authRepository        domain.AuthRepository
+	oauthProviderRegistry domain.OAuthProviderRegistry
 }
 
-func NewAuthService(usersService domain.UsersService, authRepository domain.AuthRepository) domain.AuthService {
+func NewAuthService(
+	usersService domain.UsersService,
+	authRepository domain.AuthRepository,
+	oauthProviderRegistry domain.OAuthProviderRegistry,
+) domain.AuthService {
 	return &authService{
-		usersService:   usersService,
-		authRepository: authRepository,
+		usersService,
+		authRepository,
+		oauthProviderRegistry,
 	}
 }
 
@@ -152,6 +159,24 @@ func (s *authService) RemoveUserOAuthProvider(dto domain.RemoveUserOAuthProvider
 
 func (s *authService) GetUserOAuthProvidersByUserUUID(userUUID string) ([]domain.UserOAuthProvider, error) {
 	return s.authRepository.ListUserOAuthProvidersByUserUUID(userUUID)
+}
+
+func (s *authService) GetOAuthProviderAuthURL(providerName domain.OAuthProviderName, state string) (string, error) {
+	provider, err := s.oauthProviderRegistry.Get(providerName)
+	if err != nil {
+		return "", err
+	}
+
+	return provider.GetAuthURL(state), nil
+}
+
+func (s *authService) GetOAuthProviderUserInfo(ctx context.Context, providerName domain.OAuthProviderName, code string) (*domain.OAuthProviderUserInfo, error) {
+	provider, err := s.oauthProviderRegistry.Get(providerName)
+	if err != nil {
+		return nil, err
+	}
+
+	return provider.GetUserInfo(ctx, code)
 }
 
 func getTokenExpiration(audience domain.TokenAudience) int64 {

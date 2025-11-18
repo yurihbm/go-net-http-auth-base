@@ -19,12 +19,8 @@ import (
 func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.UsersServiceMock) {
 	authServiceMock := new(mocks.AuthServiceMock)
 	usersServiceMock := new(mocks.UsersServiceMock)
-	oauthProviders := make(map[domain.OAuthProviderName]domain.OAuthProvider)
-	googleProvider := new(mocks.OAuthProviderMock)
-	googleProvider.On("GetAuthURL", "valid-state-token").Return("https://accounts.google.com/o/oauth2/v2/auth?state=valid-state-token").Maybe()
-	oauthProviders[domain.OAuthProviderGoogle] = googleProvider
 
-	controller := controllers.NewAuthController(authServiceMock, usersServiceMock, oauthProviders)
+	controller := controllers.NewAuthController(authServiceMock, usersServiceMock)
 	return controller, authServiceMock, usersServiceMock
 }
 
@@ -244,6 +240,7 @@ func TestLoginWithOAuthProvider(t *testing.T) {
 		provider := domain.OAuthProviderGoogle
 		redirectURI := "http://localhost:3000/callback"
 		stateToken := "valid-state-token"
+		authURL := "https://accounts.google.com/o/oauth2/v2/auth?state=" + stateToken
 
 		serviceMock.On("GenerateToken", domain.GenerateTokenDTO{
 			Audience: domain.TokenAudienceOAuthState,
@@ -253,6 +250,8 @@ func TestLoginWithOAuthProvider(t *testing.T) {
 			},
 		}).Return(stateToken, nil).Once()
 
+		serviceMock.On("GetOAuthProviderAuthURL", provider, stateToken).Return(authURL, nil).Once()
+
 		w, req := getControllerArgs("GET", "/auth/google/login?redirect_uri="+redirectURI, nil)
 		req.SetPathValue("provider", string(provider))
 
@@ -260,8 +259,7 @@ func TestLoginWithOAuthProvider(t *testing.T) {
 
 		// Should redirect to OAuth provider
 		assert.Equal(t, http.StatusFound, w.Code)
-		assert.NotEmpty(t, w.Header().Get("Location"))
-		assert.Contains(t, w.Header().Get("Location"), "state="+stateToken)
+		assert.Equal(t, authURL, w.Header().Get("Location"))
 		serviceMock.AssertExpectations(t)
 	})
 
@@ -306,6 +304,37 @@ func TestLoginWithOAuthProvider(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Equal(t, response.Message, "auth.provider_login.failed")
 		assert.NotEmpty(t, response.Error)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("internal server error - GetOAuthProviderAuthURL fails", func(t *testing.T) {
+		controller, serviceMock, _ := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		redirectURI := "http://localhost:3000/callback"
+		stateToken := "valid-state-token"
+
+		serviceMock.On("GenerateToken", domain.GenerateTokenDTO{
+			Audience: domain.TokenAudienceOAuthState,
+			Subject:  string(provider),
+			Payload: map[string]string{
+				"redirect_uri": redirectURI,
+			},
+		}).Return(stateToken, nil).Once()
+
+		serviceMock.On("GetOAuthProviderAuthURL", provider, stateToken).Return("", errors.New("provider not configured")).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/login?redirect_uri="+redirectURI, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.LoginWithOAuthProvider(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, response.Message, "auth.provider_login.failed")
+		assert.Contains(t, response.Error, "provider not configured")
 		serviceMock.AssertExpectations(t)
 	})
 }
@@ -407,7 +436,6 @@ func TestOAuthProviderCallback(t *testing.T) {
 	t.Run("unauthorized - provider GetUserInfo fails", func(t *testing.T) {
 		authServiceMock := new(mocks.AuthServiceMock)
 		usersServiceMock := new(mocks.UsersServiceMock)
-		oauthProviderMock := new(mocks.OAuthProviderMock)
 		provider := domain.OAuthProviderGoogle
 		state := "valid-state"
 		code := "auth-code"
@@ -427,13 +455,10 @@ func TestOAuthProviderCallback(t *testing.T) {
 			Audience: domain.TokenAudienceOAuthState,
 		}).Return(verifiedTokenData, nil).Once()
 
-		oauthProviderMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).
+		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
 			Return(nil, errors.New("provider error")).Once()
 
-		oauthProviders := make(map[domain.OAuthProviderName]domain.OAuthProvider)
-		oauthProviders[provider] = oauthProviderMock
-
-		controller := controllers.NewAuthController(authServiceMock, usersServiceMock, oauthProviders)
+		controller := controllers.NewAuthController(authServiceMock, usersServiceMock)
 
 		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
 		req.SetPathValue("provider", string(provider))
@@ -448,13 +473,11 @@ func TestOAuthProviderCallback(t *testing.T) {
 		assert.Equal(t, response.Message, "auth.provider_callback.token_exchange_failed")
 		assert.NotEmpty(t, response.Error)
 		authServiceMock.AssertExpectations(t)
-		oauthProviderMock.AssertExpectations(t)
 	})
 
 	t.Run("internal server error - missing required fields from provider", func(t *testing.T) {
 		authServiceMock := new(mocks.AuthServiceMock)
 		usersServiceMock := new(mocks.UsersServiceMock)
-		oauthProviderMock := new(mocks.OAuthProviderMock)
 		provider := domain.OAuthProviderGoogle
 		state := "valid-state"
 		code := "auth-code"
@@ -480,13 +503,10 @@ func TestOAuthProviderCallback(t *testing.T) {
 			Email: "test@example.com",
 		}
 
-		oauthProviderMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).
+		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
 			Return(userInfo, nil).Once()
 
-		oauthProviders := make(map[domain.OAuthProviderName]domain.OAuthProvider)
-		oauthProviders[provider] = oauthProviderMock
-
-		controller := controllers.NewAuthController(authServiceMock, usersServiceMock, oauthProviders)
+		controller := controllers.NewAuthController(authServiceMock, usersServiceMock)
 
 		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
 		req.SetPathValue("provider", string(provider))
@@ -501,6 +521,5 @@ func TestOAuthProviderCallback(t *testing.T) {
 		assert.Equal(t, response.Message, "auth.provider_callback.invalid_user_info")
 		assert.Contains(t, response.Error, "missing required fields")
 		authServiceMock.AssertExpectations(t)
-		oauthProviderMock.AssertExpectations(t)
 	})
 }

@@ -106,24 +106,6 @@ type RemoveUserOAuthProviderDTO struct {
 	ProviderUUID string `json:"provider_uuid" validate:"required"`
 }
 
-type AuthService interface {
-	CredentialsLogin(CredentialsLoginDTO) (AuthTokens, error)
-	RefreshToken(RefreshTokenDTO) (AuthTokens, error)
-	VerifyToken(VerifyTokenDTO) (*VerifiedTokenData, error)
-	GenerateToken(GenerateTokenDTO) (string, error)
-	AddUserOAuthProvider(AddUserOAuthProviderDTO) (*UserOAuthProvider, error)
-	GetUserOAuthProvider(GetUserOAuthProviderDTO) (*UserOAuthProvider, error)
-	RemoveUserOAuthProvider(RemoveUserOAuthProviderDTO) error
-	GetUserOAuthProvidersByUserUUID(userUUID string) ([]UserOAuthProvider, error)
-}
-
-type AuthRepository interface {
-	CreateUserOAuthProvider(UserOAuthProvider) (*UserOAuthProvider, error)
-	GetUserOAuthProviderByProviderAndProviderUserID(OAuthProviderName, string) (*UserOAuthProvider, error)
-	DeleteUserOAuthProvider(string) error
-	ListUserOAuthProvidersByUserUUID(string) ([]UserOAuthProvider, error)
-}
-
 type OAuthProvider interface {
 	GetAuthURL(string) string
 	GetUserInfo(context.Context, string) (*OAuthProviderUserInfo, error)
@@ -133,4 +115,24 @@ type OAuthProviderRegistry interface {
 	Get(name OAuthProviderName) (OAuthProvider, error)
 	GetAll() map[OAuthProviderName]OAuthProvider
 	IsConfigured(name OAuthProviderName) bool
+}
+
+type AuthService interface {
+	CredentialsLogin(CredentialsLoginDTO) (AuthTokens, error)
+	RefreshToken(RefreshTokenDTO) (AuthTokens, error)
+	VerifyToken(VerifyTokenDTO) (*VerifiedTokenData, error)
+	GenerateToken(GenerateTokenDTO) (string, error)
+	AddUserOAuthProvider(AddUserOAuthProviderDTO) (*UserOAuthProvider, error)
+	GetUserOAuthProvider(GetUserOAuthProviderDTO) (*UserOAuthProvider, error)
+	RemoveUserOAuthProvider(RemoveUserOAuthProviderDTO) error
+	GetUserOAuthProvidersByUserUUID(string) ([]UserOAuthProvider, error)
+	GetOAuthProviderAuthURL(OAuthProviderName, string) (string, error)
+	GetOAuthProviderUserInfo(context.Context, OAuthProviderName, string) (*OAuthProviderUserInfo, error)
+}
+
+type AuthRepository interface {
+	CreateUserOAuthProvider(UserOAuthProvider) (*UserOAuthProvider, error)
+	GetUserOAuthProviderByProviderAndProviderUserID(OAuthProviderName, string) (*UserOAuthProvider, error)
+	DeleteUserOAuthProvider(string) error
+	ListUserOAuthProvidersByUserUUID(string) ([]UserOAuthProvider, error)
 }

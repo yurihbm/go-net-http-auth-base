@@ -16,23 +16,30 @@ func AuthFactory(conn *pgx.Conn) *controllers.AuthController {
 	userService := services.NewUserService(userRepository)
 
 	authRepository := repositories.NewAuthPostgresRepository(conn)
-	authService := services.NewAuthService(userService, authRepository)
-
-	oauthProviders := map[domain.OAuthProviderName]domain.OAuthProvider{
-		domain.OAuthProviderGoogle: providers.NewGoogleOAuthProvider(
-			config.NewGoogleOAuthConfig(),
-		),
-		domain.OAuthProviderGitHub: providers.NewGitHubOAuthProvider(
-			config.NewGitHubOAuthConfig(),
-		),
-		domain.OAuthProviderMicrosoft: providers.NewMicrosoftOAuthProvider(
-			config.NewMicrosoftOAuthConfig(),
-		),
+	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
+		map[domain.OAuthProviderName]domain.OAuthProvider{
+			domain.OAuthProviderGoogle: providers.NewGoogleOAuthProvider(
+				config.NewGoogleOAuthConfig(),
+			),
+			domain.OAuthProviderGitHub: providers.NewGitHubOAuthProvider(
+				config.NewGitHubOAuthConfig(),
+			),
+			domain.OAuthProviderMicrosoft: providers.NewMicrosoftOAuthProvider(
+				config.NewMicrosoftOAuthConfig(),
+			),
+		},
+	)
+	if err != nil {
+		panic("failed to create OAuth provider registry: " + err.Error())
 	}
+	authService := services.NewAuthService(
+		userService,
+		authRepository,
+		oauthProviderRegistry,
+	)
 
 	return controllers.NewAuthController(
 		authService,
 		userService,
-		oauthProviders,
 	)
 }

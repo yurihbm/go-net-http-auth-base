@@ -1,6 +1,7 @@
 package mocks
 
 import (
+	"context"
 	"errors"
 
 	"go-net-http-auth-base/internal/domain"
@@ -73,6 +74,22 @@ func (m *AuthServiceMock) GetUserOAuthProvidersByUserUUID(userUUID string) ([]do
 	args := m.Called(userUUID)
 	if args.Get(0) != nil {
 		return args.Get(0).([]domain.UserOAuthProvider), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *AuthServiceMock) GetOAuthProviderAuthURL(providerName domain.OAuthProviderName, state string) (string, error) {
+	args := m.Called(providerName, state)
+	if args.Get(0) != nil {
+		return args.String(0), args.Error(1)
+	}
+	return "", errNotImplemented
+}
+
+func (m *AuthServiceMock) GetOAuthProviderUserInfo(ctx context.Context, providerName domain.OAuthProviderName, code string) (*domain.OAuthProviderUserInfo, error) {
+	args := m.Called(ctx, providerName, code)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.OAuthProviderUserInfo), args.Error(1)
 	}
 	return nil, args.Error(1)
 }

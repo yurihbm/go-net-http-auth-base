@@ -10,9 +10,8 @@ import (
 )
 
 type AuthController struct {
-	authService    domain.AuthService
-	usersService   domain.UsersService
-	oauthProviders map[domain.OAuthProviderName]domain.OAuthProvider
+	authService  domain.AuthService
+	usersService domain.UsersService
 }
 
 var _ Controller = (*AuthController)(nil)
@@ -20,12 +19,10 @@ var _ Controller = (*AuthController)(nil)
 func NewAuthController(
 	authService domain.AuthService,
 	usersService domain.UsersService,
-	oauthProviders map[domain.OAuthProviderName]domain.OAuthProvider,
 ) *AuthController {
 	return &AuthController{
 		authService,
 		usersService,
-		oauthProviders,
 	}
 }
 
@@ -128,9 +125,14 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	providerConfig := c.oauthProviders[providerName]
+	authURL, err := c.authService.GetOAuthProviderAuthURL(providerName, state)
+	if err != nil {
+		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
+			Message: "auth.provider_login.failed",
+			Error:   err.Error(),
+		})
+	}
 
-	authURL := providerConfig.GetAuthURL(state)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
@@ -177,8 +179,11 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	provider := c.oauthProviders[providerName]
-	userInfo, err := provider.GetUserInfo(r.Context(), code)
+	userInfo, err := c.authService.GetOAuthProviderUserInfo(
+		r.Context(),
+		providerName,
+		code,
+	)
 	if err != nil {
 		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 			Message: "auth.provider_callback.token_exchange_failed",
