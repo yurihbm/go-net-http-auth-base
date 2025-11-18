@@ -128,3 +128,9 @@ type OAuthProvider interface {
 	GetAuthURL(string) string
 	GetUserInfo(context.Context, string) (*OAuthProviderUserInfo, error)
 }
+
+type OAuthProviderRegistry interface {
+	Get(name OAuthProviderName) (OAuthProvider, error)
+	GetAll() map[OAuthProviderName]OAuthProvider
+	IsConfigured(name OAuthProviderName) bool
+}
