@@ -26,11 +26,11 @@ High-impact, low-effort work that immediately improves the project.
 - [x] Create providers module: `internal/providers/oauth.go`
 - [x] Implement GoogleOAuthProvider
 - [x] Implement GitHubOAuthProvider
-- [ ] Implement MicrosoftOAuthProvider
-- [ ] Update AuthService to use providers
-- [ ] Update AuthController to use methods from AuthService
-- [ ] Update factories to inject OAuth providers
-- [ ] Add and update tests
+- [x] Implement MicrosoftOAuthProvider
+- [x] Update AuthService to use providers
+- [x] Update AuthController to use methods from AuthService
+- [x] Update factories to inject OAuth providers
+- [x] Add and update tests
 
 ### 1.2 Structured Logging with slog
 
