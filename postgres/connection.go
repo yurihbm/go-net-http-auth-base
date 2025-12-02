@@ -2,7 +2,7 @@ package postgres
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/jackc/pgx/v5"
@@ -11,12 +11,14 @@ import (
 func NewConnection(ctx context.Context) *pgx.Conn {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Fatal("DATABASE_URL not set in environment")
+		slog.Error("DATABASE_URL not set in environment")
+		os.Exit(1)
 	}
 
 	conn, err := pgx.Connect(ctx, dbURL)
 	if err != nil {
-		log.Fatal("Unable to connect to database:", err)
+		slog.Error("Unable to connect to database", "error", err)
+		os.Exit(1)
 	}
 
 	return conn

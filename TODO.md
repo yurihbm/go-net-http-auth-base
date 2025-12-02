@@ -36,20 +36,21 @@ High-impact, low-effort work that immediately improves the project.
 
 **Tasks**:
 
-- [ ] Create `internal/logger/logger.go`
-- [ ] Replace `log.Println()` with `slog` calls in `cmd/main.go`
-- [ ] Update `postgres/connection.go` with structured logging
-- [ ] Add structured logging to all controllers
-- [ ] Setup JSON logging for production environment
+- [x] Create `internal/logger/logger.go`
+- [x] Replace `log.Println()` with `slog` calls in `cmd/main.go`
+- [x] Update `postgres/connection.go` with structured logging
+- [x] Create `internal/middlewares/logger_middleware`
+- [x] Register the logger middlware at `cmd/main.go`
+- [x] Setup JSON logging for production environment
 - [ ] Add context-aware logging (request IDs, user IDs)
 - [ ] Test logging output in local environment
 
 **Files to modify**:
 
 - `internal/logger/logger.go` (create)
+- `internal/middlewares/logger_middleware.go` (create)
 - `cmd/main.go`
 - `postgres/connection.go`
-- `internal/controllers/*.go`
 
 ---
 

@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go-net-http-auth-base/internal/factories"
+	"go-net-http-auth-base/internal/logger"
 	"go-net-http-auth-base/postgres"
 
 	"github.com/joho/godotenv"
@@ -17,8 +18,10 @@ import (
 
 func main() {
 	err := godotenv.Load()
+	logger.Setup()
+
 	if err != nil {
-		log.Println("Warning: .env file not found or failed to load")
+		slog.Warn("Warning: .env file not found or failed to load")
 	}
 
 	ctx := context.Background()
@@ -26,7 +29,7 @@ func main() {
 
 	defer func() {
 		if err := conn.Close(ctx); err != nil {
-			log.Println("Error closing database connection:", err)
+			slog.Error("Error closing database connection", "error", err)
 		}
 	}()
 
@@ -35,17 +38,24 @@ func main() {
 	factories.AuthFactory(conn).RegisterRoutes(mux)
 
 	corsMiddleware := factories.CORSFactory()
-	corsHandler := corsMiddleware.Use(mux)
+	loggerMiddleware := factories.LoggerFactory()
+	handler := loggerMiddleware.Use(corsMiddleware.Use(mux))
+
+	port := os.Getenv("API_PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	server := &http.Server{
-		Addr:    ":8080",
-		Handler: corsHandler,
+		Addr:    ":" + port,
+		Handler: handler,
 	}
 
 	go func() {
-		log.Println("Server listening on port :8080")
+		slog.Info("Server listening on port :" + port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
+			slog.Error("Server failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -53,14 +63,15 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	slog.Info("Shutting down server...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+		slog.Error("Server forced to shutdown", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server exited gracefully")
+	slog.Info("Server exited gracefully")
 }

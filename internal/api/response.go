@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -50,6 +50,6 @@ func WriteJSONResponse[T any](w http.ResponseWriter, status int, body ResponseBo
 	}
 	w.WriteHeader(status)
 	if _, err := w.Write(data); err != nil {
-		log.Printf("WriteJSONResponse: %v", err)
+		slog.Error("WriteJSONResponse failed", "error", err)
 	}
 }
