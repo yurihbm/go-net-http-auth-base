@@ -36,6 +36,7 @@ func main() {
 	mux := http.NewServeMux()
 	factories.UsersFactory(conn).RegisterRoutes(mux)
 	factories.AuthFactory(conn).RegisterRoutes(mux)
+	factories.HealthFactory(conn).RegisterRoutes(mux)
 
 	corsMiddleware := factories.CORSFactory()
 	loggerMiddleware := factories.LoggerFactory()

@@ -58,12 +58,12 @@ High-impact, low-effort work that immediately improves the project.
 
 **Tasks**:
 
-- [ ] Create `internal/controllers/health_controller.go`
-- [ ] Implement `GET /health` endpoint (basic liveness check)
-- [ ] Implement `GET /ready` endpoint (checks DB connectivity with timeout)
-- [ ] Register health endpoints in `cmd/main.go`
-- [ ] Add health controller tests in `internal/controllers/health_controller_test.go`
-- [ ] Test endpoints manually with curl
+- [x] Create `internal/controllers/health_controller.go`
+- [x] Implement `GET /health` endpoint (basic liveness check)
+- [x] Implement `GET /ready` endpoint (checks DB connectivity with timeout)
+- [x] Register health endpoints in `cmd/main.go`
+- [x] Add health controller tests in `internal/controllers/health_controller_test.go`
+- [x] Test endpoints manually with curl
 
 **Files to create/modify**:
 
