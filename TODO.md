@@ -42,8 +42,8 @@ High-impact, low-effort work that immediately improves the project.
 - [x] Create `internal/middlewares/logger_middleware`
 - [x] Register the logger middlware at `cmd/main.go`
 - [x] Setup JSON logging for production environment
-- [ ] Add context-aware logging (request IDs, user IDs)
-- [ ] Test logging output in local environment
+- [x] Add context-aware logging (request IDs, user IDs)
+- [x] Test logging output in local environment
 
 **Files to modify**:
 
