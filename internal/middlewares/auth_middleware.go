@@ -47,6 +47,10 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		if loggerData, ok := r.Context().Value(LoggerDataKey).(*LoggerData); ok {
+			loggerData.UserUUID = tokenData.Subject
+		}
+
 		ctx := context.WithValue(r.Context(), UserUUIDKey, tokenData.Subject)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}

@@ -1,10 +1,22 @@
 package middlewares
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type LoggerData struct {
+	UserUUID  string
+	RequestID string
+}
+
+type LoggerContextKey string
+
+const LoggerDataKey LoggerContextKey = "loggerData"
 
 type LoggerMiddleware struct{}
 
@@ -19,7 +31,12 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 		// Wrap ResponseWriter to capture status code
 		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
-		next.ServeHTTP(ww, r)
+		loggerData := &LoggerData{
+			RequestID: uuid.New().String(),
+		}
+		ctx := context.WithValue(r.Context(), LoggerDataKey, loggerData)
+
+		next.ServeHTTP(ww, r.WithContext(ctx))
 
 		duration := time.Since(start)
 
@@ -30,14 +47,20 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 			level = slog.LevelWarn
 		}
 
-		slog.Log(r.Context(), level, "HTTP Request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", ww.statusCode,
-			"duration", duration,
-			"ip", r.RemoteAddr,
-			"user_agent", r.UserAgent(),
-		)
+		attrs := []slog.Attr{
+			slog.String("requestID", loggerData.RequestID),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", ww.statusCode),
+			slog.Duration("duration", duration),
+			slog.String("ip", r.RemoteAddr),
+			slog.String("userAgent", r.UserAgent()),
+		}
+		if loggerData.UserUUID != "" {
+			attrs = append(attrs, slog.String("userUUID", loggerData.UserUUID))
+		}
+
+		slog.LogAttrs(r.Context(), level, "HTTP Request", attrs...)
 	})
 }
 

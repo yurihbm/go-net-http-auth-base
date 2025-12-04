@@ -137,7 +137,51 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 		wrappedHandler.ServeHTTP(w, req)
 
 		logOutput := buf.String()
-		assert.Contains(t, logOutput, "\"user_agent\":\"TestAgent/1.0\"")
+		assert.Contains(t, logOutput, "\"userAgent\":\"TestAgent/1.0\"")
 		assert.Contains(t, logOutput, "\"ip\":\"192.168.1.1:1234\"")
+	})
+
+	t.Run("should log userUUID when present", func(t *testing.T) {
+		buf.Reset()
+
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Simulate setting UserUUID in the context
+			if data, ok := r.Context().Value(middlewares.LoggerDataKey).(*middlewares.LoggerData); ok {
+				data.UserUUID = "test-user-uuid"
+			}
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrappedHandler := middleware.Use(nextHandler)
+
+		req := httptest.NewRequest("GET", "/test-auth", nil)
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		logOutput := buf.String()
+		assert.Contains(t, logOutput, "\"userUUID\":\"test-user-uuid\"")
+	})
+
+	t.Run("should not log userUUID when not present", func(t *testing.T) {
+		buf.Reset()
+
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrappedHandler := middleware.Use(nextHandler)
+
+		req := httptest.NewRequest("GET", "/test-no-auth", nil)
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		logOutput := buf.String()
+		assert.NotContains(t, logOutput, "\"userUUID\"")
 	})
 }

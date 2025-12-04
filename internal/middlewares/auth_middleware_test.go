@@ -1,6 +1,7 @@
 package middlewares_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -232,5 +233,48 @@ func TestAuthMiddlewareUse(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w2.Code)
 
 		serviceMock.AssertNumberOfCalls(t, "VerifyToken", 2)
+	})
+
+	t.Run("success - updates logger data when present", func(t *testing.T) {
+		middleware, serviceMock := getTestAuthMiddleware()
+		userUUID := "test-user-uuid"
+		token := "valid-token"
+
+		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceAccess,
+		}).Return(&domain.VerifiedTokenData{
+			Subject: userUUID,
+		}, nil)
+
+		// Create logger data
+		loggerData := &middlewares.LoggerData{}
+
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrappedHandler := middleware.Use(nextHandler)
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.AddCookie(&http.Cookie{
+			Name:  "access_token",
+			Value: token,
+		})
+		
+		// Inject logger data into context
+		ctx := context.WithValue(req.Context(), middlewares.LoggerDataKey, loggerData)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, userUUID, loggerData.UserUUID)
+		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceAccess,
+		})
 	})
 }
