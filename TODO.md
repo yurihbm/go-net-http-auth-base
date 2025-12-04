@@ -77,17 +77,17 @@ High-impact, low-effort work that immediately improves the project.
 
 **Tasks**:
 
-- [ ] Create `.github/workflows/test.yml`
-  - [ ] Setup Go environment
-  - [ ] Add PostgreSQL service container
-  - [ ] Run tests with coverage
-  - [ ] Upload coverage reports
-- [ ] Create `.github/workflows/lint.yml`
-  - [ ] Setup golangci-lint
-  - [ ] Run linter on all code
-  - [ ] Fail on lint errors
-- [ ] Verify workflows trigger on push/PR
-- [ ] Add status badges to README.md
+- [x] Create `.github/workflows/test.yml`
+  - [x] Setup Go environment
+  - [x] Add PostgreSQL service container
+  - [x] Run tests with coverage
+  - [x] Upload coverage reports
+- [x] Create `.github/workflows/lint.yml`
+  - [x] Setup golangci-lint
+  - [x] Run linter on all code
+  - [x] Fail on lint errors
+- [x] Verify workflows trigger on push/PR
+- [x] Add status badges to README.md
 
 **Files to create**:
 

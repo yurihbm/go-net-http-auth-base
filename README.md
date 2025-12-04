@@ -1,5 +1,8 @@
 # Go net/http Auth Base
 
+[![Test](https://github.com/yurihbm/go-net-http-auth-base/actions/workflows/test.yml/badge.svg)](https://github.com/yurihbm/go-net-http-auth-base/actions/workflows/test.yml)
+[![Lint](https://github.com/yurihbm/go-net-http-auth-base/actions/workflows/lint.yml/badge.svg)](https://github.com/yurihbm/go-net-http-auth-base/actions/workflows/lint.yml)
+
 A clean, modular Go backend service template. Built with the standard `net/http`
 library and focused on maintainability, testability, and following clean architecture
 principles. This project comes with basic users CRUD and authentication flow with JWT.
