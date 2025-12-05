@@ -1,5 +1,7 @@
-include .env
-export
+ifneq (,$(wildcard .env))
+	include .env
+	export
+endif
 
 TOOLS = \
 	github.com/air-verse/air@v1.62.0 \
