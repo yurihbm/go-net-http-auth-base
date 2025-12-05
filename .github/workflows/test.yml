@@ -20,11 +20,11 @@ jobs:
         with:
           go-version: "1.24.5"
 
+      - name: Install golang-migrate
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0
+
       - name: Start services
         run: docker compose -f docker/docker-compose.test.yaml up -d --wait
-
-      - name: Set up tools
-        run: make setup
 
       - name: Run tests
         env:
