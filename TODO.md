@@ -100,18 +100,18 @@ High-impact, low-effort work that immediately improves the project.
 
 **Tasks**:
 
-- [ ] Create `Dockerfile` with multi-stage build
-- [ ] Add builder stage (compile Go binary)
-- [ ] Add runtime stage (Alpine-based, minimal)
-- [ ] Setup non-root user for security (uid 1000)
-- [ ] Add HEALTHCHECK configuration
-- [ ] Test Docker build locally
-- [ ] Test Docker image runs correctly
-- [ ] Document Docker usage in README
+- [x] Create `docker/Dockerfile` with multi-stage build
+- [x] Add builder stage (compile Go binary)
+- [x] Add runtime stage (Alpine-based, minimal)
+- [x] Setup non-root user for security (uid 1000)
+- [x] Add HEALTHCHECK configuration
+- [x] Test Docker build locally
+- [x] Test Docker image runs correctly
+- [x] Document Docker usage in README
 
 **Files to create**:
 
-- `Dockerfile` (create)
+- `docker/Dockerfile` (create)
 
 ---
 
@@ -138,11 +138,11 @@ High-impact, low-effort work that immediately improves the project.
 
 ## ✅ Phase 1 Completion Checklist
 
-- [ ] Providers to fetch oauth user info are injected into AuthService
-- [ ] Tests run automatically on GitHub Actions
-- [ ] Docker image builds successfully
-- [ ] Logging appears in structured JSON format
-- [ ] Health endpoints (`/health`, `/ready`) return 200 OK
+- [x] Providers to fetch oauth user info are injected into AuthService
+- [x] Tests run automatically on GitHub Actions
+- [x] Docker image builds successfully
+- [x] Logging appears in structured JSON format
+- [x] Health endpoints (`/health`, `/ready`) return 200 OK
 - [ ] All Phase 1 code is tested
 
 ---
