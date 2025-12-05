@@ -3,24 +3,26 @@ ifneq (,$(wildcard .env))
 	export
 endif
 
-TOOLS = \
-	github.com/air-verse/air@v1.62.0 \
-	github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
+AIR_VERSION = v1.62.0
+SQLC_VERSION = v1.30.0
+GOLANG_MIGRATE_VERSION = v4.19.0
 
-.PHONY: install-tools tidy setup build migrate-create migrate-up migrate-down sqlc-gen
+.PHONY: install-tools install-air install-migrate install-sqlc tidy setup build migrate-create migrate-up migrate-down sqlc-gen
 
-install-tools:
-	@echo "Installing tools..."
-	@for tool in $(TOOLS); do \
-		echo "Installing $$tool..."; \
-		go install $$tool; \
-	done
-	@echo "Installing github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0..."
-	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0
+install-tools: install-air install-migrate install-sqlc
+
+install-air:
+	go install github.com/air-verse/air@$(AIR_VERSION)
+
+install-migrate:
+	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@$(GOLANG_MIGRATE_VERSION)
+
+install-sqlc:
+	go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
 
 tidy:
-	@echo "Tidying up go.mod and go.sum..."
 	go mod tidy
+
 
 setup: install-tools tidy
 
