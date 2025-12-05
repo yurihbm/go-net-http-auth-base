@@ -2,39 +2,42 @@ name: Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.24.5'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.5"
 
-    - name: Start services
-      run: docker compose -f docker/docker-compose.test.yaml up -d --wait
+      - name: Start services
+        run: docker compose -f docker/docker-compose.test.yaml up -d --wait
 
-    - name: Run tests
-      env:
-        DATABASE_URL: postgres://testuser:testpassword@localhost:5433/testdb?sslmode=disable
-      run: |
-        go test -v -coverprofile=coverage.txt ./... | tee test_output.txt
-        go tool cover -func=coverage.txt > coverage_summary.txt
+      - name: Run tests
+        env:
+          DATABASE_URL: postgres://testuser:testpassword@localhost:5433/testdb?sslmode=disable
+        run: |
+          go test -v -coverprofile=coverage.txt ./... | tee test_output.txt
+          go tool cover -func=coverage.txt > coverage_summary.txt
 
-    - name: Comment PR
-      if: github.event_name == 'pull_request'
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        echo "### Test Results" > comment.md
-        echo "" >> comment.md
-        echo "\`\`\`" >> comment.md
-        cat coverage_summary.txt >> comment.md
-        echo "\`\`\`" >> comment.md
-        gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "### Test Results" > comment.md
+          echo "" >> comment.md
+          echo "\`\`\`" >> comment.md
+          cat coverage_summary.txt >> comment.md
+          echo "\`\`\`" >> comment.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
