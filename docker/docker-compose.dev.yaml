@@ -1,14 +1,14 @@
 services:
   db:
-    image: postgres:18rc1
-    container_name: photo-chef-postgres
+    image: postgres:18-alpine
+    container_name: auth-base-postgres
     restart: always
     env_file:
       - ../.env
     ports:
       - "5432:5432"
     volumes:
-      - photo_chef_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
 
   pgadmin:
     image: dpage/pgadmin4
@@ -22,4 +22,4 @@ services:
       - db
 
 volumes:
-  photo_chef_data:
+  postgres_data:
