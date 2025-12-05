@@ -136,7 +136,7 @@ make sqlc-gen                               # Generate Go code from SQL queries
 
 ### Docker for Development
 
-You may use the `docker/docker-compose.dev.yaml` file for development. It provides a local Postgres Database (localhost:5432) and the pgAdmin application (locahost:5050).
+You may use the `docker/docker-compose.dev.yaml` file for development. It provides a local Postgres Database (localhost:5432) and the pgAdmin application (localhost:5050).
 
 ```bash
 docker compose -f docker/docker-compose.dev.yaml up -d    # Start services
