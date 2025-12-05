@@ -28,6 +28,7 @@ backend/
 │   ├── repositories/   # Data access layer
 │   ├── domain/         # Core entities and interfaces
 │   ├── factories/      # Dependency injection
+│   ├── providers/      # External services layer
 │   └── middlewares/    # HTTP middlewares
 ├── postgres/           # Database layer
 │   ├── migrations/     # Database migrations
@@ -111,7 +112,7 @@ backend/
    air
    ```
 
-   The server will start on `http://localhost:8080` with live reload enabled.
+   The server will start on `http://localhost:8080` (if APP_PORT is not set) with live reload enabled.
 
 ## 📝 Available Commands
 
@@ -119,6 +120,7 @@ backend/
 
 ```bash
 air             # Run with live reload (development)
+make setup      # Install all required tools for development
 make build      # Build production binary (outputs to bin/app)
 make tidy       # Tidy go.mod and go.sum
 ```
@@ -132,13 +134,68 @@ make migrate-create name=migration_name     # Create new migration files
 make sqlc-gen                               # Generate Go code from SQL queries
 ```
 
-### Docker
+### Docker for Development
+
+You may use the `docker/docker-compose.dev.yaml` file for development. It provides a local Postgres Database (localhost:5432) and the pgAdmin application (locahost:5050).
 
 ```bash
-docker compose -f docker/docker-compose.yaml up -d    # Start services
-docker compose -f docker/docker-compose.yaml down     # Stop services
-docker compose -f docker/docker-compose.yaml logs     # View logs
+docker compose -f docker/docker-compose.dev.yaml up -d    # Start services
+docker compose -f docker/docker-compose.dev.yaml down     # Stop services
+docker compose -f docker/docker-compose.dev.yaml logs     # View logs
 ```
+
+### Production Docker Build
+
+To build and run the application in a production-ready Docker container, you have two options:
+
+#### Option 1: Using Docker Compose (Recommended)
+
+This method automatically sets up the application and a PostgreSQL database.
+
+1. **Create the .env file**
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+2. **Run with Docker Compose**
+
+   ```bash
+   docker compose -f docker/docker-compose.prod.yaml up -d --build
+   ```
+
+#### Option 2: Manual Build & Run
+
+1. **Build the image**
+
+   ```bash
+   docker build -f docker/Dockerfile -t go-net-http-auth-base .
+   ```
+
+2. **Run the container**
+
+   You can pass environment variables using the `--env-file` flag:
+
+   ```bash
+   docker run -d \
+     -p 8080:8080 \
+     --env-file .env \
+     --name app \
+     go-net-http-auth-base
+   ```
+
+   Or pass them individually:
+
+   ```bash
+   docker run -d \
+     -p 8080:8080 \
+     -e DATABASE_URL="postgresql://user:pass@host:5432/db" \
+     --name app \
+     go-net-http-auth-base
+   ```
+
+   Note: When running manually, ensure the `DATABASE_URL` points to a reachable PostgreSQL instance.
 
 ### Testing
 
@@ -175,7 +232,7 @@ This creates two files in `postgres/migrations/`:
 
 ## 🔧 Configuration
 
-Configuration is managed through environment variables:
+Configuration is managed through environment variables (see .env.example):
 
 | Variable                   | Description                  | Example                                    |
 | -------------------------- | ---------------------------- | ------------------------------------------ |
