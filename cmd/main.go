@@ -20,7 +20,7 @@ func main() {
 	err := godotenv.Load()
 	logger.Setup()
 
-	if err != nil {
+	if err != nil && os.Getenv("API_ENV") != "production" {
 		slog.Warn("Warning: .env file not found or failed to load")
 	}
 
