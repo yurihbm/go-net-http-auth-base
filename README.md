@@ -142,7 +142,7 @@ go test ./... -v                 # Run with verbose output
 go test ./... -cover             # Run with coverage report
 ```
 
-## Docker
+## 🐋 Docker
 
 ### Docker for Development
 
