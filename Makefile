@@ -26,9 +26,9 @@ tidy:
 
 setup: install-tools tidy
 
-# Build production binary
+# Build application binary
 build:
-	@echo "Building production binary..."
+	@echo "Building application binary..."
 	GOOS=linux GOARCH=amd64 go build -o bin/app ./cmd/main.go
 
 # Create a new database migration

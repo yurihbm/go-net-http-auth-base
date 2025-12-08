@@ -97,7 +97,7 @@ backend/
 5. **Start the database**
 
    ```bash
-   docker-compose -f docker/docker-compose.yaml up -d
+   docker-compose --env-file .env -f docker/docker-compose.dev.yaml up -d
    ```
 
 6. **Run migrations**
@@ -112,7 +112,7 @@ backend/
    air
    ```
 
-   The server will start on `http://localhost:8080` (if APP_PORT is not set) with live reload enabled.
+   The server will start on `http://localhost:8080` (if API_PORT is not set) with live reload enabled.
 
 ## 📝 Available Commands
 
@@ -134,17 +134,27 @@ make migrate-create name=migration_name     # Create new migration files
 make sqlc-gen                               # Generate Go code from SQL queries
 ```
 
-### Docker for Development
-
-You may use the `docker/docker-compose.dev.yaml` file for development. It provides a local Postgres Database (localhost:5432) and the pgAdmin application (localhost:5050).
+### Testing
 
 ```bash
-docker compose -f docker/docker-compose.dev.yaml up -d    # Start services
-docker compose -f docker/docker-compose.dev.yaml down     # Stop services
-docker compose -f docker/docker-compose.dev.yaml logs     # View logs
+go test ./...                    # Run all tests
+go test ./... -v                 # Run with verbose output
+go test ./... -cover             # Run with coverage report
 ```
 
-### Production Docker Build
+## Docker
+
+### Docker for Development
+
+You may use the `docker/docker-compose.dev.yaml` file for development. It provides a local Postgres Database (localhost:5432) and the pgAdmin application (localhost:5050). You should provide a valid .env file.
+
+```bash
+docker compose --env-file .env -f docker/docker-compose.dev.yaml up -d --build  # Start services
+docker compose -f docker/docker-compose.dev.yaml down                           # Stop services
+docker compose -f docker/docker-compose.dev.yaml logs                           # View logs
+```
+
+### Docker for Production
 
 To build and run the application in a production-ready Docker container, you have two options:
 
@@ -162,8 +172,10 @@ This method automatically sets up the application and a PostgreSQL database.
 2. **Run with Docker Compose**
 
    ```bash
-   docker compose -f docker/docker-compose.prod.yaml up -d --build
+   docker compose --env-file .env -f docker/docker-compose.prod.yaml up -d --build
    ```
+
+   The `docker/docker-compose.prod.yaml` file runs a ephemeral service called `migrate` that performs the database migration. When running the migration on a CI/CD pipeline, remove this service.
 
 #### Option 2: Manual Build & Run
 
@@ -195,15 +207,7 @@ This method automatically sets up the application and a PostgreSQL database.
      go-net-http-auth-base
    ```
 
-   Note: When running manually, ensure the `DATABASE_URL` points to a reachable PostgreSQL instance.
-
-### Testing
-
-```bash
-go test ./...                    # Run all tests
-go test ./... -v                 # Run with verbose output
-go test ./... -cover             # Run with coverage report
-```
+   Note: When running manually, ensure the `DATABASE_URL` points to a reachable PostgreSQL instance that has the latest migration applied.
 
 ## 🗄️ Database
 
@@ -229,19 +233,6 @@ This creates two files in `postgres/migrations/`:
 1. Write your SQL in `postgres/queries/*.sql`
 2. Run `make sqlc-gen` to generate type-safe Go code
 3. Use the generated methods in your repositories
-
-## 🔧 Configuration
-
-Configuration is managed through environment variables (see .env.example):
-
-| Variable                   | Description                  | Example                                    |
-| -------------------------- | ---------------------------- | ------------------------------------------ |
-| `DATABASE_URL`             | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/db` |
-| `POSTGRES_USER`            | Database user                | `user`                                     |
-| `POSTGRES_PASSWORD`        | Database password            | `secure_password`                          |
-| `POSTGRES_DB`              | Database name                | `database`                                 |
-| `PGADMIN_DEFAULT_EMAIL`    | PgAdmin login email          | `admin@example.com`                        |
-| `PGADMIN_DEFAULT_PASSWORD` | PgAdmin password             | `admin`                                    |
 
 ## 🧪 Testing
 

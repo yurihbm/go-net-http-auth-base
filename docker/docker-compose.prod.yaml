@@ -1,23 +1,51 @@
 services:
-  app:
+  db:
+    image: postgres:18-alpine
+    container_name: ${PROJECT_NAME:-auth-base}-db-prod
+    restart: always
+    env_file:
+      - ../.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Remove this service when running migrations on CI/CD
+  migrate:
+    image: migrate/migrate
+    container_name: ${PROJECT_NAME:-auth-base}-migrate-prod
+    env_file:
+      - ../.env
+    volumes:
+      - ../postgres/migrations:/migrations
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'migrate -database "$$DATABASE_URL" -path /migrations up'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        API_PORT: ${API_PORT}
+    container_name: ${PROJECT_NAME:-auth-base}-api-prod
     env_file:
       - ../.env
     ports:
       - "${API_PORT:-8080}:${API_PORT:-8080}"
     restart: always
     depends_on:
-      - db
-
-  db:
-    image: postgres:18-alpine
-    restart: always
-    env_file:
-      - ../.env
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+    name: ${PROJECT_NAME:-auth-base}_pg_data_prod
