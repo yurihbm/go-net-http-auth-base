@@ -7,15 +7,11 @@ A clean, modular Go backend service template. Built with the standard `net/http`
 library and focused on maintainability, testability, and following clean architecture
 principles. This project comes with basic users CRUD and authentication flow with JWT.
 
-## 🏗️ Architecture
+## 📂 Project Structure
 
-The project follows a layered architecture pattern with clear separation of concerns:
+The project follows a layered architecture pattern. For a detailed explanation of the logical architecture and design principles, please see [CONTRIBUTING.md](CONTRIBUTING.md#-architecture).
 
-- **Controllers**: Handle HTTP requests/responses and route handling
-- **Services**: Implement business logic and orchestrate operations
-- **Repositories**: Abstract data access layer for database operations
-- **Domain**: Define core entities and interfaces
-- **Factories**: Wire up dependencies and register routes
+### Directory Layout
 
 ```
 backend/
@@ -274,3 +270,7 @@ All API responses follow a standardized format defined in `internal/api/response
 - JWT tokens for authentication
 - Environment variables for sensitive configuration
 - Prepared statements via sqlc to prevent SQL injection
+
+## 🤝 Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.

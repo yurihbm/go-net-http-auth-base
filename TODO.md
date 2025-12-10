@@ -119,15 +119,15 @@ High-impact, low-effort work that immediately improves the project.
 
 **Tasks**:
 
-- [ ] Create `LICENSE` (MIT recommended)
-- [ ] Create `CONTRIBUTING.md` with:
-  - [ ] Code standards and conventions
-  - [ ] Commit message conventions
-  - [ ] Testing requirements (80%+ coverage)
-  - [ ] Pull request process
-  - [ ] Development setup instructions
-- [ ] Update README.md to link CONTRIBUTING.md
-- [ ] Verify LICENSE file is properly formatted
+- [x] Create `LICENSE` (MIT recommended)
+- [x] Create `CONTRIBUTING.md` with:
+  - [x] Code standards and conventions
+  - [x] Commit message conventions
+  - [x] Testing requirements (80%+ coverage)
+  - [x] Pull request process
+  - [x] Development setup instructions
+- [x] Update README.md to link CONTRIBUTING.md
+- [x] Verify LICENSE file is properly formatted
 
 **Files to create**:
 
