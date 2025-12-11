@@ -7,7 +7,19 @@ AIR_VERSION = v1.62.0
 SQLC_VERSION = v1.30.0
 GOLANG_MIGRATE_VERSION = v4.19.0
 
-.PHONY: install-tools install-air install-migrate install-sqlc tidy setup build migrate-create migrate-up migrate-down sqlc-gen
+.PHONY: install-tools \
+	install-air \
+	install-migrate \
+	install-sqlc \
+	tidy \
+	setup \
+	build \
+	migrate-create \
+	migrate-up \
+	migrate-down \
+	sqlc-gen \
+	test-cover \
+	show-cover
 
 install-tools: install-air install-migrate install-sqlc
 
@@ -23,6 +35,18 @@ install-sqlc:
 tidy:
 	go mod tidy
 
+# Filters out postgres, domain, and mocks directories from the package list
+PACKAGES=$(shell go list ./... | grep -v -E 'postgres|domain|mocks|config|logger|cmd')
+
+.PHONY: test-cover
+test-cover:
+	@echo "Running tests with coverage exclusions..."
+	go test -coverprofile=coverage.out $(PACKAGES)
+	@echo "Coverage report generated: coverage.out"
+
+.PHONY: show-cover
+show-cover: test-cover
+	go tool cover -func=coverage.out
 
 setup: install-tools tidy
 

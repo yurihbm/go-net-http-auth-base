@@ -31,17 +31,21 @@ jobs:
         env:
           DATABASE_URL: postgres://testuser:testpassword@localhost:5433/testdb?sslmode=disable
         run: |
-          go test -v -coverprofile=coverage.txt ./... | tee test_output.txt
-          go tool cover -func=coverage.txt > coverage_summary.txt
+          make test-cover
+          make show-cover > coverage_summary.txt
 
-      - name: Comment PR
+      - name: Prepare comment body
         if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "### Test Results" > comment.md
           echo "" >> comment.md
-          echo "\`\`\`" >> comment.md
+          echo '```' >> comment.md
           cat coverage_summary.txt >> comment.md
-          echo "\`\`\`" >> comment.md
-          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
+          echo '```' >> comment.md
+
+      - name: Post or update comment
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage-report
+          path: comment.md
