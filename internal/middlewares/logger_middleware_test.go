@@ -19,7 +19,7 @@ func TestNewLoggerMiddleware(t *testing.T) {
 	})
 }
 
-func TestLoggerMiddlewareUse(t *testing.T) {
+func TestLoggerMiddleware_Use(t *testing.T) {
 	// Setup log capture
 	var buf bytes.Buffer
 	handler := slog.NewJSONHandler(&buf, nil)
@@ -32,7 +32,7 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 
 	t.Run("should log info for 200 OK", func(t *testing.T) {
 		buf.Reset()
-		
+
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
@@ -45,7 +45,7 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 		wrappedHandler.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		logOutput := buf.String()
 		assert.Contains(t, logOutput, "HTTP Request")
 		assert.Contains(t, logOutput, "\"level\":\"INFO\"")
@@ -56,7 +56,7 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 
 	t.Run("should log warn for 400 Bad Request", func(t *testing.T) {
 		buf.Reset()
-		
+
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 		})
@@ -69,7 +69,7 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 		wrappedHandler.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		
+
 		logOutput := buf.String()
 		assert.Contains(t, logOutput, "HTTP Request")
 		assert.Contains(t, logOutput, "\"level\":\"WARN\"")
@@ -80,7 +80,7 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 
 	t.Run("should log error for 500 Internal Server Error", func(t *testing.T) {
 		buf.Reset()
-		
+
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
@@ -93,7 +93,7 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 		wrappedHandler.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		
+
 		logOutput := buf.String()
 		assert.Contains(t, logOutput, "HTTP Request")
 		assert.Contains(t, logOutput, "\"level\":\"ERROR\"")
@@ -104,7 +104,7 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 
 	t.Run("should capture duration", func(t *testing.T) {
 		buf.Reset()
-		
+
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
@@ -122,7 +122,7 @@ func TestLoggerMiddlewareUse(t *testing.T) {
 
 	t.Run("should capture user agent and ip", func(t *testing.T) {
 		buf.Reset()
-		
+
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})

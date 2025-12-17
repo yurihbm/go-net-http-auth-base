@@ -9,39 +9,42 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWriteJSONResponse_Success(t *testing.T) {
-	w := httptest.NewRecorder()
-	responseBody := ResponseBody[string]{
-		Data:    "Test Data",
-		Message: "Success",
-	}
+func TestWriteJSONResponse(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
 
-	WriteJSONResponse(w, http.StatusOK, responseBody)
+		w := httptest.NewRecorder()
+		responseBody := ResponseBody[string]{
+			Data:    "Test Data",
+			Message: "Success",
+		}
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+		WriteJSONResponse(w, http.StatusOK, responseBody)
 
-	var response ResponseBody[string]
-	err := json.NewDecoder(w.Body).Decode(&response)
-	assert.NoError(t, err)
-	assert.Equal(t, responseBody.Data, response.Data)
-	assert.Equal(t, responseBody.Message, response.Message)
-}
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-func TestWriteJSONResponse_EncodingError(t *testing.T) {
-	w := httptest.NewRecorder()
-	responseBody := ResponseBody[chan int]{ // Using channel as a non-serializable type
-		Data: nil,
-	}
+		var response ResponseBody[string]
+		err := json.NewDecoder(w.Body).Decode(&response)
+		assert.NoError(t, err)
+		assert.Equal(t, responseBody.Data, response.Data)
+		assert.Equal(t, responseBody.Message, response.Message)
+	})
 
-	WriteJSONResponse(w, http.StatusOK, responseBody)
+	t.Run("encoding error", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		responseBody := ResponseBody[chan int]{ // Using channel as a non-serializable type
+			Data: nil,
+		}
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+		WriteJSONResponse(w, http.StatusOK, responseBody)
 
-	var response map[string]string
-	err := json.NewDecoder(w.Body).Decode(&response)
-	assert.NoError(t, err)
-	assert.Equal(t, "api.encoding_error", response["message"])
-	assert.Contains(t, response["error"], "json: unsupported type")
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+		var response map[string]string
+		err := json.NewDecoder(w.Body).Decode(&response)
+		assert.NoError(t, err)
+		assert.Equal(t, "api.encoding_error", response["message"])
+		assert.Contains(t, response["error"], "json: unsupported type")
+	})
 }

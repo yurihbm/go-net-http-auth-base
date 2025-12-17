@@ -25,7 +25,7 @@ func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMoc
 	return controller, authServiceMock, usersServiceMock
 }
 
-func TestRegisterRoutes(t *testing.T) {
+func TestAuthController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes", func(t *testing.T) {
 		router := http.NewServeMux()
 		controller, _, _ := newTestAuthController()
@@ -52,7 +52,7 @@ func TestRegisterRoutes(t *testing.T) {
 	})
 }
 
-func TestLogin(t *testing.T) {
+func TestAuthController_Login(t *testing.T) {
 	dto := &domain.CredentialsLoginDTO{
 		Email:    "test@mail.com",
 		Password: "password123",
@@ -132,7 +132,7 @@ func TestLogin(t *testing.T) {
 	})
 }
 
-func TestRefreshToken(t *testing.T) {
+func TestAuthController_RefreshToken(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, _ := newTestAuthController()
 		refreshTokenValue := "refresh-token"
@@ -224,7 +224,7 @@ func TestRefreshToken(t *testing.T) {
 	})
 }
 
-func TestLogout(t *testing.T) {
+func TestAuthController_Logout(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		controller, _, _ := newTestAuthController()
 		w, req := getControllerArgs("POST", "/auth/logout", nil)
@@ -262,7 +262,7 @@ func TestLogout(t *testing.T) {
 	})
 }
 
-func TestLoginWithOAuthProvider(t *testing.T) {
+func TestAuthController_LoginWithOAuthProvider(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, _ := newTestAuthController()
 		provider := domain.OAuthProviderGoogle
@@ -367,7 +367,7 @@ func TestLoginWithOAuthProvider(t *testing.T) {
 	})
 }
 
-func TestOAuthProviderCallback(t *testing.T) {
+func TestAuthController_OAuthProviderCallback(t *testing.T) {
 	t.Run("bad request - invalid provider", func(t *testing.T) {
 		controller, _, _ := newTestAuthController()
 		w, req := getControllerArgs("GET", "/auth/invalid/callback?state=state&code=code", nil)

@@ -29,7 +29,7 @@ func TestNewCORSMiddleware(t *testing.T) {
 	})
 }
 
-func TestCORSMiddlewareUse(t *testing.T) {
+func TestCORSMiddleware_Use(t *testing.T) {
 	t.Run("success - allowed origin with all headers set", func(t *testing.T) {
 		middleware := getTestCORSMiddleware(
 			[]string{"http://localhost:3000"},

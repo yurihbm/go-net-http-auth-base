@@ -24,7 +24,7 @@ func newTestUsersController() (*controllers.UsersController, *mocks.UsersService
 	return controller, serviceMock, middlewareMock
 }
 
-func TestUsersControllerRegisterRoutes(t *testing.T) {
+func TestUsersController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes with auth middleware", func(t *testing.T) {
 		router := http.NewServeMux()
 		controller, _, authMiddleware := newTestUsersController()
@@ -36,7 +36,7 @@ func TestUsersControllerRegisterRoutes(t *testing.T) {
 	})
 }
 
-func TestCreateUser(t *testing.T) {
+func TestUsersController_CreateUser(t *testing.T) {
 	user := &domain.User{
 		UUID:  "test-uuid",
 		Name:  "John Doe",
@@ -139,7 +139,7 @@ func TestCreateUser(t *testing.T) {
 
 }
 
-func TestGetMe(t *testing.T) {
+func TestUsersController_GetMe(t *testing.T) {
 	user := &domain.User{
 		UUID:  "test-uuid",
 		Name:  "John Doe",
@@ -203,7 +203,7 @@ func TestGetMe(t *testing.T) {
 	})
 }
 
-func TestGetUserByUUID(t *testing.T) {
+func TestUsersController_GetUserByUUID(t *testing.T) {
 	uuid := "test-uuid"
 	user := &domain.User{
 		UUID:  "test-uuid",
@@ -248,7 +248,7 @@ func TestGetUserByUUID(t *testing.T) {
 	})
 }
 
-func TestUpdateUser(t *testing.T) {
+func TestUsersController_UpdateUser(t *testing.T) {
 	uuid := "test-uuid"
 	name := "John Updated"
 	dto := domain.UserUpdateDTO{Name: &name}
@@ -297,7 +297,7 @@ func TestUpdateUser(t *testing.T) {
 
 }
 
-func TestDeleteUser(t *testing.T) {
+func TestUsersController_DeleteUser(t *testing.T) {
 	uuid := "test-uuid"
 
 	t.Run("success", func(t *testing.T) {
