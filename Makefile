@@ -35,16 +35,14 @@ install-sqlc:
 tidy:
 	go mod tidy
 
-# Filters out postgres, domain, and mocks directories from the package list
+# Filters out packages that should be excluded from coverage
 PACKAGES=$(shell go list ./... | grep -v -E 'postgres|domain|mocks|config|logger|cmd')
 
-.PHONY: test-cover
 test-cover:
 	@echo "Running tests with coverage exclusions..."
 	go test -coverprofile=coverage.out $(PACKAGES)
 	@echo "Coverage report generated: coverage.out"
 
-.PHONY: show-cover
 show-cover: test-cover
 	go tool cover -func=coverage.out
 
