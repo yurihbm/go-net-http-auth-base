@@ -79,6 +79,23 @@ func TestUsersPostgresRepository(t *testing.T) {
 		})
 	})
 
+	t.Run("FindByEmail", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			foundUser, err := repo.FindByEmail(createdUser.Email)
+			require.NoError(t, err)
+			require.NotNil(t, foundUser)
+			assert.Equal(t, createdUser.UUID, foundUser.UUID)
+			assert.Equal(t, createdUser.Name, foundUser.Name)
+			assert.Equal(t, createdUser.Email, foundUser.Email)
+		})
+
+		t.Run("not found", func(t *testing.T) {
+			user, err := repo.FindByEmail("nonexistent@example.com")
+			assert.Error(t, err)
+			assert.Nil(t, user)
+		})
+	})
+
 	t.Run("Update", func(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
 			createdUser.Name = "John Doe Updated"

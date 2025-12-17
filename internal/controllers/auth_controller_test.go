@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -22,6 +23,33 @@ func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMoc
 
 	controller := controllers.NewAuthController(authServiceMock, usersServiceMock)
 	return controller, authServiceMock, usersServiceMock
+}
+
+func TestRegisterRoutes(t *testing.T) {
+	t.Run("should register routes", func(t *testing.T) {
+		router := http.NewServeMux()
+		controller, _, _ := newTestAuthController()
+
+		controller.RegisterRoutes(router)
+
+		// Verify routes are registered by checking if requests match
+		routes := []struct {
+			method string
+			path   string
+		}{
+			{"POST", "/auth/login"},
+			{"POST", "/auth/refresh"},
+			{"POST", "/auth/logout"},
+			{"GET", "/auth/google/login"},
+			{"GET", "/auth/google/callback"},
+		}
+
+		for _, route := range routes {
+			req := httptest.NewRequest(route.method, route.path, nil)
+			_, pattern := router.Handler(req)
+			assert.NotEmpty(t, pattern)
+		}
+	})
 }
 
 func TestLogin(t *testing.T) {

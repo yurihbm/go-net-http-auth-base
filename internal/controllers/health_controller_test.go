@@ -23,6 +23,29 @@ func (m *MockPinger) Ping(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func TestHealthController_RegisterRoutes(t *testing.T) {
+	mockDb := new(MockPinger)
+	controller := controllers.NewHealthController(mockDb)
+	router := http.NewServeMux()
+
+	controller.RegisterRoutes(router)
+
+	// Verify routes are registered
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/health"},
+		{"GET", "/ready"},
+	}
+
+	for _, route := range routes {
+		req := httptest.NewRequest(route.method, route.path, nil)
+		_, pattern := router.Handler(req)
+		assert.NotEmpty(t, pattern)
+	}
+}
+
 func TestHealthController_Health(t *testing.T) {
 	mockDb := new(MockPinger)
 	controller := controllers.NewHealthController(mockDb)
