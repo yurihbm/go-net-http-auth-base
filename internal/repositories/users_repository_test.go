@@ -32,9 +32,12 @@ func seedUser(t *testing.T, repo domain.UsersRepository) *domain.User {
 		PasswordHash: "hashed_password",
 	}
 
-	createdUser, err := repo.Create(user)
-	require.NoError(t, err)
-	require.NotNil(t, createdUser)
+	createdUser, err := repo.FindByEmail(user.Email)
+	if err != nil || createdUser == nil {
+		createdUser, err = repo.Create(user)
+		require.NoError(t, err)
+		require.NotNil(t, createdUser)
+	}
 
 	return createdUser
 }
@@ -60,10 +63,12 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 	})
 
 	t.Run("duplicate email", func(t *testing.T) {
+		email := "jane.doe@example.com"
+
 		// Create first user
 		user1 := domain.User{
-			Name:         "John Doe",
-			Email:        "john.doe@example.com",
+			Name:         "Jane Doe",
+			Email:        email,
 			PasswordHash: "hashed_password",
 		}
 		_, err := repo.Create(user1)
@@ -72,7 +77,7 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 		// Try to create second user with same email
 		user2 := domain.User{
 			Name:         "Jane Doe",
-			Email:        "john.doe@example.com", // Same email
+			Email:        email,
 			PasswordHash: "another_password",
 		}
 
