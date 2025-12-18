@@ -143,7 +143,7 @@ High-impact, low-effort work that immediately improves the project.
 - [x] Docker image builds successfully
 - [x] Logging appears in structured JSON format
 - [x] Health endpoints (`/health`, `/ready`) return 200 OK
-- [ ] All Phase 1 code is tested
+- [x] All Phase 1 code is tested
 
 ---
 
