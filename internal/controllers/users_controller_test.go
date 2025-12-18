@@ -1,6 +1,7 @@
 package controllers_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/controllers"
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/middlewares"
 	"go-net-http-auth-base/internal/mocks"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +24,7 @@ func newTestUsersController() (*controllers.UsersController, *mocks.UsersService
 	return controller, serviceMock, middlewareMock
 }
 
-func TestUsersControllerRegisterRoutes(t *testing.T) {
+func TestUsersController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes with auth middleware", func(t *testing.T) {
 		router := http.NewServeMux()
 		controller, _, authMiddleware := newTestUsersController()
@@ -34,7 +36,7 @@ func TestUsersControllerRegisterRoutes(t *testing.T) {
 	})
 }
 
-func TestCreateUser(t *testing.T) {
+func TestUsersController_CreateUser(t *testing.T) {
 	user := &domain.User{
 		UUID:  "test-uuid",
 		Name:  "John Doe",
@@ -137,7 +139,71 @@ func TestCreateUser(t *testing.T) {
 
 }
 
-func TestGetUserByUUID(t *testing.T) {
+func TestUsersController_GetMe(t *testing.T) {
+	user := &domain.User{
+		UUID:  "test-uuid",
+		Name:  "John Doe",
+		Email: "john.doe@example.com",
+	}
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, _ := newTestUsersController()
+		serviceMock.On("GetByUUID", "test-uuid").Return(user, nil)
+
+		w, req := getControllerArgs("GET", "/users/me", nil)
+		// Inject user UUID into context
+		ctx := context.WithValue(req.Context(), middlewares.UserUUIDKey, "test-uuid")
+		req = req.WithContext(ctx)
+
+		controller.GetMe(w, req)
+
+		var response api.ResponseBody[domain.User]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, *user, response.Data)
+		serviceMock.AssertCalled(t, "GetByUUID", "test-uuid")
+	})
+
+	t.Run("unauthorized - missing context key", func(t *testing.T) {
+		controller, serviceMock, _ := newTestUsersController()
+
+		w, req := getControllerArgs("GET", "/users/me", nil)
+		// Context without UUID
+
+		controller.GetMe(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, "user.get_me.unauthorized", response.Message)
+		serviceMock.AssertNotCalled(t, "GetByUUID")
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		controller, serviceMock, _ := newTestUsersController()
+		serviceMock.On("GetByUUID", "test-uuid").Return(nil, assert.AnError)
+
+		w, req := getControllerArgs("GET", "/users/me", nil)
+		ctx := context.WithValue(req.Context(), middlewares.UserUUIDKey, "test-uuid")
+		req = req.WithContext(ctx)
+
+		controller.GetMe(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Equal(t, "user.get_me.not_found", response.Message)
+		serviceMock.AssertCalled(t, "GetByUUID", "test-uuid")
+	})
+}
+
+func TestUsersController_GetUserByUUID(t *testing.T) {
 	uuid := "test-uuid"
 	user := &domain.User{
 		UUID:  "test-uuid",
@@ -182,7 +248,7 @@ func TestGetUserByUUID(t *testing.T) {
 	})
 }
 
-func TestUpdateUser(t *testing.T) {
+func TestUsersController_UpdateUser(t *testing.T) {
 	uuid := "test-uuid"
 	name := "John Updated"
 	dto := domain.UserUpdateDTO{Name: &name}
@@ -231,7 +297,7 @@ func TestUpdateUser(t *testing.T) {
 
 }
 
-func TestDeleteUser(t *testing.T) {
+func TestUsersController_DeleteUser(t *testing.T) {
 	uuid := "test-uuid"
 
 	t.Run("success", func(t *testing.T) {

@@ -44,6 +44,32 @@ func TestUsersService_GetByUUID(t *testing.T) {
 	})
 }
 
+func TestUsersService_GetByEmail(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo)
+
+	t.Run("success", func(t *testing.T) {
+		user := &domain.User{UUID: "some-uuid", Name: "Test User", Email: "test@example.com"}
+		repo.On("FindByEmail", "test@example.com").Return(user, nil).Once()
+
+		result, err := service.GetByEmail("test@example.com")
+
+		assert.NoError(t, err)
+		assert.Equal(t, user, result)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		repo.On("FindByEmail", "not-found@example.com").Return(nil, errors.New("not found")).Once()
+
+		result, err := service.GetByEmail("not-found@example.com")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		repo.AssertExpectations(t)
+	})
+}
+
 func TestUsersService_Create(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
 	service := services.NewUserService(repo)

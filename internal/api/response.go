@@ -22,15 +22,17 @@ type ResponseBody[T any] struct {
 	Error   string        `json:"error,omitempty"`
 }
 
-// WriteJSONResponse writes a JSON response to the http.ResponseWriter with the given status code and body.
-// It sets the "Content-Type" header to "application/json" and encodes the provided body as JSON.
+// WriteJSONResponse writes a JSON response to the http.ResponseWriter with the
+// given status code and body.
+// It sets the "Content-Type" header to "application/json" and encodes the
+// provided body as JSON.
 // If encoding fails, it writes a minimal error response.
 //
 // Parameters:
 //
-//	w     - The http.ResponseWriter to write the response to.
-//	status - The HTTP status code to set in the response.
-//	body  - The response body to encode as JSON.
+//	w       - The http.ResponseWriter to write the response to.
+//	status  - The HTTP status code to set in the response.
+//	body    - The response body to encode as JSON.
 //
 // Type Parameters:
 //

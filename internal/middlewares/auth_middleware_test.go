@@ -33,7 +33,7 @@ func TestNewAuthMiddleware(t *testing.T) {
 	})
 }
 
-func TestAuthMiddlewareUse(t *testing.T) {
+func TestAuthMiddleware_Use(t *testing.T) {
 	t.Run("success - valid token", func(t *testing.T) {
 		middleware, serviceMock := getTestAuthMiddleware()
 		userUUID := "test-user-uuid"
@@ -261,7 +261,7 @@ func TestAuthMiddlewareUse(t *testing.T) {
 			Name:  "access_token",
 			Value: token,
 		})
-		
+
 		// Inject logger data into context
 		ctx := context.WithValue(req.Context(), middlewares.LoggerDataKey, loggerData)
 		req = req.WithContext(ctx)
