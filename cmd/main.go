@@ -38,9 +38,10 @@ func main() {
 	factories.AuthFactory(conn).RegisterRoutes(mux)
 	factories.HealthFactory(conn).RegisterRoutes(mux)
 
+	rateLimitMiddleware := factories.RateLimitFactory()
 	corsMiddleware := factories.CORSFactory()
 	loggerMiddleware := factories.LoggerFactory()
-	handler := loggerMiddleware.Use(corsMiddleware.Use(mux))
+	handler := loggerMiddleware.Use(corsMiddleware.Use(rateLimitMiddleware.Use(mux)))
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

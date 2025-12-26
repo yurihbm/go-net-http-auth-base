@@ -201,22 +201,22 @@ Enterprise-grade error handling, security, and observability.
 
 **Tasks**:
 
-- [ ] Create `internal/middlewares/rate_limiter.go`
-- [ ] Implement token bucket algorithm or sliding window
-- [ ] Rate limit per IP address
-- [ ] Return 429 (Too Many Requests) when limit exceeded
-- [ ] Add rate limit headers to responses:
-  - [ ] `X-RateLimit-Limit`
-  - [ ] `X-RateLimit-Remaining`
-  - [ ] `X-RateLimit-Reset`
-- [ ] Make rate limits configurable via environment variables
-- [ ] Add rate limiter tests
-- [ ] Integrate middleware in `cmd/main.go`
+- [x] Create `internal/middlewares/rate_limit_middleware.go`
+- [x] Implement token bucket algorithm or sliding window
+- [x] Rate limit per IP address
+- [x] Return 429 (Too Many Requests) when limit exceeded
+- [x] Add rate limit headers to responses:
+  - [x] `X-RateLimit-Limit`
+  - [x] `X-RateLimit-Remaining`
+  - [x] `X-RateLimit-Reset`
+- [x] Make rate limits configurable via environment variables
+- [x] Add rate limiter tests
+- [x] Integrate middleware in `cmd/main.go`
 
 **Files to create/modify**:
 
-- `internal/middlewares/rate_limiter.go` (create)
-- `internal/middlewares/rate_limiter_test.go` (create)
+- `internal/middlewares/rate_limit_middleware.go` (create)
+- `internal/middlewares/rate_limit_middleware_test.go` (create)
 - `cmd/main.go` (register middleware)
 - `.env.example` (add rate limit config)
 

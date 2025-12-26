@@ -72,3 +72,10 @@ func TestCORSFactory(t *testing.T) {
 		assert.Equal(t, "GET, POST", w.Header().Get("Access-Control-Allow-Methods"))
 	})
 }
+
+func TestRateLimitFactory(t *testing.T) {
+	middleware := factories.RateLimitFactory()
+
+	assert.NotNil(t, middleware)
+	assert.IsType(t, &middlewares.RateLimitMiddleware{}, middleware)
+}
