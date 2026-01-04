@@ -44,7 +44,6 @@ func TestWriteJSONResponse(t *testing.T) {
 		var response map[string]string
 		err := json.NewDecoder(w.Body).Decode(&response)
 		assert.NoError(t, err)
-		assert.Equal(t, "api.encoding_error", response["message"])
-		assert.Contains(t, response["error"], "json: unsupported type")
+		assert.Equal(t, "api.encoding_error", response["error"])
 	})
 }

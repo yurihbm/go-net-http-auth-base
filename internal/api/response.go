@@ -16,10 +16,11 @@ type ResponseMeta struct {
 }
 
 type ResponseBody[T any] struct {
-	Data    T             `json:"data"`
-	Message string        `json:"message,omitempty"`
-	Meta    *ResponseMeta `json:"meta,omitempty"`
-	Error   string        `json:"error,omitempty"`
+	Data    T                 `json:"data"`
+	Message string            `json:"message,omitempty"`
+	Meta    *ResponseMeta     `json:"meta,omitempty"`
+	Error   string            `json:"error,omitempty"`
+	Details map[string]string `json:"details,omitempty"`
 }
 
 // WriteJSONResponse writes a JSON response to the http.ResponseWriter with the
@@ -44,8 +45,7 @@ func WriteJSONResponse[T any](w http.ResponseWriter, status int, body ResponseBo
 		// Use a dedicated error response struct to ensure valid JSON.
 		// This is safe and will not panic.
 		errorResponse, _ := json.Marshal(ResponseBody[any]{
-			Message: "api.encoding_error",
-			Error:   err.Error(),
+			Error: "api.encoding_error",
 		})
 		data = errorResponse
 		status = http.StatusInternalServerError
