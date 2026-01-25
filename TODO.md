@@ -155,17 +155,17 @@ Enterprise-grade error handling, security, and observability.
 
 **Tasks**:
 
-- [ ] Create `internal/domain/errors.go` with error types:
-  - [ ] `NotFoundError`
-  - [ ] `ValidationError`
-  - [ ] `ConflictError`
-  - [ ] `UnauthorizedError`
-  - [ ] `InternalServerError`
-- [ ] Implement error mapping in controllers to HTTP status codes
-- [ ] Add error details to JSON responses
-- [ ] Update service layer to return typed errors
-- [ ] Update repository layer to return typed errors
-- [ ] Add error handling tests
+- [x] Create `internal/domain/errors.go` with error types:
+  - [x] `NotFoundError`
+  - [x] `ValidationError`
+  - [x] `ConflictError`
+  - [x] `UnauthorizedError`
+  - [x] `InternalServerError`
+- [x] Implement error mapping in controllers to HTTP status codes
+- [x] Add error details to JSON responses
+- [x] Update service layer to return typed errors
+- [x] Update repository layer to return typed errors
+- [x] Add error handling tests
 - [ ] Document error codes in API docs
 
 **Files to create/modify**:
