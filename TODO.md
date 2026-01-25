@@ -167,6 +167,9 @@ Enterprise-grade error handling, security, and observability.
 - [x] Update repository layer to return typed errors
 - [x] Add error handling tests
 - [ ] Document error codes in API docs
+- [ ] Refactor `InternalServerError` to support error wrapping (`Unwrap()`)
+- [ ] Update repositories to wrap original infrastructure errors
+- [ ] Implement centralized error logging by updating `LoggerData` in `LoggerMiddleware` to include error details, and setting it in `HandleError`
 
 **Files to create/modify**:
 
