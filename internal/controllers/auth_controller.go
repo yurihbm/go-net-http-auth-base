@@ -9,6 +9,13 @@ import (
 	"go-net-http-auth-base/internal/domain"
 )
 
+var ErrInvalidOAuthProvider = domain.NewValidationError(
+	"auth.providerCallback.invalidProvider",
+	map[string]string{
+		"provider": "invalid OAuth provider",
+	},
+)
+
 type AuthController struct {
 	authService  domain.AuthService
 	usersService domain.UsersService
@@ -38,9 +45,10 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 	var dto domain.CredentialsLoginDTO
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
+	// TODO: Improve error handling for invalid JSON. Add better details (domain.ValidationError).
 	if err := decoder.Decode(&dto); err != nil {
 		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "auth.login.bad_request",
+			Message: "auth.login.badRequest",
 			Error:   err.Error(),
 		})
 		return
@@ -48,10 +56,7 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 
 	tokens, err := c.authService.CredentialsLogin(dto)
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-			Message: "auth.login.failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
@@ -73,10 +78,11 @@ func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := r.Cookie("refresh_token")
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "auth.refresh.bad_request",
-			Error:   err.Error(),
-		})
+		api.HandleError(w,
+			domain.NewUnauthorizedError(
+				"auth.refresh.missingRefreshToken",
+			),
+		)
 		return
 	}
 
@@ -84,10 +90,7 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: refreshToken.Value,
 	})
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-			Message: "auth.refresh.failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
@@ -102,10 +105,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 	providerName := domain.OAuthProviderName(r.PathValue("provider"))
 	isValidProvider := domain.OAuthProviderName.IsValid(providerName)
 	if !isValidProvider {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "auth.provider_login.bad_request",
-			Error:   "invalid OAuth provider",
-		})
+		api.HandleError(w, ErrInvalidOAuthProvider)
 		return
 	}
 
@@ -118,19 +118,14 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 	})
 
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "auth.provider_login.failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
 	authURL, err := c.authService.GetOAuthProviderAuthURL(providerName, state)
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "auth.provider_login.failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
+		return
 	}
 
 	http.Redirect(w, r, authURL, http.StatusFound)
@@ -140,10 +135,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	providerName := domain.OAuthProviderName(r.PathValue("provider"))
 	isValidProvider := providerName.IsValid()
 	if !isValidProvider {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "auth.provider_callback.bad_request",
-			Error:   "invalid OAuth provider",
-		})
+		api.HandleError(w, ErrInvalidOAuthProvider)
 		return
 	}
 
@@ -151,10 +143,19 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	code := r.URL.Query().Get("code")
 
 	if state == "" || code == "" {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "auth.provider_callback.bad_request",
-			Error:   "missing state or code in query parameters",
-		})
+		details := map[string]string{}
+		if state == "" {
+			details["state"] = "state is required"
+		}
+		if code == "" {
+			details["code"] = "code is required"
+		}
+		api.HandleError(w,
+			domain.NewValidationError(
+				"auth.provider_callback.missingParams",
+				details,
+			),
+		)
 		return
 	}
 
@@ -163,19 +164,20 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		Audience: domain.TokenAudienceOAuthState,
 	})
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-			Message: "auth.provider_callback.invalid_state",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
 	redirectURI, ok := tokenData.Payload.(map[string]any)["redirect_uri"].(string)
 	if !ok {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "auth.provider_callback.invalid_state",
-			Error:   "invalid redirect_uri in state payload",
-		})
+		api.HandleError(w,
+			domain.NewValidationError(
+				"auth.providerCallback.invalidStatePayload",
+				map[string]string{
+					"redirect_uri": "invalid redirect_uri in state payload",
+				},
+			),
+		)
 		return
 	}
 
@@ -185,18 +187,24 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		code,
 	)
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-			Message: "auth.provider_callback.token_exchange_failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
 	if userInfo.ID == "" || userInfo.Email == "" {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "auth.provider_callback.invalid_user_info",
-			Error:   "missing required fields from provider",
-		})
+		details := map[string]string{}
+		if userInfo.ID == "" {
+			details["id"] = "user ID is required"
+		}
+		if userInfo.Email == "" {
+			details["email"] = "user email is required"
+		}
+		api.HandleError(w,
+			domain.NewValidationError(
+				"auth.providerCallback.invalidUserInfo",
+				details,
+			),
+		)
 		return
 	}
 
@@ -211,10 +219,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	if userOAuthProvider != nil {
 		authenticatedUser, err = c.usersService.GetByUUID(userOAuthProvider.UserUUID)
 		if err != nil {
-			api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-				Message: "auth.provider_callback.user_not_found",
-				Error:   err.Error(),
-			})
+			api.HandleError(w, err)
 			return
 		}
 	} else {
@@ -231,24 +236,19 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 				ProviderEmail:  userInfo.Email,
 			})
 			if err != nil {
-				api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-					Message: "auth.provider_callback.link_provider_failed",
-					Error:   err.Error(),
-				})
+				api.HandleError(w, err)
 				return
 			}
 		} else {
 			// Case 3: Provider is not used and there is no user with email (create user and link)
+			// TODO: Use transaction here to avoid orphaned OAuthProvider records
 			newUser, err := c.usersService.Create(domain.CreateUserDTO{
 				Name:     userInfo.Name,
 				Email:    userInfo.Email,
 				Password: "",
 			})
 			if err != nil {
-				api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-					Message: "auth.provider_callback.user_creation_failed",
-					Error:   err.Error(),
-				})
+				api.HandleError(w, err)
 				return
 			}
 
@@ -259,10 +259,9 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 				ProviderEmail:  userInfo.Email,
 			})
 			if err != nil {
-				api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-					Message: "auth.provider_callback.link_provider_failed",
-					Error:   err.Error(),
-				})
+				api.HandleError(w, err)
+				// TODO: Remove this when transaction is implemented
+				c.usersService.Delete(newUser.UUID) // Rollback user creation
 				return
 			}
 
@@ -275,10 +274,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		Audience: domain.TokenAudienceAccess,
 	})
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "auth.provider_callback.token_generation_failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
@@ -287,10 +283,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		Audience: domain.TokenAudienceRefresh,
 	})
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "auth.provider_callback.token_generation_failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 

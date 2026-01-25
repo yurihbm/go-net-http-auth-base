@@ -109,14 +109,14 @@ func TestAuthController_Login(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, response.Message, "auth.login.bad_request")
+		assert.Contains(t, response.Message, "auth.login.badRequest")
 		assert.NotEmpty(t, response.Error)
 		assert.Empty(t, response.Data)
 	})
 
 	t.Run("unauthorized", func(t *testing.T) {
 		controller, serviceMock, _ := newTestAuthController()
-		serviceMock.On("CredentialsLogin", *dto).Return(domain.AuthTokens{}, assert.AnError)
+		serviceMock.On("CredentialsLogin", *dto).Return(domain.AuthTokens{}, domain.NewUnauthorizedError("auth.invalidCredentials"))
 		w, req := getControllerArgs("POST", "/auth/login", dto)
 
 		controller.Login(w, req)
@@ -125,10 +125,11 @@ func TestAuthController_Login(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 
 		assert.Nil(t, err)
+		// Status code will be based on CredentialsLogin returned error type
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Contains(t, response.Message, "auth.login.failed")
-		assert.NotEmpty(t, response.Error)
+		assert.Empty(t, response.Message)
 		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 	})
 }
 
@@ -191,9 +192,9 @@ func TestAuthController_RefreshToken(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 
 		assert.Nil(t, err)
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, response.Message, "auth.refresh.bad_request")
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.NotEmpty(t, response.Error)
+		assert.Empty(t, response.Message)
 		assert.Empty(t, response.Data)
 	})
 
@@ -203,7 +204,10 @@ func TestAuthController_RefreshToken(t *testing.T) {
 		dto := domain.RefreshTokenDTO{
 			RefreshToken: refreshTokenValue,
 		}
-		serviceMock.On("RefreshToken", dto).Return(domain.AuthTokens{}, assert.AnError)
+		serviceMock.On("RefreshToken", dto).Return(
+			domain.AuthTokens{},
+			domain.NewUnauthorizedError("auth.invalidRefreshToken"),
+		)
 		w, req := getControllerArgs("POST", "/auth/refresh", nil)
 		req.AddCookie(&http.Cookie{
 			Name:  "refresh_token",
@@ -217,9 +221,9 @@ func TestAuthController_RefreshToken(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Contains(t, response.Message, "auth.refresh.failed")
 		assert.NotEmpty(t, response.Error)
 		assert.Empty(t, response.Data)
+		assert.Empty(t, response.Message)
 		serviceMock.AssertExpectations(t)
 	})
 }
@@ -303,8 +307,9 @@ func TestAuthController_LoginWithOAuthProvider(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_login.bad_request")
-		assert.Equal(t, response.Error, "invalid OAuth provider")
+		assert.Empty(t, response.Data)
+		assert.Empty(t, response.Message)
+		assert.NotEmpty(t, response.Error)
 	})
 
 	t.Run("internal server error - token generation fails", func(t *testing.T) {
@@ -330,7 +335,8 @@ func TestAuthController_LoginWithOAuthProvider(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_login.failed")
+		assert.Empty(t, response.Data)
+		assert.Empty(t, response.Message)
 		assert.NotEmpty(t, response.Error)
 		serviceMock.AssertExpectations(t)
 	})
@@ -349,7 +355,9 @@ func TestAuthController_LoginWithOAuthProvider(t *testing.T) {
 			},
 		}).Return(stateToken, nil).Once()
 
-		serviceMock.On("GetOAuthProviderAuthURL", provider, stateToken).Return("", errors.New("provider not configured")).Once()
+		serviceMock.On("GetOAuthProviderAuthURL", provider, stateToken).Return(
+			"", errors.New("provider not configured"),
+		).Once()
 
 		w, req := getControllerArgs("GET", "/auth/google/login?redirect_uri="+redirectURI, nil)
 		req.SetPathValue("provider", string(provider))
@@ -361,8 +369,9 @@ func TestAuthController_LoginWithOAuthProvider(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_login.failed")
-		assert.Contains(t, response.Error, "provider not configured")
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 		serviceMock.AssertExpectations(t)
 	})
 }
@@ -380,8 +389,9 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_callback.bad_request")
-		assert.Equal(t, response.Error, "invalid OAuth provider")
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 	})
 
 	t.Run("bad request - missing state or code", func(t *testing.T) {
@@ -396,8 +406,9 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_callback.bad_request")
-		assert.Contains(t, response.Error, "missing state or code")
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 	})
 
 	t.Run("unauthorized - invalid state token", func(t *testing.T) {
@@ -409,7 +420,7 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
 			Token:    state,
 			Audience: domain.TokenAudienceOAuthState,
-		}).Return(nil, errors.New("invalid token")).Once()
+		}).Return(nil, domain.NewUnauthorizedError("auth.invalidToken")).Once()
 
 		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
 		req.SetPathValue("provider", string(provider))
@@ -421,7 +432,8 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_callback.invalid_state")
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
 		assert.NotEmpty(t, response.Error)
 		serviceMock.AssertExpectations(t)
 	})
@@ -456,8 +468,9 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_callback.invalid_state")
-		assert.Contains(t, response.Error, "invalid redirect_uri")
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 		serviceMock.AssertExpectations(t)
 	})
 
@@ -497,8 +510,9 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 
 		assert.Nil(t, err)
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_callback.token_exchange_failed")
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
 		assert.NotEmpty(t, response.Error)
 		authServiceMock.AssertExpectations(t)
 	})
@@ -545,9 +559,10 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 
 		assert.Nil(t, err)
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Equal(t, response.Message, "auth.provider_callback.invalid_user_info")
-		assert.Contains(t, response.Error, "missing required fields")
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 		authServiceMock.AssertExpectations(t)
 	})
 }
