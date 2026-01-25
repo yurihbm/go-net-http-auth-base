@@ -39,6 +39,32 @@ The project follows a clean architecture pattern:
   generated queries from `sqlc`, and migrations.
 - `docker/`: Contains Docker-related files for setting up the development environment.
 
+## Available Skills
+
+This project provides specialized skills to automate common development tasks. **Agents should prioritize using these skills over manual implementation.**
+
+### 1. Go Resource Scaffolder (`go-resource-scaffolder`)
+
+Scaffolds a complete vertical slice for a new resource, following the project's layered architecture.
+
+- **Generates**: Domain, Repository (w/ Integration Tests), Service (w/ Unit Tests), Controller (w/ Unit Tests), and Factory.
+- **Usage**:
+  ```bash
+  npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName>
+  ```
+- **Example**: `npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Product`
+
+### 2. Go Migration Scaffolder (`go-migration-scaffolder`)
+
+Streamlines database schema changes.
+
+- **Generates**: Up/Down migration files and a corresponding `sqlc` query file.
+- **Usage**:
+  ```bash
+  npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
+  ```
+- **Example**: `npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table`
+
 ## Building and Running
 
 ### Development
@@ -317,6 +343,7 @@ func TestUsersService_Create(t *testing.T) {
 #### Repository Tests
 
 - **Integration Tests**: Repository tests are integration tests that connect to a real database.
+- **Scaffolding**: Use `go-resource-scaffolder` to generate the boilerplate for these tests.
 - **Test Database**: Use Docker Compose to spin up an isolated PostgreSQL instance for testing.
 - **TestMain Setup**:
   - Start Docker container using `docker compose up -d --wait`.

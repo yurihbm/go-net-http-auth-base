@@ -84,6 +84,28 @@ The project implements a **Clean Architecture** inspired pattern, structured int
   - **Domain**: Define interfaces and core entities.
 - **Dependency Injection**: Use the `factories` package to wire dependencies.
 
+## 🛠️ Scaffolding Tools
+
+To help you follow the project's architecture and conventions, we provide scaffolding scripts. These are the same tools used by our AI agents.
+
+### Create a New Resource
+
+To generate a complete vertical slice (Domain, Repository, Service, Controller, Factory, and Tests):
+
+```bash
+npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName>
+# Example: npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Product
+```
+
+### Create a Migration
+
+To generate migration files and a corresponding query file:
+
+```bash
+npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
+# Example: npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table
+```
+
 ## 📝 Commit Message Conventions
 
 We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
