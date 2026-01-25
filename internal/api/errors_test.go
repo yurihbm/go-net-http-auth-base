@@ -85,8 +85,11 @@ func TestHandleError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			ctx := context.Background()
-			ctx = context.WithValue(ctx, api.RequestContextDataKey, &api.RequestContextData{})
+			ctx := context.WithValue(
+				context.Background(),
+				api.RequestContextDataKey,
+				&api.RequestContextData{},
+			)
 
 			api.HandleError(ctx, w, tt.err)
 
@@ -96,6 +99,10 @@ func TestHandleError(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			assert.NoError(t, err)
 
+			if tt.err != nil {
+				ctxData := ctx.Value(api.RequestContextDataKey).(*api.RequestContextData)
+				assert.NotEmpty(t, ctxData.Error)
+			}
 			assert.Equal(t, tt.expectedBody.Error, response.Error)
 			assert.Equal(t, tt.expectedBody.Details, response.Details)
 		})

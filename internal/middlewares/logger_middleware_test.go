@@ -2,6 +2,7 @@ package middlewares_test
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -186,5 +187,51 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 
 		logOutput := buf.String()
 		assert.NotContains(t, logOutput, "\"userUUID\"")
+	})
+
+	t.Run("should log error when present", func(t *testing.T) {
+		buf.Reset()
+
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Simulate setting error in the context
+			if data, ok := r.Context().Value(
+				api.RequestContextDataKey,
+			).(*api.RequestContextData); ok {
+				data.Error = errors.New("some error occurred")
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+
+		wrappedHandler := middleware.Use(nextHandler)
+
+		req := httptest.NewRequest("GET", "/test-auth", nil)
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+		logOutput := buf.String()
+		assert.Contains(t, logOutput, "\"error\":\"some error occurred\"")
+	})
+
+	t.Run("should not log error when not present", func(t *testing.T) {
+		buf.Reset()
+
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrappedHandler := middleware.Use(nextHandler)
+
+		req := httptest.NewRequest("GET", "/test-no-auth", nil)
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		logOutput := buf.String()
+		assert.NotContains(t, logOutput, "\"error\"")
 	})
 }
