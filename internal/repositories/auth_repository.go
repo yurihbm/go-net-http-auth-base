@@ -23,13 +23,13 @@ func NewAuthPostgresRepository(db postgres.DBTX) domain.AuthRepository {
 }
 
 func (r *AuthPostgresRepository) CreateUserOAuthProvider(provider domain.UserOAuthProvider) (*domain.UserOAuthProvider, error) {
-	userUUID, err := uuid.Parse(provider.UserUUID)
+	userUUID, err := parseUsersUUID(provider.UserUUID)
 	if err != nil {
 		return nil, err
 	}
 
 	params := postgres.CreateUserOAuthProviderParams{
-		UserUuid:       pgtype.UUID{Bytes: [16]byte(userUUID), Valid: true},
+		UserUuid:       *userUUID,
 		Provider:       postgres.OauthProvider(provider.Provider),
 		ProviderUserID: provider.ProviderUserID,
 		ProviderEmail:  provider.ProviderEmail,
@@ -37,7 +37,16 @@ func (r *AuthPostgresRepository) CreateUserOAuthProvider(provider domain.UserOAu
 
 	createdProvider, err := r.q.CreateUserOAuthProvider(context.Background(), params)
 	if err != nil {
-		return nil, err
+		if conflictErr := isConflictError(err, "auth.oauthProvider.conflict"); conflictErr != nil {
+			return nil, conflictErr
+		}
+		if fkErr := isForeignKeyViolationError(err, "auth.user.notFound"); fkErr != nil {
+			return nil, fkErr
+		}
+		if noRowsErr := isNoRowsError(err, "auth.oauthProvider.notFound"); noRowsErr != nil {
+			return nil, noRowsErr
+		}
+		return nil, domain.NewInternalServerError("auth.oauthProvider.intervalServerError")
 	}
 
 	domainProvider := toDomainUserOAuthProvider(createdProvider)
@@ -51,8 +60,12 @@ func (r *AuthPostgresRepository) GetUserOAuthProviderByProviderAndProviderUserID
 	}
 
 	foundProvider, err := r.q.GetUserOAuthProviderByProviderAndProviderUserID(context.Background(), params)
+
 	if err != nil {
-		return nil, err
+		if noRowsErr := isNoRowsError(err, "auth.oauthProvider.notFound"); noRowsErr != nil {
+			return nil, noRowsErr
+		}
+		return nil, domain.NewInternalServerError("auth.oauthProvider.intervalServerError")
 	}
 
 	domainProvider := toDomainUserOAuthProvider(foundProvider)
@@ -60,23 +73,28 @@ func (r *AuthPostgresRepository) GetUserOAuthProviderByProviderAndProviderUserID
 }
 
 func (r *AuthPostgresRepository) DeleteUserOAuthProvider(uuidStr string) error {
-	parsedUUID, err := uuid.Parse(uuidStr)
+	oauthProviderUUID, err := parseUserOAuthProviderUUID(uuidStr)
 	if err != nil {
 		return err
 	}
 
-	return r.q.DeleteUserOAuthProvider(context.Background(), pgtype.UUID{Bytes: [16]byte(parsedUUID), Valid: true})
+	err = r.q.DeleteUserOAuthProvider(context.Background(), *oauthProviderUUID)
+
+	if err != nil {
+		return domain.NewInternalServerError("auth.oauthProvider.intervalServerError")
+	}
+	return nil
 }
 
-func (r *AuthPostgresRepository) ListUserOAuthProvidersByUserUUID(userUUID string) ([]domain.UserOAuthProvider, error) {
-	parsedUUID, err := uuid.Parse(userUUID)
+func (r *AuthPostgresRepository) ListUserOAuthProvidersByUserUUID(userUUIDStr string) ([]domain.UserOAuthProvider, error) {
+	userUUID, err := parseUsersUUID(userUUIDStr)
 	if err != nil {
 		return nil, err
 	}
 
-	providers, err := r.q.ListUserOAuthProvidersByUserUUID(context.Background(), pgtype.UUID{Bytes: [16]byte(parsedUUID), Valid: true})
+	providers, err := r.q.ListUserOAuthProvidersByUserUUID(context.Background(), *userUUID)
 	if err != nil {
-		return nil, err
+		return nil, domain.NewInternalServerError("auth.oauthProvider.intervalServerError")
 	}
 
 	domainProviders := make([]domain.UserOAuthProvider, len(providers))
@@ -98,4 +116,12 @@ func toDomainUserOAuthProvider(provider postgres.UserOauthProvider) domain.UserO
 		ProviderEmail:  provider.ProviderEmail,
 		CreatedAt:      provider.CreatedAt.Time.Unix(),
 	}
+}
+
+func parseUsersUUID(uuidStr string) (*pgtype.UUID, error) {
+	return parseUUID(uuidStr, "users.invalidUserUUID")
+}
+
+func parseUserOAuthProviderUUID(uuidStr string) (*pgtype.UUID, error) {
+	return parseUUID(uuidStr, "users.oauthProvider.invalidUUID")
 }

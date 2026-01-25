@@ -26,7 +26,7 @@ Repository → Service → Controller → HTTP Response
 1. **Repository layer**: Maps **infrastructure errors** → **domain errors**
    - `pgx.ErrNoRows` → `domain.NotFoundError`
    - `pgconn.PgError` (code 23505) → `domain.ConflictError`
-   - Unknown DB errors → return as-is (let upper layers decide)
+   - Unknown DB errors → `domain.InternalServerError`
 
 2. **Service layer**: Handles **business logic errors** + propagates repo errors
    - Validation failures → `domain.ValidationError`

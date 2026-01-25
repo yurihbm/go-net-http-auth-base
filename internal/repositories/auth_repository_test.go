@@ -2,6 +2,7 @@ package repositories_test
 
 import (
 	"context"
+	"errors"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/repositories"
 	"testing"
@@ -61,6 +62,23 @@ func TestAuthPostgresRepository_CreateUserOAuthProvider(t *testing.T) {
 		assert.NotEqual(t, createdProvider.CreatedAt, 0)
 	})
 
+	t.Run("conflict", func(t *testing.T) {
+		provider := domain.UserOAuthProvider{
+			UserUUID:       createdUser.UUID,
+			Provider:       domain.OAuthProviderGoogle,
+			ProviderUserID: "google_user_conflict",
+			ProviderEmail:  "conflict@gmail.com",
+		}
+
+		_, err := repo.CreateUserOAuthProvider(provider)
+		require.NoError(t, err)
+
+		_, err = repo.CreateUserOAuthProvider(provider)
+		require.Error(t, err)
+		var conflictErr *domain.ConflictError
+		assert.True(t, errors.As(err, &conflictErr))
+	})
+
 	t.Run("invalid user uuid", func(t *testing.T) {
 		provider := domain.UserOAuthProvider{
 			UserUUID:       "invalid-uuid",
@@ -70,7 +88,26 @@ func TestAuthPostgresRepository_CreateUserOAuthProvider(t *testing.T) {
 		}
 
 		_, err := repo.CreateUserOAuthProvider(provider)
-		assert.Error(t, err)
+		require.Error(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+
+	t.Run("user not found (fk violation)", func(t *testing.T) {
+		// Use a valid UUID but one that doesn't exist in the DB
+		nonExistentUserUUID := uuid.New().String()
+		provider := domain.UserOAuthProvider{
+			UserUUID:       nonExistentUserUUID,
+			Provider:       domain.OAuthProviderGoogle,
+			ProviderUserID: "google_user_999",
+			ProviderEmail:  "test999@gmail.com",
+		}
+
+		_, err := repo.CreateUserOAuthProvider(provider)
+		require.Error(t, err)
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+		assert.Equal(t, "auth.user.notFound", notFoundErr.Error())
 	})
 }
 
@@ -106,8 +143,10 @@ func TestAuthPostgresRepository_GetUserOAuthProviderByProviderAndProviderUserID(
 			domain.OAuthProviderGoogle,
 			"nonexistent_user_id",
 		)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, foundProvider)
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
 	})
 }
 
@@ -160,7 +199,9 @@ func TestAuthPostgresRepository_ListUserOAuthProvidersByUserUUID(t *testing.T) {
 
 	t.Run("invalid uuid", func(t *testing.T) {
 		_, err := repo.ListUserOAuthProvidersByUserUUID("invalid-uuid")
-		assert.Error(t, err)
+		require.Error(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
 	})
 }
 
@@ -191,8 +232,16 @@ func TestAuthPostgresRepository_DeleteUserOAuthProvider(t *testing.T) {
 		}
 	})
 
+	t.Run("idempotent delete", func(t *testing.T) {
+		// Deleting a non-existent UUID should not return an error
+		err := repo.DeleteUserOAuthProvider(uuid.New().String())
+		assert.NoError(t, err)
+	})
+
 	t.Run("invalid uuid", func(t *testing.T) {
 		err := repo.DeleteUserOAuthProvider("invalid-uuid")
-		assert.Error(t, err)
+		require.Error(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
 	})
 }

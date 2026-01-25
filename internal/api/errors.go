@@ -15,7 +15,7 @@ func HandleError(w http.ResponseWriter, err error) {
 
 	var (
 		statusCode = http.StatusInternalServerError
-		message    = "internal.server_error"
+		message    = "internalServerError"
 		details    map[string]string
 	)
 
