@@ -31,7 +31,7 @@ func (s *usersService) Create(dto domain.CreateUserDTO) (*domain.User, error) {
 	if dto.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
 		if err != nil {
-			return nil, domain.NewInternalServerError("users.create.passwordHashingFailed")
+			return nil, domain.NewInternalServerError("users.create.passwordHashingFailed", err)
 		}
 		user.PasswordHash = string(hash)
 	}

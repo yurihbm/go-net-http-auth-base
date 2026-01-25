@@ -43,7 +43,7 @@ func (r *AuthPostgresRepository) CreateUserOAuthProvider(provider domain.UserOAu
 		if fkErr := isForeignKeyViolationError(err, "auth.user.notFound"); fkErr != nil {
 			return nil, fkErr
 		}
-		return nil, domain.NewInternalServerError("auth.internalServerError")
+		return nil, domain.NewInternalServerError("auth.internalServerError", err)
 	}
 
 	domainProvider := toDomainUserOAuthProvider(createdProvider)
@@ -62,7 +62,7 @@ func (r *AuthPostgresRepository) GetUserOAuthProviderByProviderAndProviderUserID
 		if noRowsErr := isNoRowsError(err, "auth.oauthProvider.notFound"); noRowsErr != nil {
 			return nil, noRowsErr
 		}
-		return nil, domain.NewInternalServerError("auth.internalServerError")
+		return nil, domain.NewInternalServerError("auth.internalServerError", err)
 	}
 
 	domainProvider := toDomainUserOAuthProvider(foundProvider)
@@ -78,7 +78,7 @@ func (r *AuthPostgresRepository) DeleteUserOAuthProvider(uuidStr string) error {
 	err = r.q.DeleteUserOAuthProvider(context.Background(), *oauthProviderUUID)
 
 	if err != nil {
-		return domain.NewInternalServerError("auth.internalServerError")
+		return domain.NewInternalServerError("auth.internalServerError", err)
 	}
 	return nil
 }
@@ -91,7 +91,7 @@ func (r *AuthPostgresRepository) ListUserOAuthProvidersByUserUUID(userUUIDStr st
 
 	providers, err := r.q.ListUserOAuthProvidersByUserUUID(context.Background(), *userUUID)
 	if err != nil {
-		return nil, domain.NewInternalServerError("auth.internalServerError")
+		return nil, domain.NewInternalServerError("auth.internalServerError", err)
 	}
 
 	domainProviders := make([]domain.UserOAuthProvider, len(providers))

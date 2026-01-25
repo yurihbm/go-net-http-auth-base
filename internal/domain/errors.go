@@ -74,14 +74,19 @@ var _ error = (*UnauthorizedError)(nil)
 
 type InternalServerError struct {
 	message string
+	cause   error
 }
 
-func NewInternalServerError(message string) *InternalServerError {
-	return &InternalServerError{message: message}
+func NewInternalServerError(message string, cause error) *InternalServerError {
+	return &InternalServerError{message, cause}
 }
 
 func (e *InternalServerError) Error() string {
 	return e.message
+}
+
+func (e *InternalServerError) Unwrap() error {
+	return e.cause
 }
 
 var _ error = (*InternalServerError)(nil)

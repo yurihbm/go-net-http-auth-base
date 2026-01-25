@@ -41,7 +41,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 		if err != nil && errors.As(err, &notFoundErr) {
 			return domain.AuthTokens{}, domain.NewUnauthorizedError("auth.authenticate.invalidCredentials")
 		}
-		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.userFetchFailed")
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.userFetchFailed", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(dto.Password)); err != nil {
@@ -53,7 +53,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 		Audience: domain.TokenAudienceAccess,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed")
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed", err)
 	}
 
 	refreshToken, err := s.GenerateToken(domain.GenerateTokenDTO{
@@ -61,7 +61,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 		Audience: domain.TokenAudienceRefresh,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed")
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed", err)
 	}
 
 	return domain.AuthTokens{
@@ -114,7 +114,7 @@ func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthToken
 		Audience: domain.TokenAudienceAccess,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed")
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
 	}
 
 	newRefreshToken, err := s.GenerateToken(domain.GenerateTokenDTO{
@@ -122,7 +122,7 @@ func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthToken
 		Audience: domain.TokenAudienceRefresh,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed")
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
 	}
 
 	return domain.AuthTokens{
@@ -147,7 +147,7 @@ func (s *authService) GenerateToken(dto domain.GenerateTokenDTO) (string, error)
 		// domain error with more contextual messages.
 		// This domain error is returned to avoid leaking internal error details to
 		// external calls.
-		return "", domain.NewInternalServerError("auth.tokenGenerationFailed")
+		return "", domain.NewInternalServerError("auth.tokenGenerationFailed", err)
 	}
 
 	return signedString, nil
@@ -197,7 +197,7 @@ func (s *authService) GetOAuthProviderUserInfo(ctx context.Context, providerName
 
 	userInfo, err := provider.GetUserInfo(ctx, code)
 	if err != nil {
-		return nil, domain.NewInternalServerError("auth.oauthProvider.userInfoFetchFailed")
+		return nil, domain.NewInternalServerError("auth.oauthProvider.userInfoFetchFailed", err)
 	}
 
 	return userInfo, nil

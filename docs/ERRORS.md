@@ -22,31 +22,31 @@ Repository → Service → Controller → HTTP Response
 **Key principles:**
 
 1.  **Repository layer**: Maps **infrastructure errors** → **domain errors**
-    *   `pgx.ErrNoRows` → `domain.NotFoundError`
-    *   `pgconn.PgError` (code 23505) → `domain.ConflictError`
-    *   Unknown DB errors → `domain.InternalServerError`
+    - `pgx.ErrNoRows` → `domain.NotFoundError`
+    - `pgconn.PgError` (code 23505) → `domain.ConflictError`
+    - Unknown DB errors → `domain.InternalServerError`
 
 2.  **Service layer**: Handles **business logic errors** + propagates repo errors
-    *   Validation failures → `domain.ValidationError`
-    *   Authorization logic → `domain.UnauthorizedError`
-    *   Pass-through repository domain errors **unchanged** (no re-wrapping)
+    - Validation failures → `domain.ValidationError`
+    - Authorization logic → `domain.UnauthorizedError`
+    - Pass-through repository domain errors **unchanged** (no re-wrapping)
 
 3.  **Controller layer**: Maps **domain errors** → **HTTP responses**
-    *   Uses `errors.As()` to detect error type
-    *   Calls `api.HandleError(w, err)` — no manual status code selection
-    *   Unknown errors default to 500 Internal Server Error
+    - Uses `errors.As()` to detect error type
+    - Calls `api.HandleError(w, err)` — no manual status code selection
+    - Unknown errors default to 500 Internal Server Error
 
 ## Domain Error Types
 
 Defined in `internal/domain/errors.go`, these types represent **what** went wrong, independent of **how** it is presented.
 
-| Error Type | HTTP Status | Description |
-| :--- | :--- | :--- |
-| `NotFoundError` | 404 | Resource not found (e.g., User not found) |
-| `ValidationError` | 400 | Invalid input (supports field-level details) |
-| `ConflictError` | 409 | State conflicts (e.g., Email already exists) |
-| `UnauthorizedError` | 401 | Authentication/Authorization failures |
-| `InternalServerError` | 500 | Unexpected system failures |
+| Error Type            | HTTP Status | Description                                      |
+| :-------------------- | :---------- | :----------------------------------------------- |
+| `NotFoundError`       | 404         | Resource not found (e.g., User not found)        |
+| `ValidationError`     | 400         | Invalid input (supports field-level details)     |
+| `ConflictError`       | 409         | State conflicts (e.g., Email already exists)     |
+| `UnauthorizedError`   | 401         | Authentication/Authorization failures            |
+| `InternalServerError` | 500         | Unexpected system failures. Wraps original error |
 
 ## Implementation Details
 
@@ -56,9 +56,9 @@ Repositories catch database-specific errors and return `domain` errors. We use h
 
 **Helper Functions:**
 
-*   `isNoRowsError(err, message)`: Checks for `pgx.ErrNoRows`.
-*   `isConflictError(err, message)`: Checks for PostgreSQL error code `23505` (Unique Violation).
-*   `isForeignKeyViolationError(err, message)`: Checks for PostgreSQL error code `23503` (Foreign Key Violation).
+- `isNoRowsError(err, message)`: Checks for `pgx.ErrNoRows`.
+- `isConflictError(err, message)`: Checks for PostgreSQL error code `23505` (Unique Violation).
+- `isForeignKeyViolationError(err, message)`: Checks for PostgreSQL error code `23503` (Foreign Key Violation).
 
 **Example:**
 
@@ -69,7 +69,7 @@ func (r *UsersPostgresRepository) FindByEmail(email string) (*domain.User, error
         if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
             return nil, noRowsErr
         }
-        return nil, domain.NewInternalServerError("users.internalServerError")
+        return nil, domain.NewInternalServerError("users.internalServerError", err)
     }
     // ...
 }
@@ -85,7 +85,9 @@ Services handle business logic validation and propagate repository errors.
 func (s *usersService) Create(dto domain.CreateUserDTO) (*domain.User, error) {
     // Business Validation
     if dto.Password == "" {
-        return nil, domain.NewValidationError("password.required", nil)
+        return nil, domain.NewValidationError("password.required",
+            map[string]string{"password": "Password is required"},
+        )
     }
 
     // Propagate Repository Errors

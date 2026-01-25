@@ -65,7 +65,7 @@ func TestHandleError(t *testing.T) {
 		},
 		{
 			name:           "InternalServerError",
-			err:            domain.NewInternalServerError("internal.error"),
+			err:            domain.NewInternalServerError("internal.error", errors.New("db failure")),
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: api.ResponseBody[any]{
 				Error: "internal.error",
@@ -98,4 +98,3 @@ func TestHandleError(t *testing.T) {
 		})
 	}
 }
-

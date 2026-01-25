@@ -33,7 +33,7 @@ func (r *UsersPostgresRepository) FindByUUID(uuidStr string) (*domain.User, erro
 		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
 			return nil, noRowsErr
 		}
-		return nil, domain.NewInternalServerError("users.internalServerError")
+		return nil, domain.NewInternalServerError("users.internalServerError", err)
 	}
 
 	domainUser := toDomainUser(user)
@@ -46,7 +46,7 @@ func (r *UsersPostgresRepository) FindByEmail(email string) (*domain.User, error
 		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
 			return nil, noRowsErr
 		}
-		return nil, domain.NewInternalServerError("users.internalServerError")
+		return nil, domain.NewInternalServerError("users.internalServerError", err)
 	}
 
 	domainUser := toDomainUser(user)
@@ -65,7 +65,7 @@ func (r *UsersPostgresRepository) Create(user domain.User) (*domain.User, error)
 		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
 			return nil, conflictErr
 		}
-		return nil, domain.NewInternalServerError("users.internalServerError")
+		return nil, domain.NewInternalServerError("users.internalServerError", err)
 	}
 
 	// Update the user object with the data from the database
@@ -93,7 +93,7 @@ func (r *UsersPostgresRepository) Update(user domain.User) error {
 		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
 			return conflictErr
 		}
-		return domain.NewInternalServerError("users.internalServerError")
+		return domain.NewInternalServerError("users.internalServerError", err)
 	}
 
 	return nil
@@ -107,7 +107,7 @@ func (r *UsersPostgresRepository) Delete(uuidStr string) error {
 
 	err = r.q.DeleteUser(context.Background(), *uuid)
 	if err != nil {
-		return domain.NewInternalServerError("user.internalServerError")
+		return domain.NewInternalServerError("user.internalServerError", err)
 	}
 	return nil
 }
