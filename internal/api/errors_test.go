@@ -28,10 +28,10 @@ func TestHandleError(t *testing.T) {
 		},
 		{
 			name:           "NotFoundError",
-			err:            domain.NewNotFoundError("resource.not_found"),
+			err:            domain.NewNotFoundError("resource.notFound"),
 			expectedStatus: http.StatusNotFound,
 			expectedBody: api.ResponseBody[any]{
-				Error: "resource.not_found",
+				Error: "resource.notFound",
 			},
 		},
 		{
@@ -76,7 +76,7 @@ func TestHandleError(t *testing.T) {
 			err:            errors.New("some unexpected error"),
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody: api.ResponseBody[any]{
-				Error: "internal.server_error",
+				Error: "internalServerError",
 			},
 		},
 	}
@@ -98,3 +98,4 @@ func TestHandleError(t *testing.T) {
 		})
 	}
 }
+
