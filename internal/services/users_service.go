@@ -31,16 +31,12 @@ func (s *usersService) Create(dto domain.CreateUserDTO) (*domain.User, error) {
 	if dto.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
 		if err != nil {
-			return nil, err
+			return nil, domain.NewInternalServerError("users.create.passwordHashingFailed")
 		}
 		user.PasswordHash = string(hash)
 	}
 
-	createdUser, err := s.repo.Create(user)
-	if err != nil {
-		return nil, err
-	}
-	return createdUser, nil
+	return s.repo.Create(user)
 }
 
 func (s *usersService) Update(uuid string, dto domain.UserUpdateDTO) error {
@@ -56,10 +52,7 @@ func (s *usersService) Update(uuid string, dto domain.UserUpdateDTO) error {
 		user.Email = *dto.Email
 	}
 
-	if err = s.repo.Update(*user); err != nil {
-		return err
-	}
-	return nil
+	return s.repo.Update(*user)
 }
 
 func (s *usersService) Delete(uuid string) error {
