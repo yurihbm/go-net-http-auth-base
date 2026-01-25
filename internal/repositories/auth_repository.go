@@ -115,10 +115,6 @@ func toDomainUserOAuthProvider(provider postgres.UserOauthProvider) domain.UserO
 	}
 }
 
-func parseUsersUUID(uuidStr string) (*pgtype.UUID, error) {
-	return parseUUID(uuidStr, "users.invalidUserUUID")
-}
-
 func parseUserOAuthProviderUUID(uuidStr string) (*pgtype.UUID, error) {
 	return parseUUID(uuidStr, "users.oauthProvider.invalidUUID")
 }

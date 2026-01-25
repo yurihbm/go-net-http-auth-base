@@ -2,6 +2,7 @@ package repositories_test
 
 import (
 	"context"
+	"errors"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/repositories"
 	"testing"
@@ -82,7 +83,10 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 		}
 
 		_, err = repo.Create(user2)
-		assert.Error(t, err)
+		require.Error(t, err)
+		var conflictErr *domain.ConflictError
+		assert.True(t, errors.As(err, &conflictErr))
+		assert.Equal(t, "users.email.conflict", conflictErr.Error())
 	})
 }
 
@@ -102,14 +106,18 @@ func TestUsersPostgresRepository_FindByUUID(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		nonExistentUUID := uuid.New().String()
 		user, err := repo.FindByUUID(nonExistentUUID)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, user)
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
 	})
 
 	t.Run("invalid uuid", func(t *testing.T) {
 		user, err := repo.FindByUUID("invalid-uuid")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, user)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
 	})
 }
 
@@ -128,8 +136,10 @@ func TestUsersPostgresRepository_FindByEmail(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		user, err := repo.FindByEmail("nonexistent@example.com")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, user)
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
 	})
 }
 
@@ -154,7 +164,9 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 	t.Run("invalid uuid", func(t *testing.T) {
 		invalidUser := domain.User{UUID: "invalid"}
 		err := repo.Update(invalidUser)
-		assert.Error(t, err)
+		require.Error(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
 	})
 }
 
@@ -173,6 +185,8 @@ func TestUsersPostgresRepository_Delete(t *testing.T) {
 
 	t.Run("invalid uuid", func(t *testing.T) {
 		err := repo.Delete("invalid-uuid")
-		assert.Error(t, err)
+		require.Error(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
 	})
 }

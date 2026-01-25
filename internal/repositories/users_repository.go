@@ -23,14 +23,17 @@ func NewUsersPostgresRepository(db postgres.DBTX) domain.UsersRepository {
 }
 
 func (r *UsersPostgresRepository) FindByUUID(uuidStr string) (*domain.User, error) {
-	uuid, err := uuid.Parse(uuidStr)
+	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {
 		return nil, err
 	}
 
-	user, err := r.q.GetUserByUUID(context.Background(), pgtype.UUID{Bytes: [16]byte(uuid), Valid: true})
+	user, err := r.q.GetUserByUUID(context.Background(), *uuid)
 	if err != nil {
-		return nil, err
+		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
+			return nil, noRowsErr
+		}
+		return nil, domain.NewInternalServerError("users.internalServerError")
 	}
 
 	domainUser := toDomainUser(user)
@@ -40,7 +43,10 @@ func (r *UsersPostgresRepository) FindByUUID(uuidStr string) (*domain.User, erro
 func (r *UsersPostgresRepository) FindByEmail(email string) (*domain.User, error) {
 	user, err := r.q.GetUserByEmail(context.Background(), email)
 	if err != nil {
-		return nil, err
+		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
+			return nil, noRowsErr
+		}
+		return nil, domain.NewInternalServerError("users.internalServerError")
 	}
 
 	domainUser := toDomainUser(user)
@@ -56,7 +62,10 @@ func (r *UsersPostgresRepository) Create(user domain.User) (*domain.User, error)
 
 	createdUser, err := r.q.CreateUser(context.Background(), params)
 	if err != nil {
-		return nil, err
+		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
+			return nil, conflictErr
+		}
+		return nil, domain.NewInternalServerError("users.internalServerError")
 	}
 
 	// Update the user object with the data from the database
@@ -65,13 +74,13 @@ func (r *UsersPostgresRepository) Create(user domain.User) (*domain.User, error)
 }
 
 func (r *UsersPostgresRepository) Update(user domain.User) error {
-	uuid, err := uuid.Parse(user.UUID)
+	uuid, err := parseUsersUUID(user.UUID)
 	if err != nil {
 		return err
 	}
 
 	params := postgres.UpdateUserParams{
-		Uuid:  pgtype.UUID{Bytes: [16]byte(uuid), Valid: true},
+		Uuid:  *uuid,
 		Name:  user.Name,
 		Email: user.Email,
 	}
@@ -81,19 +90,26 @@ func (r *UsersPostgresRepository) Update(user domain.User) error {
 	}
 
 	if err = r.q.UpdateUser(context.Background(), params); err != nil {
-		return err
+		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
+			return conflictErr
+		}
+		return domain.NewInternalServerError("users.internalServerError")
 	}
 
 	return nil
 }
 
 func (r *UsersPostgresRepository) Delete(uuidStr string) error {
-	uuid, err := uuid.Parse(uuidStr)
+	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {
 		return err
 	}
 
-	return r.q.DeleteUser(context.Background(), pgtype.UUID{Bytes: [16]byte(uuid), Valid: true})
+	err = r.q.DeleteUser(context.Background(), *uuid)
+	if err != nil {
+		return domain.NewInternalServerError("user.internalServerError")
+	}
+	return nil
 }
 
 func toDomainUser(user postgres.User) domain.User {
@@ -106,4 +122,8 @@ func toDomainUser(user postgres.User) domain.User {
 		CreatedAt:    user.CreatedAt.Time.Unix(),
 		UpdatedAt:    user.UpdatedAt.Time.Unix(),
 	}
+}
+
+func parseUsersUUID(uuidStr string) (*pgtype.UUID, error) {
+	return parseUUID(uuidStr, "users.invalidUserUUID")
 }
