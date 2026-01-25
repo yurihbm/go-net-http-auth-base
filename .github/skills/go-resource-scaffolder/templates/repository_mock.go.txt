@@ -1,0 +1,39 @@
+package mocks
+
+import (
+	"go-net-http-auth-base/internal/domain"
+
+	"github.com/stretchr/testify/mock"
+)
+
+type {{Resources}}RepositoryMock struct {
+	mock.Mock
+}
+
+var _ domain.{{Resources}}Repository = (*{{Resources}}RepositoryMock)(nil)
+
+func (m *{{Resources}}RepositoryMock) FindByUUID(uuid string) (*domain.{{Resource}}, error) {
+	args := m.Called(uuid)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.{{Resource}}), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *{{Resources}}RepositoryMock) Create(entity domain.{{Resource}}) (*domain.{{Resource}}, error) {
+	args := m.Called(entity)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.{{Resource}}), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *{{Resources}}RepositoryMock) Update(entity domain.{{Resource}}) error {
+	args := m.Called(entity)
+	return args.Error(0)
+}
+
+func (m *{{Resources}}RepositoryMock) Delete(uuid string) error {
+	args := m.Called(uuid)
+	return args.Error(0)
+}

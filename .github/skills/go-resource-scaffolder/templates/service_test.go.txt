@@ -1,0 +1,147 @@
+package services_test
+
+import (
+	"errors"
+	"testing"
+
+	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/mocks"
+	"go-net-http-auth-base/internal/services"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
+
+func TestNew{{Resources}}Service(t *testing.T) {
+	repo := new(mocks.{{Resources}}RepositoryMock)
+	service := services.New{{Resources}}Service(repo)
+	assert.NotNil(t, service)
+}
+
+func Test{{Resources}}Service_GetByUUID(t *testing.T) {
+	repo := new(mocks.{{Resources}}RepositoryMock)
+	service := services.New{{Resources}}Service(repo)
+
+	t.Run("success", func(t *testing.T) {
+		entity := &domain.{{Resource}}{UUID: "some-uuid"}
+		repo.On("FindByUUID", "some-uuid").Return(entity, nil).Once()
+
+		result, err := service.GetByUUID("some-uuid")
+
+		assert.NoError(t, err)
+		assert.Equal(t, entity, result)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		repo.On("FindByUUID", "not-found-uuid").Return(nil, errors.New("not found")).Once()
+
+		result, err := service.GetByUUID("not-found-uuid")
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		repo.AssertExpectations(t)
+	})
+}
+
+func Test{{Resources}}Service_Create(t *testing.T) {
+	repo := new(mocks.{{Resources}}RepositoryMock)
+	service := services.New{{Resources}}Service(repo)
+
+	t.Run("success", func(t *testing.T) {
+		dto := domain.Create{{Resource}}DTO{}
+
+		repo.On("Create", mock.AnythingOfType("domain.{{Resource}}")).Return(&domain.{{Resource}}{
+			UUID:         "generated-uuid",
+		}, nil).Once()
+
+		entity, err := service.Create(dto)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, entity)
+		assert.Equal(t, "generated-uuid", entity.UUID)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("repository create error", func(t *testing.T) {
+		dto := domain.Create{{Resource}}DTO{}
+
+		repo.On("Create", mock.AnythingOfType("domain.{{Resource}}")).Return(nil, errors.New("db error")).Once()
+
+		entity, err := service.Create(dto)
+
+		assert.Error(t, err)
+		assert.Equal(t, "db error", err.Error())
+		assert.Nil(t, entity)
+		repo.AssertExpectations(t)
+	})
+}
+
+func Test{{Resources}}Service_Update(t *testing.T) {
+	repo := new(mocks.{{Resources}}RepositoryMock)
+	service := services.New{{Resources}}Service(repo)
+	uuid := "some-uuid"
+	originalEntity := &domain.{{Resource}}{
+		UUID:  uuid,
+	}
+
+	t.Run("success", func(t *testing.T) {
+		dto := domain.{{Resource}}UpdateDTO{}
+
+		repo.On("FindByUUID", uuid).Return(originalEntity, nil).Once()
+		repo.On("Update", mock.AnythingOfType("domain.{{Resource}}")).Return(nil).Once()
+
+		err := service.Update(uuid, dto)
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		dto := domain.{{Resource}}UpdateDTO{}
+		repo.On("FindByUUID", "not-found").Return(nil, errors.New("not found")).Once()
+
+		err := service.Update("not-found", dto)
+
+		assert.Error(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("update fails", func(t *testing.T) {
+		dto := domain.{{Resource}}UpdateDTO{}
+
+		repo.On("FindByUUID", uuid).Return(originalEntity, nil).Once()
+		repo.On("Update", mock.AnythingOfType("domain.{{Resource}}")).Return(errors.New("db error")).Once()
+
+		err := service.Update(uuid, dto)
+
+		assert.Error(t, err)
+		assert.Equal(t, "db error", err.Error())
+		repo.AssertExpectations(t)
+	})
+}
+
+func Test{{Resources}}Service_Delete(t *testing.T) {
+	repo := new(mocks.{{Resources}}RepositoryMock)
+	service := services.New{{Resources}}Service(repo)
+	uuid := "some-uuid"
+
+	t.Run("success", func(t *testing.T) {
+		repo.On("Delete", uuid).Return(nil).Once()
+
+		err := service.Delete(uuid)
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("delete fails", func(t *testing.T) {
+		repo.On("Delete", uuid).Return(errors.New("db error")).Once()
+
+		err := service.Delete(uuid)
+
+		assert.Error(t, err)
+		assert.Equal(t, "db error", err.Error())
+		repo.AssertExpectations(t)
+	})
+}

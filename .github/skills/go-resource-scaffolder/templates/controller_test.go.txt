@@ -1,0 +1,195 @@
+package controllers_test
+
+import (
+	"encoding/json"
+	"net/http"
+	"testing"
+
+	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/controllers"
+	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/mocks"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
+
+func newTest{{Resources}}Controller() (*controllers.{{Resources}}Controller, *mocks.{{Resources}}ServiceMock, *mocks.AuthMiddlewareMock) {
+	serviceMock := new(mocks.{{Resources}}ServiceMock)
+	middlewareMock := new(mocks.AuthMiddlewareMock)
+	controller := controllers.New{{Resources}}Controller(serviceMock, middlewareMock)
+
+	return controller, serviceMock, middlewareMock
+}
+
+func Test{{Resources}}Controller_RegisterRoutes(t *testing.T) {
+	t.Run("should register routes with auth middleware", func(t *testing.T) {
+		router := http.NewServeMux()
+		controller, _, authMiddleware := newTest{{Resources}}Controller()
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(4)
+
+		controller.RegisterRoutes(router)
+
+		authMiddleware.AssertNumberOfCalls(t, "Use", 4)
+	})
+}
+
+func Test{{Resources}}Controller_Create(t *testing.T) {
+	entity := &domain.{{Resource}}{
+		UUID:  "test-uuid",
+	}
+	dto := domain.Create{{Resource}}DTO{}
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		serviceMock.On("Create", dto).Return(entity, nil)
+		w, req := getControllerArgs(
+			"POST",
+			"/{{resources}}/",
+			dto,
+		)
+
+		controller.Create(w, req)
+
+		var response api.ResponseBody[domain.{{Resource}}]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusCreated, w.Code)
+		assert.Equal(t, response.Data, *entity)
+		serviceMock.AssertCalled(t, "Create", dto)
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		serviceMock.On("Create", dto).Return(nil, assert.AnError)
+
+		w, req := getControllerArgs(
+			"POST",
+			"/{{resources}}/",
+			dto,
+		)
+
+		controller.Create(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		serviceMock.AssertCalled(t, "Create", dto)
+	})
+
+}
+
+func Test{{Resources}}Controller_GetByUUID(t *testing.T) {
+	uuid := "test-uuid"
+	entity := &domain.{{Resource}}{
+		UUID:  "test-uuid",
+	}
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		serviceMock.On("GetByUUID", mock.Anything).Return(entity, nil)
+
+		w, req := getControllerArgs("GET", "/{{resources}}/", nil)
+		req.SetPathValue("uuid", uuid)
+
+		controller.GetByUUID(w, req)
+
+		var response api.ResponseBody[domain.{{Resource}}]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, *entity, response.Data)
+		serviceMock.AssertCalled(t, "GetByUUID", uuid)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		serviceMock.On("GetByUUID", mock.Anything).Return(nil, assert.AnError)
+
+		w, req := getControllerArgs("GET", "/{{resources}}/", nil)
+		req.SetPathValue("uuid", uuid)
+
+		controller.GetByUUID(w, req)
+
+		var response api.ResponseBody[domain.{{Resource}}]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		serviceMock.AssertCalled(t, "GetByUUID", uuid)
+
+	})
+}
+
+func Test{{Resources}}Controller_Update(t *testing.T) {
+	uuid := "test-uuid"
+	dto := domain.{{Resource}}UpdateDTO{}
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		serviceMock.On("Update", uuid, dto).Return(nil)
+
+		w, req := getControllerArgs("PUT", "/{{resources}}/", dto)
+		req.SetPathValue("uuid", uuid)
+
+		controller.Update(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertCalled(t, "Update", uuid, dto)
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		serviceMock.On("Update", uuid, dto).Return(assert.AnError)
+
+		w, req := getControllerArgs("PUT", "/{{resources}}/", dto)
+		req.SetPathValue("uuid", uuid)
+
+		controller.Update(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		serviceMock.AssertCalled(t, "Update", uuid, dto)
+	})
+
+}
+
+func Test{{Resources}}Controller_Delete(t *testing.T) {
+	uuid := "test-uuid"
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		serviceMock.On("Delete", "test-uuid").Return(nil)
+
+		w, req := getControllerArgs("DELETE", "/{{resources}}/", nil)
+		req.SetPathValue("uuid", uuid)
+
+		controller.Delete(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		serviceMock.AssertCalled(t, "Delete", "test-uuid")
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		serviceMock.On("Delete", "test-uuid").Return(assert.AnError)
+
+		w, req := getControllerArgs("DELETE", "/{{resources}}/", nil)
+		req.SetPathValue("uuid", uuid)
+
+		controller.Delete(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		serviceMock.AssertCalled(t, "Delete", "test-uuid")
+
+	})
+}

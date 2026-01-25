@@ -1,0 +1,27 @@
+package factories
+
+import (
+	"go-net-http-auth-base/internal/controllers"
+	"go-net-http-auth-base/internal/repositories"
+	"go-net-http-auth-base/internal/services"
+	// "go-net-http-auth-base/internal/middlewares" // Uncomment when adding middleware
+
+	"github.com/jackc/pgx/v5"
+)
+
+func {{Resources}}Factory(conn *pgx.Conn) *controllers.{{Resources}}Controller {
+	repo := repositories.New{{Resources}}PostgresRepository(conn)
+	service := services.New{{Resources}}Service(repo)
+
+	// TODO: Add middleware here if needed (e.g. AuthMiddleware)
+	// You can see internal/factories/users_factory.go for an example of how to inject AuthMiddleware.
+	// For now, we are passing nil which might cause a panic if the controller expects middleware.
+	// You should either:
+	// 1. Inject a real middleware (requires constructing AuthService etc.)
+	// 2. Or update the controller to not need middleware if this resource is public.
+	
+	// Example of constructing a simple middleware or passing nil if handled inside:
+	// middleware := middlewares.NewRateLimitMiddleware(...) 
+
+	return controllers.New{{Resources}}Controller(service, nil) 
+}

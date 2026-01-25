@@ -1,0 +1,122 @@
+package controllers
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/middlewares"
+)
+
+type {{Resources}}Controller struct {
+	service    domain.{{Resources}}Service
+	middleware middlewares.HandlerMiddleware
+}
+
+var _ Controller = (*{{Resources}}Controller)(nil)
+
+func New{{Resources}}Controller(service domain.{{Resources}}Service, middleware middlewares.HandlerMiddleware) *{{Resources}}Controller {
+	return &{{Resources}}Controller{
+		service:    service,
+		middleware: middleware,
+	}
+}
+
+func (c *{{Resources}}Controller) RegisterRoutes(router *http.ServeMux) {
+	router.HandleFunc("POST /{{resources}}", c.middleware.Use(c.Create))
+	router.HandleFunc("GET /{{resources}}/{uuid}", c.middleware.Use(c.GetByUUID))
+	router.HandleFunc("PUT /{{resources}}/{uuid}", c.middleware.Use(c.Update))
+	router.HandleFunc("DELETE /{{resources}}/{uuid}", c.middleware.Use(c.Delete))
+}
+
+func (c *{{Resources}}Controller) Create(w http.ResponseWriter, r *http.Request) {
+	var dto domain.Create{{Resource}}DTO
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dto); err != nil {
+		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
+			Message: "{{resource}}.create.bad_request",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	created, err := c.service.Create(dto)
+	if err != nil {
+		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
+			Message: "{{resource}}.create.failed",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusCreated, api.ResponseBody[domain.{{Resource}}]{
+		Data:    *created,
+		Message: "{{resource}}.create.success",
+	})
+}
+
+func (c *{{Resources}}Controller) GetByUUID(w http.ResponseWriter, r *http.Request) {
+	uuid := r.PathValue("uuid")
+	entity, err := c.service.GetByUUID(uuid)
+	if err != nil {
+		api.WriteJSONResponse(w, http.StatusNotFound, api.ResponseBody[any]{
+			Message: "{{resource}}.get.not_found",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.{{Resource}}]{
+		Data:    *entity,
+		Message: "{{resource}}.get.success",
+	})
+}
+
+func (c *{{Resources}}Controller) Update(w http.ResponseWriter, r *http.Request) {
+	uuid := r.PathValue("uuid")
+	var dto domain.{{Resource}}UpdateDTO
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&dto); err != nil {
+		api.WriteJSONResponse(w, http.StatusBadRequest,
+			api.ResponseBody[any]{
+				Message: "{{resource}}.update.bad_request",
+				Error:   err.Error(),
+			},
+		)
+		return
+	}
+
+	if err := c.service.Update(uuid, dto); err != nil {
+		api.WriteJSONResponse(w, http.StatusInternalServerError,
+			api.ResponseBody[any]{
+				Message: "{{resource}}.update.failed",
+				Error:   err.Error(),
+			},
+		)
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusOK,
+		api.ResponseBody[domain.{{Resource}}]{
+			Message: "{{resource}}.update.success",
+		},
+	)
+}
+
+func (c *{{Resources}}Controller) Delete(w http.ResponseWriter, r *http.Request) {
+	uuid := r.PathValue("uuid")
+	if err := c.service.Delete(uuid); err != nil {
+		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
+			Message: "{{resource}}.delete.failed",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

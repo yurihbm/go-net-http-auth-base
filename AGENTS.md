@@ -50,9 +50,11 @@ Scaffolds a complete vertical slice for a new resource, following the project's 
 - **Generates**: Domain, Repository (w/ Integration Tests), Service (w/ Unit Tests), Controller (w/ Unit Tests), and Factory.
 - **Usage**:
   ```bash
-  npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName>
+  npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular]
   ```
-- **Example**: `npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Product`
+- **Example**: 
+  - `npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Product` (Creates `products_controller.go`, etc.)
+  - `npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Auth --singular` (Creates `auth_controller.go`)
 
 ### 2. Go Migration Scaffolder (`go-migration-scaffolder`)
 

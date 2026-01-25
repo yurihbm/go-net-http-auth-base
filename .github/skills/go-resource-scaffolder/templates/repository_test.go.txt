@@ -1,0 +1,105 @@
+package repositories_test
+
+import (
+	"context"
+	"fmt"
+	"testing"
+
+	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/repositories"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func setup{{Resources}}RepoTest(t *testing.T) domain.{{Resources}}Repository {
+	if testing.Short() {
+		t.Skip("Skipping repository tests in short mode.")
+	}
+
+	ctx := context.Background()
+	repo := repositories.New{{Resources}}PostgresRepository(testDB)
+	require.NotNil(t, repo)
+
+	// Clean up table before tests
+	// TODO: Ensure this table name matches your migration
+	_, err := testDB.Exec(ctx, "TRUNCATE TABLE {{resources}} RESTART IDENTITY CASCADE")
+	if err != nil {
+		t.Logf("Warning: Failed to truncate table {{resources}}: %v", err)
+	}
+
+	return repo
+}
+
+func Test{{Resources}}PostgresRepository_Create(t *testing.T) {
+	repo := setup{{Resources}}RepoTest(t)
+
+	t.Run("success", func(t *testing.T) {
+		entity := domain.{{Resource}}{
+			// TODO: Add required fields
+			UUID: uuid.New().String(),
+		}
+
+		created, err := repo.Create(entity)
+		require.NoError(t, err)
+		assert.NotEmpty(t, created.UUID)
+	})
+}
+
+func Test{{Resources}}PostgresRepository_FindByUUID(t *testing.T) {
+	repo := setup{{Resources}}RepoTest(t)
+
+	t.Run("success", func(t *testing.T) {
+		entity := domain.{{Resource}}{
+			UUID: uuid.New().String(),
+		}
+		created, err := repo.Create(entity)
+		require.NoError(t, err)
+
+		found, err := repo.FindByUUID(created.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, created.UUID, found.UUID)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		found, err := repo.FindByUUID(uuid.New().String())
+		assert.Error(t, err)
+		assert.Nil(t, found)
+	})
+}
+
+func Test{{Resources}}PostgresRepository_Update(t *testing.T) {
+	repo := setup{{Resources}}RepoTest(t)
+
+	t.Run("success", func(t *testing.T) {
+		entity := domain.{{Resource}}{
+			UUID: uuid.New().String(),
+		}
+		created, err := repo.Create(entity)
+		require.NoError(t, err)
+
+		// TODO: Change fields
+		err = repo.Update(*created)
+		require.NoError(t, err)
+	})
+}
+
+func Test{{Resources}}PostgresRepository_Delete(t *testing.T) {
+	repo := setup{{Resources}}RepoTest(t)
+
+	t.Run("success", func(t *testing.T) {
+		entity := domain.{{Resource}}{
+			UUID: uuid.New().String(),
+		}
+		created, err := repo.Create(entity)
+		require.NoError(t, err)
+
+		err = repo.Delete(created.UUID)
+		require.NoError(t, err)
+
+		found, err := repo.FindByUUID(created.UUID)
+		assert.Error(t, err)
+		assert.Nil(t, found)
+	})
+}

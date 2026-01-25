@@ -1,0 +1,30 @@
+package domain
+
+type {{Resource}} struct {
+	UUID      string `json:"uuid"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+    // Add your fields here
+}
+
+type Create{{Resource}}DTO struct {
+    // Add your fields here
+}
+
+type {{Resource}}UpdateDTO struct {
+    // Add your fields here
+}
+
+type {{Resources}}Service interface {
+	GetByUUID(string) (*{{Resource}}, error)
+	Create(Create{{Resource}}DTO) (*{{Resource}}, error)
+	Update(string, {{Resource}}UpdateDTO) error
+	Delete(string) error
+}
+
+type {{Resources}}Repository interface {
+	FindByUUID(string) (*{{Resource}}, error)
+	Create({{Resource}}) (*{{Resource}}, error)
+	Update({{Resource}}) error
+	Delete(string) error
+}

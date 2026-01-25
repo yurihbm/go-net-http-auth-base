@@ -1,0 +1,58 @@
+package repositories
+
+import (
+	"context"
+
+	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/postgres"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type {{Resources}}PostgresRepository struct {
+	q *postgres.Queries
+}
+
+var _ domain.{{Resources}}Repository = (*{{Resources}}PostgresRepository)(nil)
+
+func New{{Resources}}PostgresRepository(db postgres.DBTX) domain.{{Resources}}Repository {
+	return &{{Resources}}PostgresRepository{
+		q: postgres.New(db),
+	}
+}
+
+func (r *{{Resources}}PostgresRepository) FindByUUID(uuidStr string) (*domain.{{Resource}}, error) {
+	uuid, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return nil, err
+	}
+
+    // TODO: Implement Get{{Resource}}ByUUID in postgres/queries
+    // user, err := r.q.Get{{Resource}}ByUUID(context.Background(), pgtype.UUID{Bytes: [16]byte(uuid), Valid: true})
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	return &domain.{{Resource}}{UUID: uuidStr}, nil // Placeholder
+}
+
+func (r *{{Resources}}PostgresRepository) Create(entity domain.{{Resource}}) (*domain.{{Resource}}, error) {
+    // TODO: Implement Create{{Resource}} in postgres/queries
+	return &entity, nil // Placeholder
+}
+
+func (r *{{Resources}}PostgresRepository) Update(entity domain.{{Resource}}) error {
+    // TODO: Implement Update{{Resource}} in postgres/queries
+	return nil // Placeholder
+}
+
+func (r *{{Resources}}PostgresRepository) Delete(uuidStr string) error {
+	uuid, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return err
+	}
+    // TODO: Implement Delete{{Resource}} in postgres/queries
+    _ = uuid
+	return nil // Placeholder
+}

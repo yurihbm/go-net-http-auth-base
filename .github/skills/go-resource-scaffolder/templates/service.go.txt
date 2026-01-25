@@ -1,0 +1,49 @@
+package services
+
+import (
+	"go-net-http-auth-base/internal/domain"
+)
+
+type {{resources}}Service struct {
+	repo domain.{{Resources}}Repository
+}
+
+func New{{Resources}}Service(repo domain.{{Resources}}Repository) domain.{{Resources}}Service {
+	return &{{resources}}Service{repo: repo}
+}
+
+func (s *{{resources}}Service) GetByUUID(uuid string) (*domain.{{Resource}}, error) {
+	return s.repo.FindByUUID(uuid)
+}
+
+func (s *{{resources}}Service) Create(dto domain.Create{{Resource}}DTO) (*domain.{{Resource}}, error) {
+	entity := domain.{{Resource}}{
+        // Map DTO to entity
+	}
+
+	created, err := s.repo.Create(entity)
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+func (s *{{resources}}Service) Update(uuid string, dto domain.{{Resource}}UpdateDTO) error {
+	entity, err := s.repo.FindByUUID(uuid)
+	if err != nil {
+		return err
+	}
+
+    // Update fields
+    _ = dto
+    _ = entity
+
+	if err = s.repo.Update(*entity); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *{{resources}}Service) Delete(uuid string) error {
+	return s.repo.Delete(uuid)
+}
