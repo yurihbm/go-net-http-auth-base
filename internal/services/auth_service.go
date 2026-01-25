@@ -14,6 +14,8 @@ import (
 
 const JWT_SECRET_KEY = "JWT_SECRET"
 
+var ErrInvalidToken = domain.NewUnauthorizedError("auth.invalidToken")
+
 type authService struct {
 	usersService          domain.UsersService
 	authRepository        domain.AuthRepository
@@ -35,11 +37,15 @@ func NewAuthService(
 func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.AuthTokens, error) {
 	user, err := s.usersService.GetByEmail(dto.Email)
 	if err != nil || user == nil {
-		return domain.AuthTokens{}, errors.New("auth.authenticate.user_not_found")
+		var notFoundErr *domain.NotFoundError
+		if err != nil && errors.As(err, &notFoundErr) {
+			return domain.AuthTokens{}, domain.NewUnauthorizedError("auth.authenticate.invalidCredentials")
+		}
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.userFetchFailed")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(dto.Password)); err != nil {
-		return domain.AuthTokens{}, errors.New("auth.authenticate.invalid_credentials")
+		return domain.AuthTokens{}, domain.NewUnauthorizedError("auth.authenticate.invalidCredentials")
 	}
 
 	accessToken, err := s.GenerateToken(domain.GenerateTokenDTO{
@@ -47,7 +53,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 		Audience: domain.TokenAudienceAccess,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, err
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed")
 	}
 
 	refreshToken, err := s.GenerateToken(domain.GenerateTokenDTO{
@@ -55,7 +61,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 		Audience: domain.TokenAudienceRefresh,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, err
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed")
 	}
 
 	return domain.AuthTokens{
@@ -67,13 +73,13 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 func (s *authService) VerifyToken(dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
 	token, err := jwt.Parse(dto.Token, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
+			return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
 		}
 		return []byte(os.Getenv(JWT_SECRET_KEY)), nil
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidToken
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
@@ -90,7 +96,7 @@ func (s *authService) VerifyToken(dto domain.VerifyTokenDTO) (*domain.VerifiedTo
 		}, nil
 	}
 
-	return nil, errors.New("invalid token")
+	return nil, ErrInvalidToken
 }
 
 func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthTokens, error) {
@@ -108,7 +114,7 @@ func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthToken
 		Audience: domain.TokenAudienceAccess,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, err
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed")
 	}
 
 	newRefreshToken, err := s.GenerateToken(domain.GenerateTokenDTO{
@@ -116,7 +122,7 @@ func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthToken
 		Audience: domain.TokenAudienceRefresh,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, err
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed")
 	}
 
 	return domain.AuthTokens{
@@ -134,8 +140,17 @@ func (s *authService) GenerateToken(dto domain.GenerateTokenDTO) (string, error)
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(os.Getenv(JWT_SECRET_KEY)))
+	signedString, err := token.SignedString([]byte(os.Getenv(JWT_SECRET_KEY)))
 
+	if err != nil {
+		// Inner service usage of GenerateToken checks this error and return this
+		// domain error with more contextual messages.
+		// This domain error is returned to avoid leaking internal error details to
+		// external calls.
+		return "", domain.NewInternalServerError("auth.tokenGenerationFailed")
+	}
+
+	return signedString, nil
 }
 
 func (s *authService) AddUserOAuthProvider(dto domain.AddUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
@@ -164,7 +179,9 @@ func (s *authService) GetUserOAuthProvidersByUserUUID(userUUID string) ([]domain
 func (s *authService) GetOAuthProviderAuthURL(providerName domain.OAuthProviderName, state string) (string, error) {
 	provider, err := s.oauthProviderRegistry.Get(providerName)
 	if err != nil {
-		return "", err
+		return "", domain.NewValidationError("auth.oauthProvider.invalid", map[string]string{
+			"provider": err.Error(),
+		})
 	}
 
 	return provider.GetAuthURL(state), nil
@@ -173,10 +190,17 @@ func (s *authService) GetOAuthProviderAuthURL(providerName domain.OAuthProviderN
 func (s *authService) GetOAuthProviderUserInfo(ctx context.Context, providerName domain.OAuthProviderName, code string) (*domain.OAuthProviderUserInfo, error) {
 	provider, err := s.oauthProviderRegistry.Get(providerName)
 	if err != nil {
-		return nil, err
+		return nil, domain.NewValidationError("auth.oauthProvider.invalid", map[string]string{
+			"provider": err.Error(),
+		})
 	}
 
-	return provider.GetUserInfo(ctx, code)
+	userInfo, err := provider.GetUserInfo(ctx, code)
+	if err != nil {
+		return nil, domain.NewInternalServerError("auth.oauthProvider.userInfoFetchFailed")
+	}
+
+	return userInfo, nil
 }
 
 func getTokenExpiration(audience domain.TokenAudience) int64 {

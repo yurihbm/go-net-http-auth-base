@@ -14,6 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -68,12 +69,14 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 			Password: "password123",
 		}
 
-		usersService.On("GetByEmail", dto.Email).Return(nil, nil).Once()
+		usersService.On("GetByEmail", dto.Email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
 
 		tokens, err := service.CredentialsLogin(dto)
 
-		assert.Error(t, err)
-		assert.Equal(t, "auth.authenticate.user_not_found", err.Error())
+		require.NotNil(t, err)
+		var unauthorizedErr *domain.UnauthorizedError
+		assert.True(t, errors.As(err, &unauthorizedErr))
+		assert.Equal(t, "auth.authenticate.invalidCredentials", err.Error())
 		assert.Empty(t, tokens.AccessToken)
 		assert.Empty(t, tokens.RefreshToken)
 		usersService.AssertExpectations(t)
@@ -89,8 +92,10 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 
 		tokens, err := service.CredentialsLogin(dto)
 
-		assert.Error(t, err)
-		assert.Equal(t, "auth.authenticate.user_not_found", err.Error())
+		require.NotNil(t, err)
+		var internalServerErr *domain.InternalServerError
+		assert.True(t, errors.As(err, &internalServerErr))
+		assert.Equal(t, "auth.authenticate.userFetchFailed", err.Error())
 		assert.Empty(t, tokens.AccessToken)
 		assert.Empty(t, tokens.RefreshToken)
 		usersService.AssertExpectations(t)
@@ -114,8 +119,10 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 
 		tokens, err := service.CredentialsLogin(dto)
 
-		assert.Error(t, err)
-		assert.Equal(t, "auth.authenticate.invalid_credentials", err.Error())
+		require.NotNil(t, err)
+		var unauthorizedErr *domain.UnauthorizedError
+		assert.True(t, errors.As(err, &unauthorizedErr))
+		assert.Equal(t, "auth.authenticate.invalidCredentials", err.Error())
 		assert.Empty(t, tokens.AccessToken)
 		assert.Empty(t, tokens.RefreshToken)
 		usersService.AssertExpectations(t)
@@ -623,9 +630,11 @@ func TestAuthService_GetOAuthProviderAuthURL(t *testing.T) {
 
 		url, err := service.GetOAuthProviderAuthURL(domain.OAuthProviderGoogle, "test-state")
 
-		assert.Error(t, err)
+		require.NotNil(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+		assert.Equal(t, "auth.oauthProvider.invalid", validationErr.Error())
 		assert.Empty(t, url)
-		assert.Equal(t, "provider not configured", err.Error())
 		oauthProviderRegistry.AssertExpectations(t)
 	})
 }
@@ -663,9 +672,11 @@ func TestAuthService_GetOAuthProviderUserInfo(t *testing.T) {
 
 		result, err := service.GetOAuthProviderUserInfo(context.Background(), domain.OAuthProviderGoogle, "auth-code")
 
-		assert.Error(t, err)
+		require.NotNil(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+		assert.Equal(t, "auth.oauthProvider.invalid", validationErr.Error())
 		assert.Nil(t, result)
-		assert.Equal(t, "provider not configured", err.Error())
 		oauthProviderRegistry.AssertExpectations(t)
 	})
 
@@ -677,9 +688,11 @@ func TestAuthService_GetOAuthProviderUserInfo(t *testing.T) {
 
 		result, err := service.GetOAuthProviderUserInfo(context.Background(), domain.OAuthProviderGoogle, "invalid-code")
 
-		assert.Error(t, err)
+		require.NotNil(t, err)
+		var internalErr *domain.InternalServerError
+		assert.True(t, errors.As(err, &internalErr))
+		assert.Equal(t, "auth.oauthProvider.userInfoFetchFailed", internalErr.Error())
 		assert.Nil(t, result)
-		assert.Equal(t, "invalid code", err.Error())
 		oauthProviderRegistry.AssertExpectations(t)
 		providerMock.AssertExpectations(t)
 	})
