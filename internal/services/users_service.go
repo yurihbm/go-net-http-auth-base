@@ -56,5 +56,6 @@ func (s *usersService) Update(uuid string, dto domain.UserUpdateDTO) error {
 }
 
 func (s *usersService) Delete(uuid string) error {
+	// TODO: Check if users is deleting itself or if this is a admin action
 	return s.repo.Delete(uuid)
 }

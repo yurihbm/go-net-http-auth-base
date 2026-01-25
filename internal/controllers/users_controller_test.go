@@ -89,7 +89,8 @@ func TestUsersController_CreateUser(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, response.Message, "user.create.invalid_password")
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
 		assert.NotEmpty(t, response.Error)
 		serviceMock.AssertNotCalled(t, "Create")
 	})
@@ -179,13 +180,19 @@ func TestUsersController_GetMe(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Equal(t, "user.get_me.unauthorized", response.Message)
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 		serviceMock.AssertNotCalled(t, "GetByUUID")
 	})
 
 	t.Run("not found", func(t *testing.T) {
 		controller, serviceMock, _ := newTestUsersController()
-		serviceMock.On("GetByUUID", "test-uuid").Return(nil, assert.AnError)
+		serviceMock.On("GetByUUID", "test-uuid").Return(nil,
+			domain.NewNotFoundError(
+				"user.notFound",
+			),
+		)
 
 		w, req := getControllerArgs("GET", "/users/me", nil)
 		ctx := context.WithValue(req.Context(), middlewares.UserUUIDKey, "test-uuid")
@@ -198,7 +205,9 @@ func TestUsersController_GetMe(t *testing.T) {
 
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusNotFound, w.Code)
-		assert.Equal(t, "user.get_me.not_found", response.Message)
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 		serviceMock.AssertCalled(t, "GetByUUID", "test-uuid")
 	})
 }
@@ -232,7 +241,10 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		controller, serviceMock, _ := newTestUsersController()
 
-		serviceMock.On("GetByUUID", mock.Anything).Return(nil, assert.AnError)
+		serviceMock.On("GetByUUID", mock.Anything).Return(
+			nil,
+			domain.NewNotFoundError("user.notFound"),
+		)
 
 		w, req := getControllerArgs("GET", "/users/", nil)
 		req.SetPathValue("uuid", uuid)
@@ -243,8 +255,10 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Empty(t, response.Message)
+		assert.Empty(t, response.Data)
+		assert.NotEmpty(t, response.Error)
 		serviceMock.AssertCalled(t, "GetByUUID", uuid)
-
 	})
 }
 

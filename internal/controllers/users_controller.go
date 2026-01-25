@@ -44,19 +44,19 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if dto.Password == "" || len(dto.Password) < 8 {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "user.create.invalid_password",
-			Error:   "password must be at least 8 characters long",
-		})
+		api.HandleError(w,
+			domain.NewValidationError("user.create.badRequest",
+				map[string]string{
+					"password": "password must be at least 8 characters long",
+				},
+			),
+		)
 		return
 	}
 
 	user, err := c.userService.Create(dto)
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "user.create.failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
@@ -69,25 +69,23 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 	userUUID, ok := r.Context().Value(middlewares.UserUUIDKey).(string)
 	if !ok {
-		api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-			Message: "user.get_me.unauthorized",
-			Error:   "user UUID not found in context",
-		})
+		api.HandleError(w,
+			domain.NewUnauthorizedError(
+				"user.getMe.unauthorized",
+			),
+		)
 		return
 	}
 
 	user, err := c.userService.GetByUUID(userUUID)
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusNotFound, api.ResponseBody[any]{
-			Message: "user.get_me.not_found",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
-		Message: "user.get_me.success",
+		Message: "user.getMe.success",
 	})
 }
 
@@ -95,10 +93,7 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 	uuid := r.PathValue("uuid")
 	user, err := c.userService.GetByUUID(uuid)
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusNotFound, api.ResponseBody[any]{
-			Message: "user.get.not_found",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
@@ -118,7 +113,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if err := decoder.Decode(&dto); err != nil {
 		api.WriteJSONResponse(w, http.StatusBadRequest,
 			api.ResponseBody[any]{
-				Message: "user.update.bad_request",
+				Message: "user.update.badRequest",
 				Error:   err.Error(),
 			},
 		)
@@ -126,12 +121,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.userService.Update(uuid, dto); err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError,
-			api.ResponseBody[any]{
-				Message: "user.update.failed",
-				Error:   err.Error(),
-			},
-		)
+		api.HandleError(w, err)
 		return
 	}
 
@@ -145,10 +135,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
 	if err := c.userService.Delete(uuid); err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "user.delete.failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(w, err)
 		return
 	}
 
