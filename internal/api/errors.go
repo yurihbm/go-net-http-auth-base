@@ -1,16 +1,22 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"go-net-http-auth-base/internal/domain"
 )
 
-func HandleError(w http.ResponseWriter, err error) {
+func HandleError(ctx context.Context, w http.ResponseWriter, err error) {
 	if err == nil {
 		WriteJSONResponse(w, http.StatusOK, ResponseBody[any]{})
 		return
+	}
+
+	reqContextData, hasReqContextData := ctx.Value(RequestContextDataKey).(*RequestContextData)
+	if hasReqContextData {
+		reqContextData.Error = err
 	}
 
 	var (
@@ -49,6 +55,9 @@ func HandleError(w http.ResponseWriter, err error) {
 	if errors.As(err, &internalServerErr) {
 		statusCode = http.StatusInternalServerError
 		message = internalServerErr.Error()
+		if hasReqContextData {
+			reqContextData.Error = internalServerErr.Unwrap()
+		}
 	}
 
 	WriteJSONResponse(w, statusCode, ResponseBody[any]{

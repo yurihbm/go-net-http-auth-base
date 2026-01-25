@@ -33,7 +33,7 @@ Repository → Service → Controller → HTTP Response
 
 3.  **Controller layer**: Maps **domain errors** → **HTTP responses**
     - Uses `errors.As()` to detect error type
-    - Calls `api.HandleError(w, err)` — no manual status code selection
+    - Calls `api.HandleError(ctx, w, err)` — no manual status code selection
     - Unknown errors default to 500 Internal Server Error
 
 ## Domain Error Types
@@ -106,7 +106,7 @@ func (c *UsersController) Create(w http.ResponseWriter, r *http.Request) {
     // ...
     user, err := c.service.Create(dto)
     if err != nil {
-        api.HandleError(w, err)
+        api.HandleError(r.Context(), w, err)
         return
     }
     // ...
@@ -127,3 +127,34 @@ The `HandleError` function inspects the error type using `errors.As()` and write
   }
 }
 ```
+
+## Error Logging & Observability
+
+We use a **Canonical Log Line** pattern to ensure observability without log spam.
+
+### How it works
+
+1.  **Context Injection**:
+    When `api.HandleError(ctx, w, err)` is called, it injects the error into the request context via `api.RequestContextData`.
+
+    ```go
+    // internal/api/errors.go
+    if hasReqContextData {
+        reqContextData.Error = err
+    }
+    ```
+
+2.  **Middleware Logging**:
+    The `LoggerMiddleware` wraps the entire request. When the request finishes, it reads the error from the context and logs it alongside the request metadata.
+    ```go
+    // internal/middlewares/logger_middleware.go
+    if reqContextData.Error != nil {
+        attrs = append(attrs, slog.String("error", reqContextData.Error.Error()))
+    }
+    ```
+
+### Benefits
+
+- **Root Cause Visibility**: The `InternalServerError` type wraps the original infrastructure error (e.g., PostgreSQL connection failure), so the log entry contains the actual cause of the failure.
+- **Single Log Entry**: Access logs and error logs are combined, making it easy to correlate HTTP status codes with their underlying errors.
+- **Contextual**: Every error is automatically associated with the `request_id` and `user_id`.

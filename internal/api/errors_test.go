@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -84,8 +85,10 @@ func TestHandleError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, api.RequestContextDataKey, &api.RequestContextData{})
 
-			api.HandleError(w, tt.err)
+			api.HandleError(ctx, w, tt.err)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 

@@ -56,7 +56,7 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 
 	tokens, err := c.authService.CredentialsLogin(dto)
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -78,7 +78,7 @@ func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := r.Cookie("refresh_token")
 	if err != nil {
-		api.HandleError(w,
+		api.HandleError(r.Context(), w,
 			domain.NewUnauthorizedError(
 				"auth.refresh.missingRefreshToken",
 			),
@@ -90,7 +90,7 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: refreshToken.Value,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -105,7 +105,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 	providerName := domain.OAuthProviderName(r.PathValue("provider"))
 	isValidProvider := domain.OAuthProviderName.IsValid(providerName)
 	if !isValidProvider {
-		api.HandleError(w, ErrInvalidOAuthProvider)
+		api.HandleError(r.Context(), w, ErrInvalidOAuthProvider)
 		return
 	}
 
@@ -118,13 +118,13 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 	})
 
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
 	authURL, err := c.authService.GetOAuthProviderAuthURL(providerName, state)
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -135,7 +135,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	providerName := domain.OAuthProviderName(r.PathValue("provider"))
 	isValidProvider := providerName.IsValid()
 	if !isValidProvider {
-		api.HandleError(w, ErrInvalidOAuthProvider)
+		api.HandleError(r.Context(), w, ErrInvalidOAuthProvider)
 		return
 	}
 
@@ -150,7 +150,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		if code == "" {
 			details["code"] = "code is required"
 		}
-		api.HandleError(w,
+		api.HandleError(r.Context(), w,
 			domain.NewValidationError(
 				"auth.provider_callback.missingParams",
 				details,
@@ -164,13 +164,13 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		Audience: domain.TokenAudienceOAuthState,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
 	redirectURI, ok := tokenData.Payload.(map[string]any)["redirect_uri"].(string)
 	if !ok {
-		api.HandleError(w,
+		api.HandleError(r.Context(), w,
 			domain.NewValidationError(
 				"auth.providerCallback.invalidStatePayload",
 				map[string]string{
@@ -187,7 +187,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		code,
 	)
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		if userInfo.Email == "" {
 			details["email"] = "user email is required"
 		}
-		api.HandleError(w,
+		api.HandleError(r.Context(), w,
 			domain.NewValidationError(
 				"auth.providerCallback.invalidUserInfo",
 				details,
@@ -219,7 +219,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	if userOAuthProvider != nil {
 		authenticatedUser, err = c.usersService.GetByUUID(userOAuthProvider.UserUUID)
 		if err != nil {
-			api.HandleError(w, err)
+			api.HandleError(r.Context(), w, err)
 			return
 		}
 	} else {
@@ -236,7 +236,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 				ProviderEmail:  userInfo.Email,
 			})
 			if err != nil {
-				api.HandleError(w, err)
+				api.HandleError(r.Context(), w, err)
 				return
 			}
 		} else {
@@ -248,7 +248,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 				Password: "",
 			})
 			if err != nil {
-				api.HandleError(w, err)
+				api.HandleError(r.Context(), w, err)
 				return
 			}
 
@@ -259,7 +259,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 				ProviderEmail:  userInfo.Email,
 			})
 			if err != nil {
-				api.HandleError(w, err)
+				api.HandleError(r.Context(), w, err)
 				// TODO: Remove this when transaction is implemented
 				c.usersService.Delete(newUser.UUID) // Rollback user creation
 				return
@@ -274,7 +274,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		Audience: domain.TokenAudienceAccess,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -283,7 +283,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		Audience: domain.TokenAudienceRefresh,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 

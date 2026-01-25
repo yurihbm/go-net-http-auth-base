@@ -2,21 +2,13 @@ package middlewares
 
 import (
 	"context"
+	"go-net-http-auth-base/internal/api"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 )
-
-type LoggerData struct {
-	UserUUID  string
-	RequestID string
-}
-
-type LoggerContextKey string
-
-const LoggerDataKey LoggerContextKey = "loggerData"
 
 type LoggerMiddleware struct{}
 
@@ -31,10 +23,10 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 		// Wrap ResponseWriter to capture status code
 		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
-		loggerData := &LoggerData{
+		reqContextData := &api.RequestContextData{
 			RequestID: uuid.New().String(),
 		}
-		ctx := context.WithValue(r.Context(), LoggerDataKey, loggerData)
+		ctx := context.WithValue(r.Context(), api.RequestContextDataKey, reqContextData)
 
 		next.ServeHTTP(ww, r.WithContext(ctx))
 
@@ -48,7 +40,7 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 		}
 
 		attrs := []slog.Attr{
-			slog.String("requestID", loggerData.RequestID),
+			slog.String("requestID", reqContextData.RequestID),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
 			slog.Int("status", ww.statusCode),
@@ -56,8 +48,11 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 			slog.String("ip", r.RemoteAddr),
 			slog.String("userAgent", r.UserAgent()),
 		}
-		if loggerData.UserUUID != "" {
-			attrs = append(attrs, slog.String("userUUID", loggerData.UserUUID))
+		if reqContextData.UserUUID != "" {
+			attrs = append(attrs, slog.String("userUUID", reqContextData.UserUUID))
+		}
+		if reqContextData.Error != nil {
+			attrs = append(attrs, slog.String("error", reqContextData.Error.Error()))
 		}
 
 		slog.LogAttrs(r.Context(), level, "HTTP Request", attrs...)

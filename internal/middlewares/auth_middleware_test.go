@@ -248,7 +248,7 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		}, nil)
 
 		// Create logger data
-		loggerData := &middlewares.LoggerData{}
+		reqContextData := &api.RequestContextData{}
 
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -263,7 +263,7 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		})
 
 		// Inject logger data into context
-		ctx := context.WithValue(req.Context(), middlewares.LoggerDataKey, loggerData)
+		ctx := context.WithValue(req.Context(), api.RequestContextDataKey, reqContextData)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
@@ -271,7 +271,7 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		wrappedHandler.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, userUUID, loggerData.UserUUID)
+		assert.Equal(t, userUUID, reqContextData.UserUUID)
 		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,

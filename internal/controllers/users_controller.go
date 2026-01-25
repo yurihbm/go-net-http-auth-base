@@ -44,7 +44,7 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if dto.Password == "" || len(dto.Password) < 8 {
-		api.HandleError(w,
+		api.HandleError(r.Context(), w,
 			domain.NewValidationError("user.create.badRequest",
 				map[string]string{
 					"password": "password must be at least 8 characters long",
@@ -56,7 +56,7 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := c.userService.Create(dto)
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -69,7 +69,7 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 	userUUID, ok := r.Context().Value(middlewares.UserUUIDKey).(string)
 	if !ok {
-		api.HandleError(w,
+		api.HandleError(r.Context(), w,
 			domain.NewUnauthorizedError(
 				"user.getMe.unauthorized",
 			),
@@ -79,7 +79,7 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	user, err := c.userService.GetByUUID(userUUID)
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -93,7 +93,7 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 	uuid := r.PathValue("uuid")
 	user, err := c.userService.GetByUUID(uuid)
 	if err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -121,7 +121,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.userService.Update(uuid, dto); err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -135,7 +135,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
 	if err := c.userService.Delete(uuid); err != nil {
-		api.HandleError(w, err)
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 

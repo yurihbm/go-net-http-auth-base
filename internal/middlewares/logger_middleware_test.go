@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/middlewares"
 
 	"github.com/stretchr/testify/assert"
@@ -146,7 +147,9 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Simulate setting UserUUID in the context
-			if data, ok := r.Context().Value(middlewares.LoggerDataKey).(*middlewares.LoggerData); ok {
+			if data, ok := r.Context().Value(
+				api.RequestContextDataKey,
+			).(*api.RequestContextData); ok {
 				data.UserUUID = "test-user-uuid"
 			}
 			w.WriteHeader(http.StatusOK)
