@@ -3,7 +3,7 @@ package api
 const RequestContextDataKey string = "requestContextData"
 
 type RequestContextData struct {
-	UserUUID  string
-	RequestID string
-	Error     error
+	UserUUID    string
+	RequestUUID string
+	Error       error
 }

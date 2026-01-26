@@ -2,6 +2,7 @@ package middlewares_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -143,6 +144,60 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		assert.Contains(t, logOutput, "\"ip\":\"192.168.1.1:1234\"")
 	})
 
+	t.Run("should log requestUUID when present", func(t *testing.T) {
+		buf.Reset()
+
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrappedHandler := middleware.Use(nextHandler)
+
+		req := httptest.NewRequest("GET", "/test-auth", nil)
+		ctx := context.WithValue(
+			req.Context(),
+			api.RequestContextDataKey,
+			&api.RequestContextData{
+				RequestUUID: "test-req-uuid",
+			},
+		)
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		logOutput := buf.String()
+		assert.Contains(t, logOutput, "\"requestUUID\":\"test-req-uuid\"")
+	})
+
+	t.Run("should not log requestUUID when not present", func(t *testing.T) {
+		buf.Reset()
+
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrappedHandler := middleware.Use(nextHandler)
+
+		req := httptest.NewRequest("GET", "/test-auth", nil)
+		ctx := context.WithValue(
+			req.Context(),
+			api.RequestContextDataKey,
+			&api.RequestContextData{},
+		)
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		logOutput := buf.String()
+		assert.NotContains(t, logOutput, "\"requestUUID\"")
+	})
+
 	t.Run("should log userUUID when present", func(t *testing.T) {
 		buf.Reset()
 
@@ -159,6 +214,12 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		wrappedHandler := middleware.Use(nextHandler)
 
 		req := httptest.NewRequest("GET", "/test-auth", nil)
+		ctx := context.WithValue(
+			req.Context(),
+			api.RequestContextDataKey,
+			&api.RequestContextData{},
+		)
+		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
 
 		wrappedHandler.ServeHTTP(w, req)
@@ -179,6 +240,12 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		wrappedHandler := middleware.Use(nextHandler)
 
 		req := httptest.NewRequest("GET", "/test-no-auth", nil)
+		ctx := context.WithValue(
+			req.Context(),
+			api.RequestContextDataKey,
+			&api.RequestContextData{},
+		)
+		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
 
 		wrappedHandler.ServeHTTP(w, req)
@@ -205,6 +272,12 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		wrappedHandler := middleware.Use(nextHandler)
 
 		req := httptest.NewRequest("GET", "/test-auth", nil)
+		ctx := context.WithValue(
+			req.Context(),
+			api.RequestContextDataKey,
+			&api.RequestContextData{},
+		)
+		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
 
 		wrappedHandler.ServeHTTP(w, req)
@@ -225,6 +298,12 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		wrappedHandler := middleware.Use(nextHandler)
 
 		req := httptest.NewRequest("GET", "/test-no-auth", nil)
+		ctx := context.WithValue(
+			req.Context(),
+			api.RequestContextDataKey,
+			&api.RequestContextData{},
+		)
+		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
 
 		wrappedHandler.ServeHTTP(w, req)

@@ -180,17 +180,17 @@ Enterprise-grade error handling, security, and observability.
 
 ---
 
-### 2.2 Request ID Middleware
+### 2.2 Request UUID Middleware
 
 **Tasks**:
 
-- [ ] Create `internal/middlewares/request_id_middleware.go`
-- [ ] Generate unique request ID for each request (UUID)
-- [ ] Add request ID to context
-- [ ] Include request ID in all log messages
-- [ ] Include request ID in response headers (`X-Request-ID`)
-- [ ] Add middleware tests
-- [ ] Integrate middleware in `cmd/main.go`
+- [x] Create `internal/middlewares/request_uuid_middleware.go`
+- [x] Generate unique request UUID for each request
+- [x] Add request UUID to context
+- [x] Include request UUID in all log messages
+- [x] Include request UUID in response headers (`X-Request-UUID`)
+- [x] Add middleware tests
+- [x] Integrate middleware in `cmd/main.go`
 
 **Files to create/modify**:
 
@@ -268,10 +268,10 @@ Enterprise-grade error handling, security, and observability.
 
 ## ✅ Phase 2 Completion Checklist
 
-- [ ] All errors return appropriate HTTP status codes
-- [ ] Rate limiter rejects requests after limit
+- [x] All errors return appropriate HTTP status codes
+- [x] Rate limiter rejects requests after limit
 - [ ] Audit logs record sensitive operations
-- [ ] Request IDs appear in all logs
+- [x] Request IDs appear in all logs
 - [ ] Test coverage remains >85%
 - [ ] All Phase 2 features are tested
 

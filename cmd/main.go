@@ -41,7 +41,16 @@ func main() {
 	rateLimitMiddleware := factories.RateLimitFactory()
 	corsMiddleware := factories.CORSFactory()
 	loggerMiddleware := factories.LoggerFactory()
-	handler := loggerMiddleware.Use(corsMiddleware.Use(rateLimitMiddleware.Use(mux)))
+	requestIDMiddleware := factories.RequestUUIDFactory()
+	handler := requestIDMiddleware.Use(
+		loggerMiddleware.Use(
+			corsMiddleware.Use(
+				rateLimitMiddleware.Use(
+					mux,
+				),
+			),
+		),
+	)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

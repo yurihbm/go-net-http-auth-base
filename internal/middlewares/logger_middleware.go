@@ -1,13 +1,11 @@
 package middlewares
 
 import (
-	"context"
-	"go-net-http-auth-base/internal/api"
 	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
+	"go-net-http-auth-base/internal/api"
 )
 
 type LoggerMiddleware struct{}
@@ -23,14 +21,14 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 		// Wrap ResponseWriter to capture status code
 		ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
-		reqContextData := &api.RequestContextData{
-			RequestID: uuid.New().String(),
-		}
-		ctx := context.WithValue(r.Context(), api.RequestContextDataKey, reqContextData)
-
-		next.ServeHTTP(ww, r.WithContext(ctx))
+		next.ServeHTTP(ww, r)
 
 		duration := time.Since(start)
+
+		var reqContextData *api.RequestContextData
+		if val := r.Context().Value(api.RequestContextDataKey); val != nil {
+			reqContextData = val.(*api.RequestContextData)
+		}
 
 		level := slog.LevelInfo
 		if ww.statusCode >= 500 {
@@ -40,7 +38,6 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 		}
 
 		attrs := []slog.Attr{
-			slog.String("requestID", reqContextData.RequestID),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
 			slog.Int("status", ww.statusCode),
@@ -48,11 +45,17 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 			slog.String("ip", r.RemoteAddr),
 			slog.String("userAgent", r.UserAgent()),
 		}
-		if reqContextData.UserUUID != "" {
-			attrs = append(attrs, slog.String("userUUID", reqContextData.UserUUID))
-		}
-		if reqContextData.Error != nil {
-			attrs = append(attrs, slog.String("error", reqContextData.Error.Error()))
+
+		if reqContextData != nil {
+			if reqContextData.RequestUUID != "" {
+				attrs = append(attrs, slog.String("requestUUID", reqContextData.RequestUUID))
+			}
+			if reqContextData.UserUUID != "" {
+				attrs = append(attrs, slog.String("userUUID", reqContextData.UserUUID))
+			}
+			if reqContextData.Error != nil {
+				attrs = append(attrs, slog.String("error", reqContextData.Error.Error()))
+			}
 		}
 
 		slog.LogAttrs(r.Context(), level, "HTTP Request", attrs...)
