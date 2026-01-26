@@ -266,12 +266,30 @@ Enterprise-grade error handling, security, and observability.
 
 ---
 
+### 2.6 Telemetry & Observability (OpenTelemetry + Grafana LGTM)
+
+Full observability stack with distributed tracing, metrics, and log correlation using OpenTelemetry and the Grafana LGTM stack.
+
+> **📄 Detailed implementation plan:** [TELEMETRY_AND_O11Y.md](TELEMETRY_AND_O11Y.md)
+
+**Summary:**
+
+- [ ] Domain interfaces & provider abstraction (DIP)
+- [ ] OpenTelemetry provider implementation
+- [ ] NoOp provider (for `OTEL_ENABLED=false`)
+- [ ] Dedicated `TelemetryMiddleware` (SRP)
+- [ ] Docker Compose infrastructure (Grafana, Tempo, Loki, Prometheus, OTel Collector)
+- [ ] Documentation & testing
+
+---
+
 ## ✅ Phase 2 Completion Checklist
 
 - [x] All errors return appropriate HTTP status codes
 - [x] Rate limiter rejects requests after limit
 - [ ] Audit logs record sensitive operations
 - [x] Request IDs appear in all logs
+- [ ] Telemetry & observability operational (see [TELEMETRY_AND_O11Y.md](TELEMETRY_AND_O11Y.md))
 - [ ] Test coverage remains >85%
 - [ ] All Phase 2 features are tested
 
