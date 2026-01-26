@@ -24,6 +24,12 @@ func TestRequestUUIDMiddleware_Use(t *testing.T) {
 
 	t.Run("should add request UUID to context and response header", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
+		ctx := req.Context()
+		ctx = context.WithValue(ctx,
+			api.RequestContextDataKey,
+			&api.RequestContextData{},
+		)
+		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 
 		handler := middleware.Use(
@@ -57,9 +63,12 @@ func TestRequestUUIDMiddleware_Use(t *testing.T) {
 	t.Run("should preserve existing RequestContextData in context", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		ctx := req.Context()
-		ctx = context.WithValue(ctx, api.RequestContextDataKey, &api.RequestContextData{
-			UserUUID: "existing-user-uuid",
-		})
+		ctx = context.WithValue(ctx,
+			api.RequestContextDataKey,
+			&api.RequestContextData{
+				UserUUID: "existing-user-uuid",
+			},
+		)
 		req = req.WithContext(ctx)
 
 		rr := httptest.NewRecorder()

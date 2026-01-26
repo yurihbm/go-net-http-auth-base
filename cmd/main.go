@@ -42,11 +42,14 @@ func main() {
 	corsMiddleware := factories.CORSFactory()
 	loggerMiddleware := factories.LoggerFactory()
 	requestIDMiddleware := factories.RequestUUIDFactory()
-	handler := requestIDMiddleware.Use(
-		loggerMiddleware.Use(
-			corsMiddleware.Use(
-				rateLimitMiddleware.Use(
-					mux,
+	requestContextDataMiddleware := factories.RequestContextDataFactory()
+	handler := requestContextDataMiddleware.Use(
+		requestIDMiddleware.Use(
+			loggerMiddleware.Use(
+				corsMiddleware.Use(
+					rateLimitMiddleware.Use(
+						mux,
+					),
 				),
 			),
 		),
