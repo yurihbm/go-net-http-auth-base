@@ -565,4 +565,561 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		assert.NotEmpty(t, response.Error)
 		authServiceMock.AssertExpectations(t)
 	})
+
+	t.Run("success - existing linked user", func(t *testing.T) {
+		controller, authServiceMock, usersServiceMock := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+		userUUID := "user-uuid"
+		providerUserID := "provider-user-id"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    providerUserID,
+			Name:  "Test User",
+			Email: "test@example.com",
+		}
+
+		userOAuthProvider := &domain.UserOAuthProvider{
+			UserUUID:       userUUID,
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  "test@example.com",
+		}
+
+		user := &domain.User{
+			UUID:  userUUID,
+			Email: "test@example.com",
+			Name:  "Test User",
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
+			Return(userInfo, nil).Once()
+
+		authServiceMock.On("GetUserOAuthProvider", domain.GetUserOAuthProviderDTO{
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+		}).Return(userOAuthProvider, nil).Once()
+
+		usersServiceMock.On("GetByUUID", userUUID).Return(user, nil).Once()
+
+		authServiceMock.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool {
+			return dto.Subject == userUUID && dto.Audience == domain.TokenAudienceAccess
+		})).Return("access-token", nil).Once()
+
+		authServiceMock.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool {
+			return dto.Subject == userUUID && dto.Audience == domain.TokenAudienceRefresh
+		})).Return("refresh-token", nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, redirectURI, w.Header().Get("Location"))
+
+		cookies := w.Result().Cookies()
+		var hasAccess, hasRefresh bool
+		for _, c := range cookies {
+			if c.Name == "access_token" {
+				hasAccess = true
+			}
+			if c.Name == "refresh_token" {
+				hasRefresh = true
+			}
+		}
+		assert.True(t, hasAccess)
+		assert.True(t, hasRefresh)
+
+		authServiceMock.AssertExpectations(t)
+		usersServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("success - link to existing user", func(t *testing.T) {
+		controller, authServiceMock, usersServiceMock := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+		userUUID := "user-uuid"
+		providerUserID := "provider-user-id"
+		email := "test@example.com"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    providerUserID,
+			Name:  "Test User",
+			Email: email,
+		}
+
+		user := &domain.User{
+			UUID:  userUUID,
+			Email: email,
+			Name:  "Test User",
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
+			Return(userInfo, nil).Once()
+
+		authServiceMock.On("GetUserOAuthProvider", domain.GetUserOAuthProviderDTO{
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+		}).Return(nil, domain.NewNotFoundError("not found")).Once()
+
+		usersServiceMock.On("GetByEmail", email).Return(user, nil).Once()
+
+		authServiceMock.On("AddUserOAuthProvider", domain.AddUserOAuthProviderDTO{
+			UserUUID:       userUUID,
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  email,
+		}).Return(nil, nil).Once()
+
+		authServiceMock.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool {
+			return dto.Subject == userUUID && dto.Audience == domain.TokenAudienceAccess
+		})).Return("access-token", nil).Once()
+
+		authServiceMock.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool {
+			return dto.Subject == userUUID && dto.Audience == domain.TokenAudienceRefresh
+		})).Return("refresh-token", nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, redirectURI, w.Header().Get("Location"))
+		authServiceMock.AssertExpectations(t)
+		usersServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("success - create new user", func(t *testing.T) {
+		controller, authServiceMock, usersServiceMock := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+		userUUID := "new-user-uuid"
+		providerUserID := "provider-user-id"
+		email := "new@example.com"
+		name := "New User"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    providerUserID,
+			Name:  name,
+			Email: email,
+		}
+
+		newUser := &domain.User{
+			UUID:  userUUID,
+			Email: email,
+			Name:  name,
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		authServiceMock.On(
+			"GetOAuthProviderUserInfo",
+			mock.MatchedBy(func(ctx any) bool { return true }), provider, code,
+		).Return(userInfo, nil).Once()
+
+		authServiceMock.On("GetUserOAuthProvider", domain.GetUserOAuthProviderDTO{
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+		}).Return(nil, domain.NewNotFoundError("not found")).Once()
+
+		usersServiceMock.On("GetByEmail", email).Return(
+			nil,
+			domain.NewNotFoundError("not found"),
+		).Once()
+
+		usersServiceMock.On("Create", domain.CreateUserDTO{
+			Name:     name,
+			Email:    email,
+			Password: "",
+		}).Return(newUser, nil).Once()
+
+		authServiceMock.On("AddUserOAuthProvider", domain.AddUserOAuthProviderDTO{
+			UserUUID:       userUUID,
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  email,
+		}).Return(nil, nil).Once()
+
+		authServiceMock.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool {
+			return dto.Subject == userUUID && dto.Audience == domain.TokenAudienceAccess
+		})).Return("access-token", nil).Once()
+
+		authServiceMock.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool {
+			return dto.Subject == userUUID && dto.Audience == domain.TokenAudienceRefresh
+		})).Return("refresh-token", nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, redirectURI, w.Header().Get("Location"))
+		authServiceMock.AssertExpectations(t)
+		usersServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("internal server error - failed to fetch user (Case 1)", func(t *testing.T) {
+		controller, authServiceMock, usersServiceMock := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+		userUUID := "user-uuid"
+		providerUserID := "provider-user-id"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    providerUserID,
+			Name:  "Test User",
+			Email: "test@example.com",
+		}
+
+		userOAuthProvider := &domain.UserOAuthProvider{
+			UserUUID:       userUUID,
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  "test@example.com",
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
+			Return(userInfo, nil).Once()
+
+		authServiceMock.On("GetUserOAuthProvider", domain.GetUserOAuthProviderDTO{
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+		}).Return(userOAuthProvider, nil).Once()
+
+		usersServiceMock.On("GetByUUID", userUUID).Return(nil, errors.New("db error")).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		authServiceMock.AssertExpectations(t)
+		usersServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("internal server error - failed to link provider (Case 2)", func(t *testing.T) {
+		controller, authServiceMock, usersServiceMock := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+		userUUID := "user-uuid"
+		providerUserID := "provider-user-id"
+		email := "test@example.com"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    providerUserID,
+			Name:  "Test User",
+			Email: email,
+		}
+
+		user := &domain.User{
+			UUID:  userUUID,
+			Email: email,
+			Name:  "Test User",
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
+			Return(userInfo, nil).Once()
+
+		authServiceMock.On("GetUserOAuthProvider", domain.GetUserOAuthProviderDTO{
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+		}).Return(nil, domain.NewNotFoundError("not found")).Once()
+
+		usersServiceMock.On("GetByEmail", email).Return(user, nil).Once()
+
+		authServiceMock.On("AddUserOAuthProvider", domain.AddUserOAuthProviderDTO{
+			UserUUID:       userUUID,
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  email,
+		}).Return(nil, errors.New("db error")).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		authServiceMock.AssertExpectations(t)
+		usersServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("internal server error - failed to create user (Case 3)", func(t *testing.T) {
+		controller, authServiceMock, usersServiceMock := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+		providerUserID := "provider-user-id"
+		email := "new@example.com"
+		name := "New User"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    providerUserID,
+			Name:  name,
+			Email: email,
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
+			Return(userInfo, nil).Once()
+
+		authServiceMock.On("GetUserOAuthProvider", domain.GetUserOAuthProviderDTO{
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+		}).Return(nil, domain.NewNotFoundError("not found")).Once()
+
+		usersServiceMock.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("not found")).Once()
+
+		usersServiceMock.On("Create", domain.CreateUserDTO{
+			Name:     name,
+			Email:    email,
+			Password: "",
+		}).Return(nil, errors.New("db error")).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		authServiceMock.AssertExpectations(t)
+		usersServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("internal server error - failed to link provider during creation (Case 3 - Rollback)", func(t *testing.T) {
+		controller, authServiceMock, usersServiceMock := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+		userUUID := "new-user-uuid"
+		providerUserID := "provider-user-id"
+		email := "new@example.com"
+		name := "New User"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    providerUserID,
+			Name:  name,
+			Email: email,
+		}
+
+		newUser := &domain.User{
+			UUID:  userUUID,
+			Email: email,
+			Name:  name,
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
+			Return(userInfo, nil).Once()
+
+		authServiceMock.On("GetUserOAuthProvider", domain.GetUserOAuthProviderDTO{
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+		}).Return(nil, domain.NewNotFoundError("not found")).Once()
+
+		usersServiceMock.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("not found")).Once()
+
+		usersServiceMock.On("Create", domain.CreateUserDTO{
+			Name:     name,
+			Email:    email,
+			Password: "",
+		}).Return(newUser, nil).Once()
+
+		authServiceMock.On("AddUserOAuthProvider", domain.AddUserOAuthProviderDTO{
+			UserUUID:       userUUID,
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  email,
+		}).Return(nil, errors.New("db error")).Once()
+
+		usersServiceMock.On("Delete", userUUID).Return(nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		authServiceMock.AssertExpectations(t)
+		usersServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("internal server error - token generation fails", func(t *testing.T) {
+		controller, authServiceMock, usersServiceMock := newTestAuthController()
+		provider := domain.OAuthProviderGoogle
+		state := "valid-state"
+		code := "auth-code"
+		redirectURI := "http://localhost:3000/callback"
+		userUUID := "user-uuid"
+		providerUserID := "provider-user-id"
+
+		verifiedTokenData := &domain.VerifiedTokenData{
+			Subject:    string(provider),
+			Audience:   domain.TokenAudienceOAuthState,
+			Expiration: time.Now().Add(time.Hour).Unix(),
+			Payload: map[string]any{
+				"redirect_uri": redirectURI,
+			},
+		}
+
+		userInfo := &domain.OAuthProviderUserInfo{
+			ID:    providerUserID,
+			Name:  "Test User",
+			Email: "test@example.com",
+		}
+
+		userOAuthProvider := &domain.UserOAuthProvider{
+			UserUUID:       userUUID,
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  "test@example.com",
+		}
+
+		user := &domain.User{
+			UUID:  userUUID,
+			Email: "test@example.com",
+			Name:  "Test User",
+		}
+
+		authServiceMock.On("VerifyToken", domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		}).Return(verifiedTokenData, nil).Once()
+
+		authServiceMock.On("GetOAuthProviderUserInfo",
+			mock.MatchedBy(func(ctx any) bool { return true }),
+			provider,
+			code,
+		).Return(userInfo, nil).Once()
+
+		authServiceMock.On("GetUserOAuthProvider", domain.GetUserOAuthProviderDTO{
+			Provider:       provider,
+			ProviderUserID: providerUserID,
+		}).Return(userOAuthProvider, nil).Once()
+
+		usersServiceMock.On("GetByUUID", userUUID).Return(user, nil).Once()
+
+		authServiceMock.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool {
+			return dto.Subject == userUUID && dto.Audience == domain.TokenAudienceAccess
+		})).Return("", errors.New("token error")).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
+		req.SetPathValue("provider", string(provider))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		authServiceMock.AssertExpectations(t)
+		usersServiceMock.AssertExpectations(t)
+	})
 }
