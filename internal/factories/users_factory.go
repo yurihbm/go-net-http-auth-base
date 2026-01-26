@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func UsersFactory(conn *pgx.Conn) *controllers.UsersController {
+func UsersFactory(conn *pgx.Conn) controllers.Controller {
 	userRepository := repositories.NewUsersPostgresRepository(conn)
 	userService := services.NewUserService(userRepository)
 

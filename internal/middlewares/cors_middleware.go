@@ -24,7 +24,7 @@ func NewCORSMiddleware(
 	exposeHeaders []string,
 	allowCredentials bool,
 	maxAge string,
-) *CORSMiddleware {
+) GlobalMiddleware {
 	return &CORSMiddleware{
 		allowedOrigins:   allowedOrigins,
 		allowedMethods:   allowedMethods,

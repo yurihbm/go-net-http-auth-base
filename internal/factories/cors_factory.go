@@ -7,7 +7,7 @@ import (
 	"go-net-http-auth-base/internal/middlewares"
 )
 
-func CORSFactory() *middlewares.CORSMiddleware {
+func CORSFactory() middlewares.GlobalMiddleware {
 	allowedOrigins := parseAllowedOrigins()
 	allowedMethods := parseAllowedMethods()
 	allowedHeaders := []string{"Content-Type", "Authorization"}

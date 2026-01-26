@@ -10,7 +10,7 @@ import (
 
 type LoggerMiddleware struct{}
 
-func NewLoggerMiddleware() *LoggerMiddleware {
+func NewLoggerMiddleware() GlobalMiddleware {
 	return &LoggerMiddleware{}
 }
 

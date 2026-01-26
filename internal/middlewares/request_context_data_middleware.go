@@ -9,7 +9,7 @@ import (
 
 type RequestContextDataMiddleware struct{}
 
-func NewRequestContextDataMiddleware() *RequestContextDataMiddleware {
+func NewRequestContextDataMiddleware() GlobalMiddleware {
 	return &RequestContextDataMiddleware{}
 }
 

@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func getTestAuthMiddleware() (*middlewares.AuthMiddleware, *mocks.AuthServiceMock) {
+func getTestAuthMiddleware() (middlewares.HandlerMiddleware, *mocks.AuthServiceMock) {
 	serviceMock := new(mocks.AuthServiceMock)
 	middleware := middlewares.NewAuthMiddleware(serviceMock)
 

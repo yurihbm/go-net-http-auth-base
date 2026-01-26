@@ -4,6 +4,6 @@ import (
 	"go-net-http-auth-base/internal/middlewares"
 )
 
-func LoggerFactory() *middlewares.LoggerMiddleware {
+func LoggerFactory() middlewares.GlobalMiddleware {
 	return middlewares.NewLoggerMiddleware()
 }

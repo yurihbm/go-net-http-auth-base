@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func AuthFactory(conn *pgx.Conn) *controllers.AuthController {
+func AuthFactory(conn *pgx.Conn) controllers.Controller {
 	userRepository := repositories.NewUsersPostgresRepository(conn)
 	userService := services.NewUserService(userRepository)
 

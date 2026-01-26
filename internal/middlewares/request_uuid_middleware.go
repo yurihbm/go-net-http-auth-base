@@ -10,7 +10,7 @@ import (
 
 type RequestUUIDMiddleware struct{}
 
-func NewRequestUUIDMiddleware() *RequestUUIDMiddleware {
+func NewRequestUUIDMiddleware() GlobalMiddleware {
 	return &RequestUUIDMiddleware{}
 }
 

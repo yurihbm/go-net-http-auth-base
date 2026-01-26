@@ -6,7 +6,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func RateLimitFactory() *middlewares.RateLimitMiddleware {
+func RateLimitFactory() middlewares.GlobalMiddleware {
 	rps := GetEnvAsFloat("RATE_LIMIT_REQUESTS_PER_SECOND", 20.0)
 	burst := GetEnvAsInt("RATE_LIMIT_BURST", 50)
 

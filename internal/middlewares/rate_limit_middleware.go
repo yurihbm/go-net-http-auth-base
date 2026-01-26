@@ -21,7 +21,7 @@ type visitor struct {
 	lastSeen time.Time
 }
 
-func NewRateLimitMiddleware(r rate.Limit, b int) *RateLimitMiddleware {
+func NewRateLimitMiddleware(r rate.Limit, b int) GlobalMiddleware {
 	m := &RateLimitMiddleware{
 		visitors: make(map[string]*visitor),
 		rate:     r,

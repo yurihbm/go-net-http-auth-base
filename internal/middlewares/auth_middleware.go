@@ -20,7 +20,7 @@ type AuthMiddleware struct {
 
 var _ HandlerMiddleware = (*AuthMiddleware)(nil)
 
-func NewAuthMiddleware(authService domain.AuthService) *AuthMiddleware {
+func NewAuthMiddleware(authService domain.AuthService) HandlerMiddleware {
 	return &AuthMiddleware{authService: authService}
 }
 

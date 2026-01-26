@@ -10,7 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func getTestCORSMiddleware(origins, methods, headers, exposeHeaders []string, credentials bool, maxAge string) *middlewares.CORSMiddleware {
+func getTestCORSMiddleware(
+	origins,
+	methods,
+	headers,
+	exposeHeaders []string,
+	credentials bool,
+	maxAge string,
+) middlewares.GlobalMiddleware {
 	return middlewares.NewCORSMiddleware(origins, methods, headers, exposeHeaders, credentials, maxAge)
 }
 
