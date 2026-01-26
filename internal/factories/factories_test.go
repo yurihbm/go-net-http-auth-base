@@ -79,3 +79,17 @@ func TestRateLimitFactory(t *testing.T) {
 	assert.NotNil(t, middleware)
 	assert.IsType(t, &middlewares.RateLimitMiddleware{}, middleware)
 }
+
+func TestRequestContextDataFactory(t *testing.T) {
+	middleware := factories.RequestContextDataFactory()
+
+	assert.NotNil(t, middleware)
+	assert.IsType(t, &middlewares.RequestContextDataMiddleware{}, middleware)
+}
+
+func TestRequestUUIDFactory(t *testing.T) {
+	middleware := factories.RequestUUIDFactory()
+
+	assert.NotNil(t, middleware)
+	assert.IsType(t, &middlewares.RequestUUIDMiddleware{}, middleware)
+}
