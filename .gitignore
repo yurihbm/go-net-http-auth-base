@@ -35,3 +35,5 @@ Thumbs.db
 # Docker specific files
 docker-compose.override.yml
 
+# Gemini CLI specific files
+conductor
