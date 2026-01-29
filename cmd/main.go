@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go-net-http-auth-base/internal/factories"
+	"go-net-http-auth-base/internal/infra"
 	"go-net-http-auth-base/internal/logger"
 	"go-net-http-auth-base/postgres"
 
@@ -26,6 +27,24 @@ func main() {
 
 	ctx := context.Background()
 	conn := postgres.NewConnection(ctx)
+
+	// Initialize and run Partition Manager
+	partitionManager := infra.NewAuditLogsPartitionManager(conn)
+	if err := partitionManager.RunMaintenance(ctx); err != nil {
+		slog.Error("Failed to initialize audit log partitions", "error", err)
+		os.Exit(1)
+	}
+
+	// Run partition maintenance in background
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := partitionManager.RunMaintenance(context.Background()); err != nil {
+				slog.Error("Failed to maintain audit log partitions", "error", err)
+			}
+		}
+	}()
 
 	defer func() {
 		if err := conn.Close(ctx); err != nil {
