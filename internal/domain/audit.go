@@ -15,6 +15,23 @@ type AuditLog struct {
 	CreatedAt     int64   `json:"created_at"`
 }
 
+const (
+	// Status
+	AuditStatusSuccess = "SUCCESS"
+	AuditStatusFailure = "FAILURE"
+
+	// Actions
+	AuditActionUserCreate = "USER_CREATE"
+	AuditActionUserUpdate = "USER_UPDATE"
+	AuditActionUserDelete = "USER_DELETE"
+	AuditActionLogin      = "LOGIN"
+	AuditActionLogout     = "LOGOUT"
+
+	// Resources
+	AuditResourceUser = "user"
+	AuditResourceAuth = "auth"
+)
+
 type CreateAuditLogDTO struct {
 	ActorUUID     *string
 	IPAddress     string
