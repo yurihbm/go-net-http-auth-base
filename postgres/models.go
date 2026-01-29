@@ -14,7 +14,9 @@ import (
 type OauthProvider string
 
 const (
-	OauthProviderGoogle OauthProvider = "google"
+	OauthProviderGoogle    OauthProvider = "google"
+	OauthProviderMicrosoft OauthProvider = "microsoft"
+	OauthProviderGithub    OauthProvider = "github"
 )
 
 func (e *OauthProvider) Scan(src interface{}) error {
@@ -50,6 +52,36 @@ func (ns NullOauthProvider) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.OauthProvider), nil
+}
+
+type AuditLog struct {
+	Uuid          pgtype.UUID
+	ActorUuid     pgtype.UUID
+	IpAddress     string
+	UserAgent     string
+	Action        string
+	ResourceType  string
+	ResourceUuid  string
+	RequestUuid   pgtype.UUID
+	Changes       []byte
+	Status        string
+	FailureReason pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+}
+
+type AuditLogsDefault struct {
+	Uuid          pgtype.UUID
+	ActorUuid     pgtype.UUID
+	IpAddress     string
+	UserAgent     string
+	Action        string
+	ResourceType  string
+	ResourceUuid  string
+	RequestUuid   pgtype.UUID
+	Changes       []byte
+	Status        string
+	FailureReason pgtype.Text
+	CreatedAt     pgtype.Timestamptz
 }
 
 type User struct {
