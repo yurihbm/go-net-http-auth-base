@@ -229,13 +229,18 @@ Enterprise-grade error handling, security, and observability.
 
 **Tasks**:
 
-- [ ] Create database migration for audit logs table
-- [ ] Create `internal/domain/audit.go` with audit entry model
-- [ ] Create `internal/repositories/audit_repository.go`
+- [x] Create database migration for audit logs table
+- [x] Create `internal/domain/audit.go` with audit entry model
+- [x] Create `internal/repositories/audit_repository.go`
 - [ ] Create `internal/services/audit_service.go`
 - [ ] Log sensitive operations (create user, update user, etc.)
 - [ ] Include user ID, action, timestamp, IP address in audit logs
 - [ ] Add audit log retrieval endpoint (admin only)
+  - [ ] Add admin role to user model
+  - [ ] Create a `require role` middleware
+  - [ ] Create `internal/controllers/audit_controller.go`
+  - [ ] Implement `GET /audit-logs` endpoint with pagination and filtering
+  - [ ] Add middleware to protect the endpoint
 - [ ] Add comprehensive audit logging tests
 
 **Files to create/modify**:
