@@ -1,10 +1,16 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE TYPE user_role AS ENUM (
+    'admin',
+    'user'
+);
+
 CREATE TABLE users (
     uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
     name text NOT NULL,
     email text UNIQUE NOT NULL,
     password_hash text,
+    role user_role NOT NULL DEFAULT 'user',
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL
 );

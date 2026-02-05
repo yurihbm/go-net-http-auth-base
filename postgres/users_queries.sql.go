@@ -15,7 +15,7 @@ const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email, password_hash)
     VALUES ($1, $2, $3)
 RETURNING
-    uuid, name, email, password_hash, created_at, updated_at
+    uuid, name, email, password_hash, role, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -32,6 +32,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
+		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -52,7 +53,7 @@ func (q *Queries) DeleteUser(ctx context.Context, uuid pgtype.UUID) error {
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-    uuid, name, email, password_hash, created_at, updated_at
+    uuid, name, email, password_hash, role, created_at, updated_at
 FROM
     users
 WHERE
@@ -67,6 +68,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
+		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -75,7 +77,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 
 const getUserByUUID = `-- name: GetUserByUUID :one
 SELECT
-    uuid, name, email, password_hash, created_at, updated_at
+    uuid, name, email, password_hash, role, created_at, updated_at
 FROM
     users
 WHERE
@@ -90,6 +92,7 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 		&i.Name,
 		&i.Email,
 		&i.PasswordHash,
+		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -98,7 +101,7 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 
 const listUsers = `-- name: ListUsers :many
 SELECT
-    uuid, name, email, password_hash, created_at, updated_at
+    uuid, name, email, password_hash, role, created_at, updated_at
 FROM
     users
 ORDER BY
@@ -125,6 +128,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Name,
 			&i.Email,
 			&i.PasswordHash,
+			&i.Role,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

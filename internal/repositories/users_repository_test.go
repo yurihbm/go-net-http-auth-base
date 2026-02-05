@@ -31,6 +31,7 @@ func seedUser(t *testing.T, repo domain.UsersRepository) *domain.User {
 		Name:         "John Doe",
 		Email:        "john.doe@example.com",
 		PasswordHash: "hashed_password",
+		Role:         domain.RoleUser,
 	}
 
 	createdUser, err := repo.FindByEmail(user.Email)
@@ -51,6 +52,7 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 			Name:         "John Doe",
 			Email:        "john.doe@example.com",
 			PasswordHash: "hashed_password",
+			Role:         domain.RoleUser,
 		}
 
 		createdUser, err := repo.Create(user)
@@ -61,6 +63,7 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 		assert.Equal(t, user.Name, createdUser.Name)
 		assert.Equal(t, user.Email, createdUser.Email)
 		assert.Equal(t, user.PasswordHash, createdUser.PasswordHash)
+		assert.Equal(t, domain.RoleUser, createdUser.Role)
 	})
 
 	t.Run("duplicate email", func(t *testing.T) {
@@ -101,6 +104,7 @@ func TestUsersPostgresRepository_FindByUUID(t *testing.T) {
 		assert.Equal(t, createdUser.UUID, foundUser.UUID)
 		assert.Equal(t, createdUser.Name, foundUser.Name)
 		assert.Equal(t, createdUser.Email, foundUser.Email)
+		assert.Equal(t, domain.RoleUser, foundUser.Role)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -132,6 +136,7 @@ func TestUsersPostgresRepository_FindByEmail(t *testing.T) {
 		assert.Equal(t, createdUser.UUID, foundUser.UUID)
 		assert.Equal(t, createdUser.Name, foundUser.Name)
 		assert.Equal(t, createdUser.Email, foundUser.Email)
+		assert.Equal(t, domain.RoleUser, foundUser.Role)
 	})
 
 	t.Run("not found", func(t *testing.T) {

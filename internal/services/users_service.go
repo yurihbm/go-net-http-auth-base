@@ -24,8 +24,9 @@ func (s *usersService) GetByEmail(email string) (*domain.User, error) {
 
 func (s *usersService) Create(dto domain.CreateUserDTO) (*domain.User, error) {
 	user := domain.User{
-		Name:  dto.Name,
+		Name: dto.Name,
 		Email: dto.Email,
+		Role: domain.RoleUser,
 	}
 
 	if dto.Password != "" {

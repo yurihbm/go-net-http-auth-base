@@ -118,6 +118,7 @@ func toDomainUser(user postgres.User) domain.User {
 		UUID:         uuid.UUID(uuidBytes).String(),
 		Name:         user.Name,
 		Email:        user.Email,
+		Role:         domain.UserRole(user.Role),
 		PasswordHash: user.PasswordHash.String,
 		CreatedAt:    user.CreatedAt.Time.Unix(),
 		UpdatedAt:    user.UpdatedAt.Time.Unix(),

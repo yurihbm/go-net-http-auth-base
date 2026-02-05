@@ -1,12 +1,29 @@
 package domain
 
+type UserRole string
+
+const (
+	RoleAdmin UserRole = "admin"
+	RoleUser  UserRole = "user"
+)
+
+func (r UserRole) IsValid() bool {
+	switch r {
+	case RoleAdmin, RoleUser:
+		return true
+	default:
+		return false
+	}
+}
+
 type User struct {
-	UUID         string `json:"uuid"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-	PasswordHash string `json:"-"`
-	CreatedAt    int64  `json:"created_at"`
-	UpdatedAt    int64  `json:"updated_at"`
+	UUID         string   `json:"uuid"`
+	Name         string   `json:"name"`
+	Email        string   `json:"email"`
+	PasswordHash string   `json:"-"`
+	Role         UserRole `json:"role"`
+	CreatedAt    int64    `json:"created_at"`
+	UpdatedAt    int64    `json:"updated_at"`
 }
 
 type CreateUserDTO struct {

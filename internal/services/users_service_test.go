@@ -82,11 +82,14 @@ func TestUsersService_Create(t *testing.T) {
 			Password: password,
 		}
 
-		repo.On("Create", mock.AnythingOfType("domain.User")).Return(&domain.User{
+		repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
+			return u.Role == domain.RoleUser
+		})).Return(&domain.User{
 			UUID:         "generated-uuid",
 			Name:         "Test User",
 			Email:        "test@example.com",
 			PasswordHash: "hashed-password",
+			Role:         domain.RoleUser,
 			CreatedAt:    1234567890,
 		}, nil).Once()
 
@@ -98,6 +101,7 @@ func TestUsersService_Create(t *testing.T) {
 		assert.Equal(t, dto.Name, user.Name)
 		assert.Equal(t, dto.Email, user.Email)
 		assert.Equal(t, "hashed-password", user.PasswordHash)
+		assert.Equal(t, domain.RoleUser, user.Role)
 		assert.Equal(t, int64(1234567890), user.CreatedAt)
 		repo.AssertExpectations(t)
 	})
@@ -108,11 +112,14 @@ func TestUsersService_Create(t *testing.T) {
 			Email: "test@example.com",
 		}
 
-		repo.On("Create", mock.AnythingOfType("domain.User")).Return(&domain.User{
+		repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
+			return u.Role == domain.RoleUser
+		})).Return(&domain.User{
 			UUID:         "generated-uuid",
 			Name:         "Test User",
 			Email:        "test@example.com",
 			PasswordHash: "",
+			Role:         domain.RoleUser,
 			CreatedAt:    1234567890,
 		}, nil).Once()
 
@@ -124,6 +131,7 @@ func TestUsersService_Create(t *testing.T) {
 		assert.Equal(t, dto.Name, user.Name)
 		assert.Equal(t, dto.Email, user.Email)
 		assert.Equal(t, "", user.PasswordHash)
+		assert.Equal(t, domain.RoleUser, user.Role)
 		assert.Equal(t, int64(1234567890), user.CreatedAt)
 		repo.AssertExpectations(t)
 	})

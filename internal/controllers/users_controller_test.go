@@ -41,6 +41,7 @@ func TestUsersController_CreateUser(t *testing.T) {
 		UUID:  "test-uuid",
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
+		Role:  domain.RoleUser,
 	}
 	dto := domain.CreateUserDTO{
 		Name:     "John Doe",
@@ -66,6 +67,7 @@ func TestUsersController_CreateUser(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.Equal(t, response.Data, *user)
+		assert.Equal(t, domain.RoleUser, response.Data.Role)
 		serviceMock.AssertCalled(t, "Create", dto)
 	})
 
@@ -145,6 +147,7 @@ func TestUsersController_GetMe(t *testing.T) {
 		UUID:  "test-uuid",
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
+		Role:  domain.RoleUser,
 	}
 
 	t.Run("success", func(t *testing.T) {
@@ -164,6 +167,7 @@ func TestUsersController_GetMe(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, *user, response.Data)
+		assert.Equal(t, domain.RoleUser, response.Data.Role)
 		serviceMock.AssertCalled(t, "GetByUUID", "test-uuid")
 	})
 
@@ -218,6 +222,7 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 		UUID:  "test-uuid",
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
+		Role:  domain.RoleUser,
 	}
 
 	t.Run("success", func(t *testing.T) {
@@ -235,6 +240,7 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, *user, response.Data)
+		assert.Equal(t, domain.RoleUser, response.Data.Role)
 		serviceMock.AssertCalled(t, "GetByUUID", uuid)
 	})
 
