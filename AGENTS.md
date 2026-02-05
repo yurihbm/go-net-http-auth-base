@@ -52,7 +52,7 @@ Scaffolds a complete vertical slice for a new resource, following the project's 
   ```bash
   npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular]
   ```
-- **Example**: 
+- **Example**:
   - `npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Product` (Creates `products_controller.go`, etc.)
   - `npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Auth --singular` (Creates `auth_controller.go`)
 
@@ -151,6 +151,7 @@ Controllers handle HTTP requests and responses. Key patterns:
 - **Error Handling**: Map service errors to appropriate HTTP status codes (400 for bad request, 404 for not found, 500 for internal errors).
 
 **Example Structure**:
+
 ```go
 type UsersController struct {
     userService    domain.UsersService
@@ -185,6 +186,7 @@ Services implement business logic. Key patterns:
 - **Error Handling**: Services return domain-specific errors with meaningful messages (e.g., `"user.create.password_required"`).
 
 **Example Structure**:
+
 ```go
 type usersService struct {
     repo domain.UsersRepository
@@ -200,7 +202,7 @@ func (s *usersService) Create(dto *domain.CreateUserDTO) (*domain.User, error) {
         Name:  dto.Name,
         Email: dto.Email,
     }
-    
+
     if dto.AuthMethod == domain.AuthMethodEmail {
         if dto.Password == nil {
             return nil, errors.New("user.create.password_required")
@@ -211,7 +213,7 @@ func (s *usersService) Create(dto *domain.CreateUserDTO) (*domain.User, error) {
         }
         user.PasswordHash = string(hash)
     }
-    
+
     err := s.repo.Create(user)
     return user, err
 }
@@ -231,6 +233,7 @@ Repositories handle data persistence. Key patterns:
 - **pgtype Usage**: Nullable database fields use `pgtype` types (e.g., `pgtype.Text`, `pgtype.UUID`).
 
 **Example Structure**:
+
 ```go
 type UsersPostgresRepository struct {
     q *postgres.Queries
@@ -247,12 +250,12 @@ func (r *UsersPostgresRepository) Create(user *domain.User) error {
         Name:  user.Name,
         Email: user.Email,
     }
-    
+
     createdUser, err := r.q.CreateUser(context.Background(), params)
     if err != nil {
         return err
     }
-    
+
     // Update the pointer with database-generated values
     *user = *toDomainUser(createdUser)
     return nil
@@ -286,18 +289,19 @@ func toDomainUser(user postgres.User) *domain.User {
 - **Test Coverage**: Include success cases, validation errors, and service error scenarios.
 
 **Example**:
+
 ```go
 func TestCreateUser(t *testing.T) {
     t.Run("success", func(t *testing.T) {
         controller, serviceMock, _ := newTestUsersController()
         serviceMock.On("Create", &dto).Return(user, nil)
-        
+
         w, req := getControllerArgs("POST", "/users/", dto)
         controller.CreateUser(w, req)
-        
+
         var response api.ResponseBody[domain.User]
         err := json.Unmarshal(w.Body.Bytes(), &response)
-        
+
         assert.Nil(t, err)
         assert.Equal(t, http.StatusCreated, w.Code)
         assert.Equal(t, response.Data, *user)
@@ -315,26 +319,27 @@ func TestCreateUser(t *testing.T) {
 - **Test Coverage**: Test all business logic branches (different auth methods, validation errors, repository errors).
 
 **Example**:
+
 ```go
 func TestUsersService_Create(t *testing.T) {
     repo := new(mocks.UsersRepositoryMock)
     service := services.NewUserService(repo)
-    
+
     t.Run("success with email auth", func(t *testing.T) {
         password := "password123"
         dto := &domain.CreateUserDTO{
             AuthMethod: domain.AuthMethodEmail,
             Password:   &password,
         }
-        
+
         repo.On("Create", mock.AnythingOfType("*domain.User")).Return(nil).Once().Run(func(args mock.Arguments) {
             userArg := args.Get(0).(*domain.User)
             err := bcrypt.CompareHashAndPassword([]byte(userArg.PasswordHash), []byte(password))
             assert.NoError(t, err)
         })
-        
+
         user, err := service.Create(dto)
-        
+
         assert.NoError(t, err)
         assert.NotNil(t, user)
         repo.AssertExpectations(t)
@@ -358,28 +363,29 @@ func TestUsersService_Create(t *testing.T) {
 - **Test Coverage**: Test success cases, constraint violations (e.g., duplicate email), invalid inputs, and not found scenarios.
 
 **Example**:
+
 ```go
 func TestMain(m *testing.M) {
     ctx := context.Background()
-    
+
     // Start Docker container
     cmd := exec.Command("docker", "compose", "-f", "../../docker/docker-compose.test.yaml", "up", "-d", "--wait")
     if err := cmd.Run(); err != nil {
         log.Fatalf("Could not start testing database: %v", err)
     }
-    
+
     // Run migrations
     cmd = exec.Command("migrate", "-path", "./../../postgres/migrations", "-database", connStr, "up")
     if err := cmd.Run(); err != nil {
         log.Fatalf("Could not migrate the database: %v", err)
     }
-    
+
     // Setup database connection
     testDB, _ = pgxpool.New(ctx, connStr)
-    
+
     // Run tests
     code := m.Run()
-    
+
     // Teardown
     testDB.Close()
     exec.Command("docker", "compose", "-f", "../../docker/docker-compose.test.yaml", "down").Run()
@@ -403,6 +409,7 @@ func truncateTables(ctx context.Context, db *pgxpool.Pool) {
 - **Naming Convention**: Mocks are named with the `Mock` suffix (e.g., `UsersServiceMock`, `UsersRepositoryMock`).
 
 **Example**:
+
 ```go
 type UsersServiceMock struct {
     mock.Mock
