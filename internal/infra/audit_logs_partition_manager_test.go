@@ -20,7 +20,6 @@ var testDB *pgxpool.Pool
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
-	// Start docker container for INFRA tests (distinct from repositories if needed, but here we use same)
 	// Use a unique container name for infra tests: auth-base-infra-test
 	cmd := exec.Command(
 		"docker",
@@ -35,11 +34,7 @@ func TestMain(m *testing.M) {
 		"postgres:18-alpine",
 	)
 	if err := cmd.Run(); err != nil {
-		// If it fails, maybe it exists. Try to stop it first.
-		exec.Command("docker", "rm", "-f", "auth-base-infra-test").Run()
-		if err := cmd.Run(); err != nil {
-			log.Fatalf("Could not start infra testing database: %v", err)
-		}
+		log.Fatalf("Could not start infra testing database: %v", err)
 	}
 
 	connStr := "postgres://testuser:testpassword@localhost:5434/testdb?sslmode=disable"
@@ -72,7 +67,9 @@ func TestMain(m *testing.M) {
 
 	// Teardown.
 	testDB.Close()
-	exec.Command("docker", "stop", "auth-base-infra-test").Run()
+	if err := exec.Command("docker", "stop", "auth-base-infra-test").Run(); err != nil {
+		log.Printf("Warning: Failed to stop Docker container: %v", err)
+	}
 
 	os.Exit(code)
 }
@@ -187,4 +184,3 @@ func TestAuditLogsPartitionManager_RunMaintenance(t *testing.T) {
 		}
 	})
 }
-

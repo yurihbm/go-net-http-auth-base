@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -259,9 +260,12 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 				ProviderEmail:  userInfo.Email,
 			})
 			if err != nil {
-				api.HandleError(r.Context(), w, err)
 				// TODO: Remove this when transaction is implemented
-				c.usersService.Delete(newUser.UUID) // Rollback user creation
+				api.HandleError(r.Context(), w, err)
+				// Rollback user creation
+				if err := c.usersService.Delete(newUser.UUID); err != nil {
+					slog.Error("oauthProviderCallback.rollback.userDeletionFailed", "user_uuid", newUser.UUID, "error", err)
+				}
 				return
 			}
 

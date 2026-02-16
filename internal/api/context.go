@@ -1,6 +1,8 @@
 package api
 
-const RequestContextDataKey string = "requestContextData"
+type APIContextKey string
+
+const RequestContextDataKey APIContextKey = "requestContextData"
 
 type RequestContextData struct {
 	UserUUID    string
