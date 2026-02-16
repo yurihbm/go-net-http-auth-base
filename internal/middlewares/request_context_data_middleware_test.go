@@ -1,4 +1,4 @@
-package middlewares
+package middlewares_test
 
 import (
 	"net/http"
@@ -6,19 +6,20 @@ import (
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/middlewares"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewRequestContextDataMiddleware(t *testing.T) {
 	t.Run("should create new request context data middleware", func(t *testing.T) {
-		middleware := NewRequestContextDataMiddleware()
+		middleware := middlewares.NewRequestContextDataMiddleware()
 		assert.NotNil(t, middleware)
 	})
 }
 
 func TestRequestContextDataMiddleware_Use(t *testing.T) {
-	middleware := NewRequestContextDataMiddleware()
+	middleware := middlewares.NewRequestContextDataMiddleware()
 
 	t.Run("should add request context data pointer to request context", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)

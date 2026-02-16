@@ -1,6 +1,7 @@
-package middlewares
+package middlewares_test
 
 import (
+	"go-net-http-auth-base/internal/middlewares"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +13,7 @@ import (
 
 func TestRateLimitMiddleware(t *testing.T) {
 	// Limit: 1 req/sec, Burst: 2
-	middleware := NewRateLimitMiddleware(rate.Limit(1), 2)
+	middleware := middlewares.NewRateLimitMiddleware(rate.Limit(1), 2)
 	handler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -24,7 +25,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	handler.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "2", w.Header().Get("X-RateLimit-Limit"))
-	
+
 	// 2. Second request - should pass
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)

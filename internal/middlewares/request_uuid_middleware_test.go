@@ -1,4 +1,4 @@
-package middlewares
+package middlewares_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/middlewares"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -14,13 +15,13 @@ import (
 
 func TestNewRequestUUIDMiddleware(t *testing.T) {
 	t.Run("should create new request UUID middleware", func(t *testing.T) {
-		middleware := NewRequestUUIDMiddleware()
+		middleware := middlewares.NewRequestUUIDMiddleware()
 		assert.NotNil(t, middleware)
 	})
 }
 
 func TestRequestUUIDMiddleware_Use(t *testing.T) {
-	middleware := NewRequestUUIDMiddleware()
+	middleware := middlewares.NewRequestUUIDMiddleware()
 
 	t.Run("should add request UUID to context and response header", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
