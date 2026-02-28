@@ -236,8 +236,8 @@ Enterprise-grade error handling, security, and observability.
 - [ ] Log sensitive operations (create user, update user, etc.)
 - [ ] Include user ID, action, timestamp, IP address in audit logs
 - [ ] Add audit log retrieval endpoint (admin only)
-  - [ ] Add admin role to user model
-  - [ ] Create a `require role` middleware
+  - [x] Add admin role to user model
+  - [x] Create a `role` middleware
   - [ ] Create `internal/controllers/audit_controller.go`
   - [ ] Implement `GET /audit-logs` endpoint with pagination and filtering
   - [ ] Add middleware to protect the endpoint
