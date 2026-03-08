@@ -232,7 +232,7 @@ Enterprise-grade error handling, security, and observability.
 - [x] Create database migration for audit logs table
 - [x] Create `internal/domain/audit.go` with audit entry model
 - [x] Create `internal/repositories/audit_repository.go`
-- [ ] Create `internal/services/audit_service.go`
+- [x] Create `internal/services/audit_service.go`
 - [ ] Log sensitive operations (create user, update user, etc.)
 - [ ] Include user ID, action, timestamp, IP address in audit logs
 - [ ] Add audit log retrieval endpoint (admin only)
