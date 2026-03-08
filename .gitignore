@@ -37,3 +37,6 @@ docker-compose.override.yml
 
 # Gemini CLI specific files
 conductor
+
+# OpenCode specific files
+.opencode
