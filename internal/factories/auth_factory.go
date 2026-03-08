@@ -38,8 +38,12 @@ func AuthFactory(conn *pgx.Conn) controllers.Controller {
 		oauthProviderRegistry,
 	)
 
+	auditRepository := repositories.NewAuditPostgresRepository(conn)
+	auditService := services.NewAuditService(auditRepository)
+
 	return controllers.NewAuthController(
 		authService,
 		userService,
+		auditService,
 	)
 }

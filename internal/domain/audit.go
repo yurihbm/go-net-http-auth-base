@@ -25,6 +25,7 @@ const (
 	AuditActionUserUpdate = "USER_UPDATE"
 	AuditActionUserDelete = "USER_DELETE"
 	AuditActionLogin      = "LOGIN"
+	AuditActionOAuthLogin = "OAUTH_LOGIN"
 	AuditActionLogout     = "LOGOUT"
 
 	// Resources

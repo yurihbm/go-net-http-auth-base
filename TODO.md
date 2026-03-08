@@ -233,8 +233,8 @@ Enterprise-grade error handling, security, and observability.
 - [x] Create `internal/domain/audit.go` with audit entry model
 - [x] Create `internal/repositories/audit_repository.go`
 - [x] Create `internal/services/audit_service.go`
-- [ ] Log sensitive operations (create user, update user, etc.)
-- [ ] Include user ID, action, timestamp, IP address in audit logs
+- [x] Log sensitive operations (create user, update user, etc.)
+- [x] Include user ID, action, timestamp, IP address in audit logs
 - [ ] Add audit log retrieval endpoint (admin only)
   - [x] Add admin role to user model
   - [x] Create a `role` middleware
@@ -292,7 +292,7 @@ Full observability stack with distributed tracing, metrics, and log correlation 
 
 - [x] All errors return appropriate HTTP status codes
 - [x] Rate limiter rejects requests after limit
-- [ ] Audit logs record sensitive operations
+- [x] Audit logs record sensitive operations
 - [x] Request IDs appear in all logs
 - [ ] Telemetry & observability operational (see [TELEMETRY_AND_O11Y.md](TELEMETRY_AND_O11Y.md))
 - [ ] Test coverage remains >85%

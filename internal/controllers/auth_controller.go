@@ -20,6 +20,7 @@ var ErrInvalidOAuthProvider = domain.NewValidationError(
 type AuthController struct {
 	authService  domain.AuthService
 	usersService domain.UsersService
+	auditService domain.AuditService
 }
 
 var _ Controller = (*AuthController)(nil)
@@ -27,10 +28,12 @@ var _ Controller = (*AuthController)(nil)
 func NewAuthController(
 	authService domain.AuthService,
 	usersService domain.UsersService,
+	auditService domain.AuditService,
 ) *AuthController {
 	return &AuthController{
 		authService,
 		usersService,
+		auditService,
 	}
 }
 
@@ -57,9 +60,24 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 
 	tokens, err := c.authService.CredentialsLogin(dto)
 	if err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			Action:        domain.AuditActionLogin,
+			ResourceType:  domain.AuditResourceAuth,
+			ResourceUUID:  "",
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
 		api.HandleError(r.Context(), w, err)
 		return
 	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		Action:       domain.AuditActionLogin,
+		ResourceType: domain.AuditResourceAuth,
+		ResourceUUID: "",
+		Status:       domain.AuditStatusSuccess,
+	})
 
 	c.setAuthCookies(w, tokens)
 
@@ -70,6 +88,14 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 
 func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 	c.deleteAuthCookies(w)
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    actorUUID(r),
+		Action:       domain.AuditActionLogout,
+		ResourceType: domain.AuditResourceAuth,
+		ResourceUUID: "",
+		Status:       domain.AuditStatusSuccess,
+	})
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
 		Message: "auth.logout.success",
@@ -290,6 +316,15 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		api.HandleError(r.Context(), w, err)
 		return
 	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    &authenticatedUser.UUID,
+		Action:       domain.AuditActionOAuthLogin,
+		ResourceType: domain.AuditResourceAuth,
+		ResourceUUID: authenticatedUser.UUID,
+		Changes:      map[string]string{"provider": string(providerName)},
+		Status:       domain.AuditStatusSuccess,
+	})
 
 	c.setAuthCookies(w, domain.AuthTokens{
 		AccessToken:  accessToken,

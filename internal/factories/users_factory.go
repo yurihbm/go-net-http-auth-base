@@ -40,5 +40,8 @@ func UsersFactory(conn *pgx.Conn) controllers.Controller {
 	)
 	authMiddleware := middlewares.NewAuthMiddleware(authService)
 
-	return controllers.NewUsersController(userService, authMiddleware)
+	auditRepository := repositories.NewAuditPostgresRepository(conn)
+	auditService := services.NewAuditService(auditRepository)
+
+	return controllers.NewUsersController(userService, auditService, authMiddleware)
 }

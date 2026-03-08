@@ -11,14 +11,20 @@ import (
 
 type UsersController struct {
 	userService    domain.UsersService
+	auditService   domain.AuditService
 	authMiddleware middlewares.HandlerMiddleware
 }
 
 var _ Controller = (*UsersController)(nil)
 
-func NewUsersController(service domain.UsersService, authMiddleware middlewares.HandlerMiddleware) *UsersController {
+func NewUsersController(
+	service domain.UsersService,
+	auditService domain.AuditService,
+	authMiddleware middlewares.HandlerMiddleware,
+) *UsersController {
 	return &UsersController{
 		userService:    service,
+		auditService:   auditService,
 		authMiddleware: authMiddleware,
 	}
 }
@@ -56,9 +62,26 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := c.userService.Create(dto)
 	if err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			ActorUUID:     actorUUID(r),
+			Action:        domain.AuditActionUserCreate,
+			ResourceType:  domain.AuditResourceUser,
+			ResourceUUID:  "",
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
 		api.HandleError(r.Context(), w, err)
 		return
 	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    actorUUID(r),
+		Action:       domain.AuditActionUserCreate,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: user.UUID,
+		Status:       domain.AuditStatusSuccess,
+	})
 
 	api.WriteJSONResponse(w, http.StatusCreated, api.ResponseBody[domain.User]{
 		Data:    *user,
@@ -121,9 +144,27 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.userService.Update(uuid, dto); err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			ActorUUID:     actorUUID(r),
+			Action:        domain.AuditActionUserUpdate,
+			ResourceType:  domain.AuditResourceUser,
+			ResourceUUID:  uuid,
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
 		api.HandleError(r.Context(), w, err)
 		return
 	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    actorUUID(r),
+		Action:       domain.AuditActionUserUpdate,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: uuid,
+		Changes:      dto,
+		Status:       domain.AuditStatusSuccess,
+	})
 
 	api.WriteJSONResponse(w, http.StatusOK,
 		api.ResponseBody[domain.User]{
@@ -135,9 +176,26 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
 	if err := c.userService.Delete(uuid); err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			ActorUUID:     actorUUID(r),
+			Action:        domain.AuditActionUserDelete,
+			ResourceType:  domain.AuditResourceUser,
+			ResourceUUID:  uuid,
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
 		api.HandleError(r.Context(), w, err)
 		return
 	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    actorUUID(r),
+		Action:       domain.AuditActionUserDelete,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: uuid,
+		Status:       domain.AuditStatusSuccess,
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }
