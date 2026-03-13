@@ -33,6 +33,12 @@ func TestHealthFactory(t *testing.T) {
 	assert.IsType(t, &controllers.HealthController{}, controller)
 }
 
+func TestAuditFactory(t *testing.T) {
+	controller := factories.AuditFactory(nil)
+	assert.NotNil(t, controller)
+	assert.IsType(t, &controllers.AuditController{}, controller)
+}
+
 func TestLoggerFactory(t *testing.T) {
 	middleware := factories.LoggerFactory()
 	assert.NotNil(t, middleware)

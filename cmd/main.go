@@ -56,6 +56,7 @@ func main() {
 	factories.UsersFactory(conn).RegisterRoutes(mux)
 	factories.AuthFactory(conn).RegisterRoutes(mux)
 	factories.HealthFactory(conn).RegisterRoutes(mux)
+	factories.AuditFactory(conn).RegisterRoutes(mux)
 
 	rateLimitMiddleware := factories.RateLimitFactory()
 	corsMiddleware := factories.CORSFactory()

@@ -1,5 +1,7 @@
 package domain
 
+import "context"
+
 type AuditLog struct {
 	UUID          string  `json:"uuid"`
 	ActorUUID     *string `json:"actor_uuid,omitempty"`
@@ -12,7 +14,7 @@ type AuditLog struct {
 	Changes       any     `json:"changes,omitempty"`
 	Status        string  `json:"status"`
 	FailureReason *string `json:"failure_reason,omitempty"`
-	CreatedAt     int64   `json:"created_at"`
+	CreatedAt     string  `json:"created_at"`
 }
 
 const (
@@ -46,10 +48,29 @@ type CreateAuditLogDTO struct {
 	FailureReason *string
 }
 
+type ListAuditLogsDTO struct {
+	Action       *string
+	ResourceType *string
+	Status       *string
+	ActorUUID    *string
+	Cursor       *string
+	Limit        int
+	StartDate    *int64
+	EndDate      *int64
+}
+
+type AuditLogPage struct {
+	Items      []AuditLog
+	NextCursor *string
+	Total      int64
+}
+
 type AuditService interface {
-	Log(CreateAuditLogDTO) error
+	Log(ctx context.Context, dto CreateAuditLogDTO) error
+	List(ctx context.Context, dto ListAuditLogsDTO) (*AuditLogPage, error)
 }
 
 type AuditRepository interface {
-	Create(*AuditLog) error
+	Create(ctx context.Context, log *AuditLog) error
+	List(ctx context.Context, dto ListAuditLogsDTO) ([]AuditLog, int64, error)
 }

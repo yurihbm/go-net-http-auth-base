@@ -11,6 +11,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAuditLogs = `-- name: CountAuditLogs :one
+SELECT COUNT(*)
+FROM audit_logs
+WHERE
+    ($1::timestamptz IS NULL OR created_at >= $1) AND
+    ($2::timestamptz IS NULL OR created_at < $2) AND
+    ($3::text IS NULL OR action = $3) AND
+    ($4::text IS NULL OR resource_type = $4) AND
+    ($5::text IS NULL OR status = $5) AND
+    ($6::uuid IS NULL OR actor_uuid = $6)
+`
+
+type CountAuditLogsParams struct {
+	StartDate    pgtype.Timestamptz
+	EndDate      pgtype.Timestamptz
+	Action       pgtype.Text
+	ResourceType pgtype.Text
+	Status       pgtype.Text
+	ActorUuid    pgtype.UUID
+}
+
+func (q *Queries) CountAuditLogs(ctx context.Context, arg CountAuditLogsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAuditLogs,
+		arg.StartDate,
+		arg.EndDate,
+		arg.Action,
+		arg.ResourceType,
+		arg.Status,
+		arg.ActorUuid,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAuditLog = `-- name: CreateAuditLog :exec
 INSERT INTO audit_logs (
     actor_uuid,
@@ -55,4 +90,72 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 		arg.FailureReason,
 	)
 	return err
+}
+
+const listAuditLogs = `-- name: ListAuditLogs :many
+SELECT uuid, actor_uuid, ip_address, user_agent, action, resource_type, resource_uuid, request_uuid, changes, status, failure_reason, created_at
+FROM audit_logs
+WHERE
+    ($1::timestamptz IS NULL OR created_at >= $1) AND
+    ($2::timestamptz IS NULL OR created_at <= $2) AND
+    ($3::text IS NULL OR action = $3) AND
+    ($4::text IS NULL OR resource_type = $4) AND
+    ($5::text IS NULL OR status = $5) AND
+    ($6::uuid IS NULL OR actor_uuid = $6) AND
+    ($7::uuid IS NULL OR uuid < $7)
+ORDER BY uuid DESC
+LIMIT $8
+`
+
+type ListAuditLogsParams struct {
+	StartDate    pgtype.Timestamptz
+	EndDate      pgtype.Timestamptz
+	Action       pgtype.Text
+	ResourceType pgtype.Text
+	Status       pgtype.Text
+	ActorUuid    pgtype.UUID
+	Cursor       pgtype.UUID
+	PageSize     int64
+}
+
+func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, listAuditLogs,
+		arg.StartDate,
+		arg.EndDate,
+		arg.Action,
+		arg.ResourceType,
+		arg.Status,
+		arg.ActorUuid,
+		arg.Cursor,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditLog
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.ActorUuid,
+			&i.IpAddress,
+			&i.UserAgent,
+			&i.Action,
+			&i.ResourceType,
+			&i.ResourceUuid,
+			&i.RequestUuid,
+			&i.Changes,
+			&i.Status,
+			&i.FailureReason,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

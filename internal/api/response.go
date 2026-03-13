@@ -7,12 +7,9 @@ import (
 )
 
 type ResponseMeta struct {
-	CurrentPage  int `json:"page,omitempty"`
-	NextPage     int `json:"next_page,omitempty"`
-	PreviousPage int `json:"previous_page,omitempty"`
-	TotalPages   int `json:"total_pages,omitempty"`
-	PageSize     int `json:"page_size,omitempty"`
-	TotalItems   int `json:"total_items,omitempty"`
+	Total      int64   `json:"total,omitempty"`
+	Limit      int     `json:"limit,omitempty"`
+	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
 type ResponseBody[T any] struct {
