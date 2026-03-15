@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/middlewares"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -27,8 +27,8 @@ func TestRequestUUIDMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		ctx := req.Context()
 		ctx = context.WithValue(ctx,
-			api.RequestContextDataKey,
-			&api.RequestContextData{},
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{},
 		)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -36,8 +36,8 @@ func TestRequestUUIDMiddleware_Use(t *testing.T) {
 		handler := middleware.Use(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				reqContextData, ok := r.Context().Value(
-					api.RequestContextDataKey,
-				).(*api.RequestContextData)
+					shared.RequestContextDataKey,
+				).(*shared.RequestContextData)
 				if !ok {
 					t.Error("RequestContextData not found in context")
 					return
@@ -65,8 +65,8 @@ func TestRequestUUIDMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		ctx := req.Context()
 		ctx = context.WithValue(ctx,
-			api.RequestContextDataKey,
-			&api.RequestContextData{
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{
 				UserUUID: "existing-user-uuid",
 			},
 		)
@@ -77,8 +77,8 @@ func TestRequestUUIDMiddleware_Use(t *testing.T) {
 		handler := middleware.Use(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				reqContextData, ok := r.Context().Value(
-					api.RequestContextDataKey,
-				).(*api.RequestContextData)
+					shared.RequestContextDataKey,
+				).(*shared.RequestContextData)
 
 				if !ok {
 					t.Error("RequestContextData not found in context")

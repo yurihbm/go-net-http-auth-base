@@ -6,6 +6,7 @@ import (
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/shared"
 )
 
 type AuthContextKey string
@@ -48,8 +49,8 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if reqContextData, ok := r.Context().Value(
-			api.RequestContextDataKey,
-		).(*api.RequestContextData); ok {
+			shared.RequestContextDataKey,
+		).(*shared.RequestContextData); ok {
 			reqContextData.UserUUID = tokenData.Subject
 		}
 

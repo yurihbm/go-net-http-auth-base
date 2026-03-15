@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/env"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -49,8 +49,6 @@ func (t *SlowQueryTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data
 // TraceQueryEnd measures the elapsed time and logs a warning if it exceeds the threshold.
 // When a RequestUUID is present in the context (set by the RequestUUIDMiddleware) it is
 // included in the log entry so the slow query can be correlated with the originating request.
-//
-// See <root>/internal/middlewares/request_uuid_middleware.go for the RequestUUIDMiddleware implementation.
 func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
 	startTime, ok := ctx.Value(QueryStartTimeKey).(time.Time)
 	if !ok {
@@ -69,7 +67,7 @@ func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data p
 		"sql", sql,
 	}
 
-	if reqData, ok := ctx.Value(api.RequestContextDataKey).(api.RequestContextData); ok && reqData.RequestUUID != "" {
+	if reqData, ok := ctx.Value(shared.RequestContextDataKey).(shared.RequestContextData); ok && reqData.RequestUUID != "" {
 		args = append(args, "request_uuid", reqData.RequestUUID)
 	}
 

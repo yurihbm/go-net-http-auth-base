@@ -6,12 +6,13 @@ import (
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/shared"
 )
 
 // auditLog fires an audit log entry and silently swallows persistence errors so
 // they never affect the HTTP response status returned to the client.
 func auditLog(r *http.Request, auditService domain.AuditService, dto domain.CreateAuditLogDTO) {
-	reqCtxData, _ := r.Context().Value(api.RequestContextDataKey).(*api.RequestContextData)
+	reqCtxData, _ := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData)
 	if reqCtxData != nil && reqCtxData.RequestUUID != "" {
 		dto.RequestUUID = reqCtxData.RequestUUID
 	}
@@ -28,7 +29,7 @@ func auditLog(r *http.Request, auditService domain.AuditService, dto domain.Crea
 // actorUUID returns a pointer to the authenticated user UUID from context, or
 // nil when the request is unauthenticated.
 func actorUUID(r *http.Request) *string {
-	reqCtxData, _ := r.Context().Value(api.RequestContextDataKey).(*api.RequestContextData)
+	reqCtxData, _ := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData)
 	if reqCtxData != nil && reqCtxData.UserUUID != "" {
 		u := reqCtxData.UserUUID
 		return &u

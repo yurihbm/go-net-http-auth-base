@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/shared"
 )
 
 type LoggerMiddleware struct{}
@@ -25,9 +25,9 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 
 		duration := time.Since(start)
 
-		var reqContextData *api.RequestContextData
-		if val := r.Context().Value(api.RequestContextDataKey); val != nil {
-			reqContextData = val.(*api.RequestContextData)
+		var reqContextData *shared.RequestContextData
+		if val := r.Context().Value(shared.RequestContextDataKey); val != nil {
+			reqContextData = val.(*shared.RequestContextData)
 		}
 
 		level := slog.LevelInfo

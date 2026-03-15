@@ -3,6 +3,7 @@ package middlewares
 import (
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/shared"
 	"net/http"
 	"slices"
 )
@@ -20,7 +21,7 @@ func NewRoleMiddleware(usersService domain.UsersService, roles []domain.UserRole
 
 func (m *RoleMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if reqCtxData, ok := r.Context().Value(api.RequestContextDataKey).(*api.RequestContextData); ok {
+		if reqCtxData, ok := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData); ok {
 			// TODO: Use token payload instead of fetching user from database when
 			// required info is included in the token
 			user, err := m.usersService.GetByUUID(reqCtxData.UserUUID)

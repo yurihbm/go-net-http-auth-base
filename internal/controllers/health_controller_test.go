@@ -56,7 +56,7 @@ func TestHealthController_Health(t *testing.T) {
 	controller.Health(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var response api.ResponseBody[string]
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
@@ -67,7 +67,7 @@ func TestHealthController_Ready(t *testing.T) {
 	t.Run("database is ready", func(t *testing.T) {
 		mockDb := new(MockPinger)
 		mockDb.On("Ping", mock.Anything).Return(nil)
-		
+
 		controller := controllers.NewHealthController(mockDb)
 
 		req, _ := http.NewRequest("GET", "/ready", nil)
@@ -76,7 +76,7 @@ func TestHealthController_Ready(t *testing.T) {
 		controller.Ready(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		var response api.ResponseBody[string]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
@@ -87,7 +87,7 @@ func TestHealthController_Ready(t *testing.T) {
 	t.Run("database is not ready", func(t *testing.T) {
 		mockDb := new(MockPinger)
 		mockDb.On("Ping", mock.Anything).Return(errors.New("connection refused"))
-		
+
 		controller := controllers.NewHealthController(mockDb)
 
 		req, _ := http.NewRequest("GET", "/ready", nil)
@@ -96,7 +96,7 @@ func TestHealthController_Ready(t *testing.T) {
 		controller.Ready(w, req)
 
 		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-		
+
 		var response api.ResponseBody[string]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)

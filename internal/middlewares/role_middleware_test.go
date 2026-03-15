@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
 	"go-net-http-auth-base/internal/mocks"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -41,8 +41,8 @@ func TestRoleMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		ctx := req.Context()
 		ctx = context.WithValue(ctx,
-			api.RequestContextDataKey,
-			&api.RequestContextData{
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{
 				UserUUID: "test-uuid",
 			},
 		)
@@ -71,8 +71,8 @@ func TestRoleMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		ctx := req.Context()
 		ctx = context.WithValue(ctx,
-			api.RequestContextDataKey,
-			&api.RequestContextData{
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{
 				UserUUID: "test-uuid",
 			},
 		)

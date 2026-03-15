@@ -12,6 +12,7 @@ import (
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/shared"
 )
 
 func TestHandleError(t *testing.T) {
@@ -87,8 +88,8 @@ func TestHandleError(t *testing.T) {
 			w := httptest.NewRecorder()
 			ctx := context.WithValue(
 				context.Background(),
-				api.RequestContextDataKey,
-				&api.RequestContextData{},
+				shared.RequestContextDataKey,
+				&shared.RequestContextData{},
 			)
 
 			api.HandleError(ctx, w, tt.err)
@@ -100,7 +101,7 @@ func TestHandleError(t *testing.T) {
 			assert.NoError(t, err)
 
 			if tt.err != nil {
-				ctxData := ctx.Value(api.RequestContextDataKey).(*api.RequestContextData)
+				ctxData := ctx.Value(shared.RequestContextDataKey).(*shared.RequestContextData)
 				assert.NotEmpty(t, ctxData.Error)
 			}
 			assert.Equal(t, tt.expectedBody.Error, response.Error)

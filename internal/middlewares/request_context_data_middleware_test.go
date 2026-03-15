@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/middlewares"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -28,8 +28,8 @@ func TestRequestContextDataMiddleware_Use(t *testing.T) {
 		handler := middleware.Use(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_, ok := r.Context().Value(
-					api.RequestContextDataKey,
-				).(*api.RequestContextData)
+					shared.RequestContextDataKey,
+				).(*shared.RequestContextData)
 				if !ok {
 					t.Error("RequestContextData not found in context")
 					return

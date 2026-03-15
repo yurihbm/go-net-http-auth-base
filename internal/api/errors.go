@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/shared"
 )
 
 func HandleError(ctx context.Context, w http.ResponseWriter, err error) {
@@ -14,7 +15,7 @@ func HandleError(ctx context.Context, w http.ResponseWriter, err error) {
 		return
 	}
 
-	reqContextData, hasReqContextData := ctx.Value(RequestContextDataKey).(*RequestContextData)
+	reqContextData, hasReqContextData := ctx.Value(shared.RequestContextDataKey).(*shared.RequestContextData)
 	if hasReqContextData {
 		reqContextData.Error = err
 	}

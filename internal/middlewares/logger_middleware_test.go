@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/middlewares"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -156,8 +156,8 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test-auth", nil)
 		ctx := context.WithValue(
 			req.Context(),
-			api.RequestContextDataKey,
-			&api.RequestContextData{
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{
 				RequestUUID: "test-req-uuid",
 			},
 		)
@@ -184,8 +184,8 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test-auth", nil)
 		ctx := context.WithValue(
 			req.Context(),
-			api.RequestContextDataKey,
-			&api.RequestContextData{},
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{},
 		)
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
@@ -204,8 +204,8 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Simulate setting UserUUID in the context
 			if data, ok := r.Context().Value(
-				api.RequestContextDataKey,
-			).(*api.RequestContextData); ok {
+				shared.RequestContextDataKey,
+			).(*shared.RequestContextData); ok {
 				data.UserUUID = "test-user-uuid"
 			}
 			w.WriteHeader(http.StatusOK)
@@ -216,8 +216,8 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test-auth", nil)
 		ctx := context.WithValue(
 			req.Context(),
-			api.RequestContextDataKey,
-			&api.RequestContextData{},
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{},
 		)
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
@@ -242,8 +242,8 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test-no-auth", nil)
 		ctx := context.WithValue(
 			req.Context(),
-			api.RequestContextDataKey,
-			&api.RequestContextData{},
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{},
 		)
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
@@ -262,8 +262,8 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Simulate setting error in the context
 			if data, ok := r.Context().Value(
-				api.RequestContextDataKey,
-			).(*api.RequestContextData); ok {
+				shared.RequestContextDataKey,
+			).(*shared.RequestContextData); ok {
 				data.Error = errors.New("some error occurred")
 			}
 			w.WriteHeader(http.StatusInternalServerError)
@@ -274,8 +274,8 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test-auth", nil)
 		ctx := context.WithValue(
 			req.Context(),
-			api.RequestContextDataKey,
-			&api.RequestContextData{},
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{},
 		)
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
@@ -300,8 +300,8 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 		req := httptest.NewRequest("GET", "/test-no-auth", nil)
 		ctx := context.WithValue(
 			req.Context(),
-			api.RequestContextDataKey,
-			&api.RequestContextData{},
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{},
 		)
 		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()

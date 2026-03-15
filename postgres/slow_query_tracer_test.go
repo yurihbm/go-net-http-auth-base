@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/shared"
 	"go-net-http-auth-base/postgres"
 
 	"github.com/jackc/pgx/v5"
@@ -161,8 +161,8 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 
 		ctx := context.WithValue(
 			context.Background(),
-			api.RequestContextDataKey,
-			api.RequestContextData{RequestUUID: "test-req-uuid"},
+			shared.RequestContextDataKey,
+			shared.RequestContextData{RequestUUID: "test-req-uuid"},
 		)
 		ctx = tracer.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{
 			SQL: "SELECT 1",
@@ -200,8 +200,8 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 
 		ctx := context.WithValue(
 			context.Background(),
-			api.RequestContextDataKey,
-			api.RequestContextData{RequestUUID: ""},
+			shared.RequestContextDataKey,
+			shared.RequestContextData{RequestUUID: ""},
 		)
 		ctx = tracer.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{
 			SQL: "SELECT 1",

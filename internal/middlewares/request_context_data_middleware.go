@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/shared"
 )
 
 type RequestContextDataMiddleware struct{}
@@ -15,8 +15,8 @@ func NewRequestContextDataMiddleware() GlobalMiddleware {
 
 func (m *RequestContextDataMiddleware) Use(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqContextData := &api.RequestContextData{}
-		ctx := context.WithValue(r.Context(), api.RequestContextDataKey, reqContextData)
+		reqContextData := &shared.RequestContextData{}
+		ctx := context.WithValue(r.Context(), shared.RequestContextDataKey, reqContextData)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

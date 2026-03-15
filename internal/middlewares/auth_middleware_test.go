@@ -12,6 +12,7 @@ import (
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
 	"go-net-http-auth-base/internal/mocks"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -248,7 +249,7 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		}, nil)
 
 		// Create logger data
-		reqContextData := &api.RequestContextData{}
+		reqContextData := &shared.RequestContextData{}
 
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -263,7 +264,7 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		})
 
 		// Inject logger data into context
-		ctx := context.WithValue(req.Context(), api.RequestContextDataKey, reqContextData)
+		ctx := context.WithValue(req.Context(), shared.RequestContextDataKey, reqContextData)
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
