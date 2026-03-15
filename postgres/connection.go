@@ -117,6 +117,9 @@ func NewConnectionPool(ctx context.Context) (*pgxpool.Pool, error) {
 // LogPoolStats emits a structured log line with current pool statistics.
 // Intended for periodic health monitoring (e.g. called from a background goroutine).
 func LogPoolStats(pool *pgxpool.Pool) {
+	if pool == nil {
+		return
+	}
 	stats := pool.Stat()
 	slog.Info("Connection pool stats",
 		"total_conns", stats.TotalConns(),

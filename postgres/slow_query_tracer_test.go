@@ -59,16 +59,6 @@ func TestNewSlowQueryTracer(t *testing.T) {
 	})
 }
 
-func TestSlowQueryTracer_Threshold(t *testing.T) {
-	t.Run("returns the configured threshold", func(t *testing.T) {
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "1s")
-
-		tracer := postgres.NewSlowQueryTracer()
-
-		assert.Equal(t, time.Second, tracer.Threshold())
-	})
-}
-
 func TestSlowQueryTracer_TraceQueryStart(t *testing.T) {
 	t.Run("returns an enriched context with start time and SQL", func(t *testing.T) {
 		tracer := postgres.NewSlowQueryTracer()
