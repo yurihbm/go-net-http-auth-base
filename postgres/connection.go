@@ -90,7 +90,7 @@ func NewConnectionPool(ctx context.Context) (*pgxpool.Pool, error) {
 		"max_conn_lifetime", cfg.MaxConnLifetime,
 		"max_conn_idle_time", cfg.MaxConnIdleTime,
 		"health_check_period", cfg.HealthCheckPeriod,
-		"connect_timeout", poolCfg.ConnectTimeout,
+		"connect_timeout", cfg.ConnConfig.ConnectTimeout,
 	)
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)

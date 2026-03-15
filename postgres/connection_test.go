@@ -153,8 +153,10 @@ func TestNewConnectionPool(t *testing.T) {
 
 	t.Run("returns error when ping times out", func(t *testing.T) {
 		// Use a reachable host on a closed port to force a fast connect refusal.
-		// The context deadline ensures the test does not hang.
+		// DB_CONNECT_TIMEOUT is set to a short value so the pgx handshake timeout
+		// fires quickly on both TCP RST (REJECT) and DROP network configurations.
 		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:19999/db?sslmode=disable")
+		t.Setenv("DB_CONNECT_TIMEOUT", "500ms")
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
