@@ -131,7 +131,7 @@ Adding observability aligns well with the project goals because:
   - Add middleware tests
 
 - [ ] **2.3 Update shared request context (minimal change)**
-  - Add `TraceID` and `SpanID` fields to `api.RequestContextData`
+  - Add `TraceID` and `SpanID` fields to `shared.RequestContextData` in `internal/shared/context.go`
   - Update `LoggerMiddleware` to read and log these fields (no OTel imports needed)
 
 - [ ] **2.4 Instrument database layer**
@@ -241,7 +241,7 @@ Adding observability aligns well with the project goals because:
 | File                                        | Changes                                                                |
 | ------------------------------------------- | ---------------------------------------------------------------------- |
 | `go.mod`                                    | Add OpenTelemetry dependencies                                         |
-| `internal/api/context.go`                   | Add `TraceID`, `SpanID` fields to `RequestContextData`                 |
+| `internal/shared/context.go`                | Add `TraceID`, `SpanID` fields to `RequestContextData`                 |
 | `internal/middlewares/logger_middleware.go` | Read `traceID`, `spanID` from context (no OTel imports)                |
 | `cmd/main.go`                               | Initialize telemetry provider, inject into middleware, set chain order |
 | `postgres/connection.go`                    | Add pgx OpenTelemetry instrumentation                                  |
