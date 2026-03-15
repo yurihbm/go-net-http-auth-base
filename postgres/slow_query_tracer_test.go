@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Replaces slog.Default with a JSON logger writing to buf.
+// captureLogger replaces slog.Default with a JSON logger writing to buf.
 // The returned function restores the original default logger.
 func captureLogger(buf *bytes.Buffer) func() {
 	handler := slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})

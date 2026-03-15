@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	// unique lock ID for audit logs partition creation
-	// Generated arbitrarily to avoid collision with other locks
+	// auditLogsPartitionLockID is a unique lock ID for audit logs partition
+	// creation. Generated arbitrarily to avoid collision with other locks.
 	auditLogsPartitionLockID = 8374928374
 )
 

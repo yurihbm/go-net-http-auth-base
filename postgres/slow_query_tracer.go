@@ -26,8 +26,8 @@ type SlowQueryTracer struct {
 
 var _ pgx.QueryTracer = (*SlowQueryTracer)(nil)
 
-// Returns a new SlowQueryTracer with the threshold configured from the
-// DB_SLOW_QUERY_THRESHOLD environment variable.
+// NewSlowQueryTracer returns a new SlowQueryTracer with the threshold
+// configured from the DB_SLOW_QUERY_THRESHOLD environment variable.
 func NewSlowQueryTracer() *SlowQueryTracer {
 	return &SlowQueryTracer{
 		threshold: env.GetEnvAsDuration("DB_SLOW_QUERY_THRESHOLD", defaultSlowQueryThreshold),
@@ -46,9 +46,10 @@ func (t *SlowQueryTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data
 	return ctx
 }
 
-// TraceQueryEnd measures the elapsed time and logs a warning if it exceeds the threshold.
-// When a RequestUUID is present in the context (set by the RequestUUIDMiddleware) it is
-// included in the log entry so the slow query can be correlated with the originating request.
+// TraceQueryEnd measures the elapsed time and logs a warning if it exceeds the
+// threshold. When a RequestUUID is present in the context (set by the
+// RequestUUIDMiddleware) it is included in the log entry so the slow query can
+// be correlated with the originating request.
 func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
 	startTime, ok := ctx.Value(QueryStartTimeKey).(time.Time)
 	if !ok {
