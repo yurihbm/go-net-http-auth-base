@@ -8,10 +8,10 @@ import (
 	"go-net-http-auth-base/internal/repositories"
 	"go-net-http-auth-base/internal/services"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func AuthFactory(conn *pgx.Conn) controllers.Controller {
+func AuthFactory(conn *pgxpool.Pool) controllers.Controller {
 	userRepository := repositories.NewUsersPostgresRepository(conn)
 	userService := services.NewUserService(userRepository)
 

@@ -8,10 +8,14 @@ import (
 	"os/exec"
 	"testing"
 
+	"go-net-http-auth-base/postgres"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var testDB *pgxpool.Pool
+
+const testConnStr = "postgres://testuser:testpassword@localhost:5433/testdb?sslmode=disable"
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
@@ -31,23 +35,24 @@ func TestMain(m *testing.M) {
 	}
 	log.Printf("Testing database started.")
 
-	connStr := "postgres://testuser:testpassword@localhost:5433/testdb?sslmode=disable"
 	// Migrate database using golang-migrate.
 	cmd = exec.Command(
 		"migrate",
 		"-path",
 		"./../../postgres/migrations",
 		"-database",
-		connStr,
+		testConnStr,
 		"up",
 	)
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("Could not migrate the database: %v", err)
 	}
 
-	// Setup database connection.
+	// Setup database connection using the shared postgres package helper so
+	// that production pool configuration logic is exercised during tests.
+	os.Setenv("DATABASE_URL", testConnStr)
 	var err error
-	testDB, err = pgxpool.New(ctx, connStr)
+	testDB, err = postgres.NewConnectionPool(ctx)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}

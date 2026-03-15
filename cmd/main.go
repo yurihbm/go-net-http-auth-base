@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	"go-net-http-auth-base/internal/env"
 	"go-net-http-auth-base/internal/factories"
 	"go-net-http-auth-base/internal/infra"
 	"go-net-http-auth-base/internal/logger"
@@ -16,6 +18,25 @@ import (
 
 	"github.com/joho/godotenv"
 )
+
+// runEvery runs fn on every interval tick until ctx is cancelled.
+// It increments wg before starting and decrements it when done.
+func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, fn func()) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				fn()
+			}
+		}
+	}()
+}
 
 func main() {
 	err := godotenv.Load()
@@ -25,38 +46,53 @@ func main() {
 		slog.Warn("Warning: .env file not found or failed to load")
 	}
 
-	ctx := context.Background()
-	conn := postgres.NewConnection(ctx)
+	ctx, stopBackgroundTasks := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stopBackgroundTasks()
+
+	pool, err := postgres.NewConnectionPool(ctx)
+	if err != nil {
+		slog.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
 
 	// Initialize and run Partition Manager
-	partitionManager := infra.NewAuditLogsPartitionManager(conn)
+	partitionManager := infra.NewAuditLogsPartitionManager(pool)
 	if err := partitionManager.RunMaintenance(ctx); err != nil {
 		slog.Error("Failed to initialize audit log partitions", "error", err)
 		os.Exit(1)
 	}
 
-	// Run partition maintenance in background
-	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			if err := partitionManager.RunMaintenance(context.Background()); err != nil {
+	var wg sync.WaitGroup
+
+	// Run partition maintenance in background — stops on shutdown signal.
+	runEvery(
+		ctx, &wg, 24*time.Hour,
+		func() {
+			if err := partitionManager.RunMaintenance(ctx); err != nil {
 				slog.Error("Failed to maintain audit log partitions", "error", err)
 			}
-		}
-	}()
+		},
+	)
 
-	defer func() {
-		if err := conn.Close(ctx); err != nil {
-			slog.Error("Error closing database connection", "error", err)
-		}
-	}()
+	// Log pool stats periodically for health monitoring — stops on shutdown signal.
+	runEvery(
+		ctx, &wg,
+		env.GetEnvAsDuration("DB_STATS_LOG_INTERVAL", 30*time.Second),
+		func() {
+			postgres.LogPoolStats(pool)
+		},
+	)
 
 	mux := http.NewServeMux()
-	factories.UsersFactory(conn).RegisterRoutes(mux)
-	factories.AuthFactory(conn).RegisterRoutes(mux)
-	factories.HealthFactory(conn).RegisterRoutes(mux)
-	factories.AuditFactory(conn).RegisterRoutes(mux)
+	factories.UsersFactory(pool).RegisterRoutes(mux)
+	factories.AuthFactory(pool).RegisterRoutes(mux)
+	factories.HealthFactory(pool).RegisterRoutes(mux)
+	factories.AuditFactory(pool).RegisterRoutes(mux)
 
 	rateLimitMiddleware := factories.RateLimitFactory()
 	corsMiddleware := factories.CORSFactory()
@@ -93,19 +129,33 @@ func main() {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	// Block until a shutdown signal is received via ctx.
+	<-ctx.Done()
 
 	slog.Info("Shutting down server...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.Error("Server forced to shutdown", "error", err)
-		os.Exit(1)
-	}
+	// Drain HTTP and wait for background goroutines concurrently,
+	// both bounded by the same 10-second shutdown window.
+	var shutdownWg sync.WaitGroup
+
+	shutdownWg.Add(1)
+	go func() {
+		defer shutdownWg.Done()
+		wg.Wait()
+	}()
+
+	shutdownWg.Add(1)
+	go func() {
+		defer shutdownWg.Done()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			slog.Error("Server forced to shutdown", "error", err)
+		}
+	}()
+
+	shutdownWg.Wait()
 
 	slog.Info("Server exited gracefully")
 }

@@ -241,7 +241,7 @@ Enterprise-grade error handling, security, and observability.
   - [x] Create `internal/controllers/audit_controller.go`
   - [x] Implement `GET /audit-logs` endpoint with pagination and filtering
   - [x] Add middleware to protect the endpoint
-- [ ] Add comprehensive audit logging tests
+- [x] Add comprehensive audit logging tests
 
 **Files to create/modify**:
 
@@ -258,12 +258,12 @@ Enterprise-grade error handling, security, and observability.
 
 **Tasks**:
 
-- [ ] Review and optimize connection pool settings in `postgres/connection.go`
-- [ ] Set appropriate `MaxConns`, `MinConns`
-- [ ] Add connection pool health monitoring
-- [ ] Document connection pool configuration
-- [ ] Add tests for connection handling
-- [ ] Monitor slow queries
+- [x] Review and optimize connection pool settings in `postgres/connection.go`
+- [x] Set appropriate `MaxConns`, `MinConns`
+- [x] Add connection pool health monitoring
+- [x] Document connection pool configuration
+- [x] Add tests for connection handling
+- [x] Monitor slow queries
 
 **Files to modify**:
 
