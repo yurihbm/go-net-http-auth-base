@@ -28,7 +28,7 @@ func NewGoogleOAuthProvider(config oauth2.Config, infoURL ...string) domain.OAut
 	}
 }
 
-func (p *googleOAuthProvider) GetAuthURL(state string) string {
+func (p *googleOAuthProvider) GetAuthURL(_ context.Context, state string) string {
 	return p.config.AuthCodeURL(state)
 }
 

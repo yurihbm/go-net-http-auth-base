@@ -1,6 +1,7 @@
 package services_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestUsersService_GetByUUID(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User"}
 		repo.On("FindByUUID", "some-uuid").Return(user, nil).Once()
 
-		result, err := service.GetByUUID("some-uuid")
+		result, err := service.GetByUUID(context.Background(), "some-uuid")
 
 		assert.NoError(t, err)
 		assert.Equal(t, user, result)
@@ -36,7 +37,7 @@ func TestUsersService_GetByUUID(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		repo.On("FindByUUID", "not-found-uuid").Return(nil, errors.New("not found")).Once()
 
-		result, err := service.GetByUUID("not-found-uuid")
+		result, err := service.GetByUUID(context.Background(), "not-found-uuid")
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -52,7 +53,7 @@ func TestUsersService_GetByEmail(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User", Email: "test@example.com"}
 		repo.On("FindByEmail", "test@example.com").Return(user, nil).Once()
 
-		result, err := service.GetByEmail("test@example.com")
+		result, err := service.GetByEmail(context.Background(), "test@example.com")
 
 		assert.NoError(t, err)
 		assert.Equal(t, user, result)
@@ -62,7 +63,7 @@ func TestUsersService_GetByEmail(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		repo.On("FindByEmail", "not-found@example.com").Return(nil, errors.New("not found")).Once()
 
-		result, err := service.GetByEmail("not-found@example.com")
+		result, err := service.GetByEmail(context.Background(), "not-found@example.com")
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -93,7 +94,7 @@ func TestUsersService_Create(t *testing.T) {
 			CreatedAt:    1234567890,
 		}, nil).Once()
 
-		user, err := service.Create(dto)
+		user, err := service.Create(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, user)
@@ -123,7 +124,7 @@ func TestUsersService_Create(t *testing.T) {
 			CreatedAt:    1234567890,
 		}, nil).Once()
 
-		user, err := service.Create(dto)
+		user, err := service.Create(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, user)
@@ -146,7 +147,7 @@ func TestUsersService_Create(t *testing.T) {
 
 		repo.On("Create", mock.AnythingOfType("domain.User")).Return(nil, errors.New("db error")).Once()
 
-		user, err := service.Create(dto)
+		user, err := service.Create(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Equal(t, "db error", err.Error())
@@ -178,7 +179,7 @@ func TestUsersService_Update(t *testing.T) {
 			return u.Name == newName && u.Email == newEmail
 		})).Return(nil).Once()
 
-		err := service.Update(uuid, dto)
+		err := service.Update(context.Background(), uuid, dto)
 
 		assert.NoError(t, err)
 		repo.AssertExpectations(t)
@@ -188,7 +189,7 @@ func TestUsersService_Update(t *testing.T) {
 		dto := domain.UserUpdateDTO{}
 		repo.On("FindByUUID", "not-found").Return(nil, errors.New("not found")).Once()
 
-		err := service.Update("not-found", dto)
+		err := service.Update(context.Background(), "not-found", dto)
 
 		assert.Error(t, err)
 		repo.AssertExpectations(t)
@@ -201,7 +202,7 @@ func TestUsersService_Update(t *testing.T) {
 		repo.On("FindByUUID", uuid).Return(originalUser, nil).Once()
 		repo.On("Update", mock.AnythingOfType("domain.User")).Return(errors.New("db error")).Once()
 
-		err := service.Update(uuid, dto)
+		err := service.Update(context.Background(), uuid, dto)
 
 		assert.Error(t, err)
 		assert.Equal(t, "db error", err.Error())
@@ -217,7 +218,7 @@ func TestUsersService_Delete(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		repo.On("Delete", uuid).Return(nil).Once()
 
-		err := service.Delete(uuid)
+		err := service.Delete(context.Background(), uuid)
 
 		assert.NoError(t, err)
 		repo.AssertExpectations(t)
@@ -226,7 +227,7 @@ func TestUsersService_Delete(t *testing.T) {
 	t.Run("delete fails", func(t *testing.T) {
 		repo.On("Delete", uuid).Return(errors.New("db error")).Once()
 
-		err := service.Delete(uuid)
+		err := service.Delete(context.Background(), uuid)
 
 		assert.Error(t, err)
 		assert.Equal(t, "db error", err.Error())

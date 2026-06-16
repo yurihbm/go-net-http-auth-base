@@ -39,7 +39,7 @@ func TestGoogleOAuthProvider_GetAuthURL(t *testing.T) {
 	provider := providers.NewGoogleOAuthProvider(config)
 	state := "test-state"
 
-	authURL := provider.GetAuthURL(state)
+	authURL := provider.GetAuthURL(context.Background(), state)
 
 	assert.Contains(t, authURL, "state="+state)
 }

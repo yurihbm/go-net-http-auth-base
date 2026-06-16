@@ -55,7 +55,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 
 		usersService.On("GetByEmail", dto.Email).Return(user, nil).Once()
 
-		tokens, err := service.CredentialsLogin(dto)
+		tokens, err := service.CredentialsLogin(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, tokens.AccessToken)
@@ -71,7 +71,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 
 		usersService.On("GetByEmail", dto.Email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
 
-		tokens, err := service.CredentialsLogin(dto)
+		tokens, err := service.CredentialsLogin(context.Background(), dto)
 
 		require.NotNil(t, err)
 		var unauthorizedErr *domain.UnauthorizedError
@@ -90,7 +90,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 
 		usersService.On("GetByEmail", dto.Email).Return(nil, errors.New("db error")).Once()
 
-		tokens, err := service.CredentialsLogin(dto)
+		tokens, err := service.CredentialsLogin(context.Background(), dto)
 
 		require.NotNil(t, err)
 		var internalServerErr *domain.InternalServerError
@@ -117,7 +117,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 
 		usersService.On("GetByEmail", dto.Email).Return(user, nil).Once()
 
-		tokens, err := service.CredentialsLogin(dto)
+		tokens, err := service.CredentialsLogin(context.Background(), dto)
 
 		require.NotNil(t, err)
 		var unauthorizedErr *domain.UnauthorizedError
@@ -155,7 +155,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 			Token:    tokenString,
 			Audience: domain.TokenAudienceAccess,
 		}
-		result, err := service.VerifyToken(dto)
+		result, err := service.VerifyToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -176,7 +176,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 			Token:    tokenString,
 			Audience: domain.TokenAudienceAccess,
 		}
-		result, err := service.VerifyToken(dto)
+		result, err := service.VerifyToken(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -187,7 +187,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 			Token:    "invalid-token",
 			Audience: domain.TokenAudienceAccess,
 		}
-		result, err := service.VerifyToken(dto)
+		result, err := service.VerifyToken(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -207,7 +207,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 			Token:    tokenString,
 			Audience: domain.TokenAudienceAccess,
 		}
-		result, err := service.VerifyToken(dto)
+		result, err := service.VerifyToken(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -227,7 +227,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 			Token:    tokenString,
 			Audience: domain.TokenAudienceAccess,
 		}
-		result, err := service.VerifyToken(dto)
+		result, err := service.VerifyToken(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -247,7 +247,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 			Token:    tokenString,
 			Audience: domain.TokenAudienceAccess,
 		}
-		result, err := service.VerifyToken(dto)
+		result, err := service.VerifyToken(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -279,7 +279,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		dto := domain.RefreshTokenDTO{
 			RefreshToken: refreshTokenString,
 		}
-		tokens, err := service.RefreshToken(dto)
+		tokens, err := service.RefreshToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, tokens.AccessToken)
@@ -290,7 +290,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 			Token:    tokens.AccessToken,
 			Audience: domain.TokenAudienceAccess,
 		}
-		verifiedToken, err := service.VerifyToken(verifyDTO)
+		verifiedToken, err := service.VerifyToken(context.Background(), verifyDTO)
 		assert.NoError(t, err)
 		assert.NotNil(t, verifiedToken)
 		assert.Equal(t, userUUID, verifiedToken.Subject)
@@ -300,7 +300,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 			Token:    tokens.RefreshToken,
 			Audience: domain.TokenAudienceRefresh,
 		}
-		verifiedToken, err = service.VerifyToken(verifyDTO)
+		verifiedToken, err = service.VerifyToken(context.Background(), verifyDTO)
 		assert.NoError(t, err)
 		assert.NotNil(t, verifiedToken)
 		assert.Equal(t, userUUID, verifiedToken.Subject)
@@ -310,7 +310,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		dto := domain.RefreshTokenDTO{
 			RefreshToken: "invalid-token",
 		}
-		tokens, err := service.RefreshToken(dto)
+		tokens, err := service.RefreshToken(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Empty(t, tokens.AccessToken)
@@ -330,7 +330,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		dto := domain.RefreshTokenDTO{
 			RefreshToken: refreshTokenString,
 		}
-		tokens, err := service.RefreshToken(dto)
+		tokens, err := service.RefreshToken(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Empty(t, tokens.AccessToken)
@@ -356,7 +356,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Audience: domain.TokenAudienceAccess,
 		}
 
-		token, err := service.GenerateToken(dto)
+		token, err := service.GenerateToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token)
@@ -366,7 +366,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
 		}
-		verifiedToken, err := service.VerifyToken(verifyDTO)
+		verifiedToken, err := service.VerifyToken(context.Background(), verifyDTO)
 		assert.NoError(t, err)
 		assert.NotNil(t, verifiedToken)
 		assert.Equal(t, "user-uuid-123", verifiedToken.Subject)
@@ -378,7 +378,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Audience: domain.TokenAudienceRefresh,
 		}
 
-		token, err := service.GenerateToken(dto)
+		token, err := service.GenerateToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token)
@@ -388,7 +388,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Token:    token,
 			Audience: domain.TokenAudienceRefresh,
 		}
-		verifiedToken, err := service.VerifyToken(verifyDTO)
+		verifiedToken, err := service.VerifyToken(context.Background(), verifyDTO)
 		assert.NoError(t, err)
 		assert.NotNil(t, verifiedToken)
 		assert.Equal(t, "user-uuid-456", verifiedToken.Subject)
@@ -400,7 +400,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Audience: domain.TokenAudienceExchange,
 		}
 
-		token, err := service.GenerateToken(dto)
+		token, err := service.GenerateToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token)
@@ -410,7 +410,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Token:    token,
 			Audience: domain.TokenAudienceExchange,
 		}
-		verifiedToken, err := service.VerifyToken(verifyDTO)
+		verifiedToken, err := service.VerifyToken(context.Background(), verifyDTO)
 		assert.NoError(t, err)
 		assert.NotNil(t, verifiedToken)
 		assert.Equal(t, "user-uuid-789", verifiedToken.Subject)
@@ -444,7 +444,7 @@ func TestAuthService_AddUserOAuthProvider(t *testing.T) {
 			return p.UserUUID == dto.UserUUID && p.Provider == dto.Provider
 		})).Return(&provider, nil).Once()
 
-		result, err := service.AddUserOAuthProvider(dto)
+		result, err := service.AddUserOAuthProvider(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -462,7 +462,7 @@ func TestAuthService_AddUserOAuthProvider(t *testing.T) {
 
 		authRepo.On("CreateUserOAuthProvider", mock.AnythingOfType("domain.UserOAuthProvider")).Return(nil, errors.New("db error")).Once()
 
-		result, err := service.AddUserOAuthProvider(dto)
+		result, err := service.AddUserOAuthProvider(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -493,7 +493,7 @@ func TestAuthService_GetUserOAuthProvider(t *testing.T) {
 
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", domain.OAuthProviderGoogle, "google-123").Return(&provider, nil).Once()
 
-		result, err := service.GetUserOAuthProvider(dto)
+		result, err := service.GetUserOAuthProvider(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -509,7 +509,7 @@ func TestAuthService_GetUserOAuthProvider(t *testing.T) {
 
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", domain.OAuthProviderGoogle, "nonexistent").Return(nil, errors.New("not found")).Once()
 
-		result, err := service.GetUserOAuthProvider(dto)
+		result, err := service.GetUserOAuthProvider(context.Background(), dto)
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -531,7 +531,7 @@ func TestAuthService_RemoveUserOAuthProvider(t *testing.T) {
 
 		authRepo.On("DeleteUserOAuthProvider", "provider-uuid-123").Return(nil).Once()
 
-		err := service.RemoveUserOAuthProvider(dto)
+		err := service.RemoveUserOAuthProvider(context.Background(), dto)
 
 		assert.NoError(t, err)
 		authRepo.AssertExpectations(t)
@@ -545,7 +545,7 @@ func TestAuthService_RemoveUserOAuthProvider(t *testing.T) {
 
 		authRepo.On("DeleteUserOAuthProvider", "provider-uuid-123").Return(errors.New("db error")).Once()
 
-		err := service.RemoveUserOAuthProvider(dto)
+		err := service.RemoveUserOAuthProvider(context.Background(), dto)
 
 		assert.Error(t, err)
 		authRepo.AssertExpectations(t)
@@ -572,7 +572,7 @@ func TestAuthService_GetUserOAuthProvidersByUserUUID(t *testing.T) {
 
 		authRepo.On("ListUserOAuthProvidersByUserUUID", "user-uuid-123").Return(providers, nil).Once()
 
-		result, err := service.GetUserOAuthProvidersByUserUUID("user-uuid-123")
+		result, err := service.GetUserOAuthProvidersByUserUUID(context.Background(), "user-uuid-123")
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -586,7 +586,7 @@ func TestAuthService_GetUserOAuthProvidersByUserUUID(t *testing.T) {
 
 		authRepo.On("ListUserOAuthProvidersByUserUUID", "user-uuid-456").Return(providers, nil).Once()
 
-		result, err := service.GetUserOAuthProvidersByUserUUID("user-uuid-456")
+		result, err := service.GetUserOAuthProvidersByUserUUID(context.Background(), "user-uuid-456")
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -597,7 +597,7 @@ func TestAuthService_GetUserOAuthProvidersByUserUUID(t *testing.T) {
 	t.Run("repository error", func(t *testing.T) {
 		authRepo.On("ListUserOAuthProvidersByUserUUID", "user-uuid-789").Return(nil, errors.New("db error")).Once()
 
-		result, err := service.GetUserOAuthProvidersByUserUUID("user-uuid-789")
+		result, err := service.GetUserOAuthProvidersByUserUUID(context.Background(), "user-uuid-789")
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -617,7 +617,7 @@ func TestAuthService_GetOAuthProviderAuthURL(t *testing.T) {
 
 		oauthProviderRegistry.On("Get", domain.OAuthProviderGoogle).Return(providerMock, nil).Once()
 
-		url, err := service.GetOAuthProviderAuthURL(domain.OAuthProviderGoogle, "test-state")
+		url, err := service.GetOAuthProviderAuthURL(context.Background(), domain.OAuthProviderGoogle, "test-state")
 
 		assert.NoError(t, err)
 		assert.Equal(t, "https://provider.com/auth?state=test-state", url)
@@ -628,7 +628,7 @@ func TestAuthService_GetOAuthProviderAuthURL(t *testing.T) {
 	t.Run("provider not configured", func(t *testing.T) {
 		oauthProviderRegistry.On("Get", domain.OAuthProviderGoogle).Return(nil, errors.New("provider not configured")).Once()
 
-		url, err := service.GetOAuthProviderAuthURL(domain.OAuthProviderGoogle, "test-state")
+		url, err := service.GetOAuthProviderAuthURL(context.Background(), domain.OAuthProviderGoogle, "test-state")
 
 		require.NotNil(t, err)
 		var validationErr *domain.ValidationError

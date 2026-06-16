@@ -28,7 +28,7 @@ func NewGitHubOAuthProvider(config oauth2.Config, infoURL ...string) domain.OAut
 	}
 }
 
-func (p *githubOAuthProvider) GetAuthURL(state string) string {
+func (p *githubOAuthProvider) GetAuthURL(_ context.Context, state string) string {
 	return p.config.AuthCodeURL(state)
 }
 

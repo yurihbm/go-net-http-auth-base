@@ -22,13 +22,13 @@ func NewUsersPostgresRepository(db postgres.DBTX) domain.UsersRepository {
 	}
 }
 
-func (r *UsersPostgresRepository) FindByUUID(uuidStr string) (*domain.User, error) {
+func (r *UsersPostgresRepository) FindByUUID(ctx context.Context, uuidStr string) (*domain.User, error) {
 	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {
 		return nil, err
 	}
 
-	user, err := r.q.GetUserByUUID(context.Background(), *uuid)
+	user, err := r.q.GetUserByUUID(ctx, *uuid)
 	if err != nil {
 		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
 			return nil, noRowsErr
@@ -40,8 +40,8 @@ func (r *UsersPostgresRepository) FindByUUID(uuidStr string) (*domain.User, erro
 	return &domainUser, nil
 }
 
-func (r *UsersPostgresRepository) FindByEmail(email string) (*domain.User, error) {
-	user, err := r.q.GetUserByEmail(context.Background(), email)
+func (r *UsersPostgresRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
+	user, err := r.q.GetUserByEmail(ctx, email)
 	if err != nil {
 		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
 			return nil, noRowsErr
@@ -53,14 +53,14 @@ func (r *UsersPostgresRepository) FindByEmail(email string) (*domain.User, error
 	return &domainUser, nil
 }
 
-func (r *UsersPostgresRepository) Create(user domain.User) (*domain.User, error) {
+func (r *UsersPostgresRepository) Create(ctx context.Context, user domain.User) (*domain.User, error) {
 	params := postgres.CreateUserParams{
 		Name:         user.Name,
 		Email:        user.Email,
 		PasswordHash: pgtype.Text{String: user.PasswordHash, Valid: true},
 	}
 
-	createdUser, err := r.q.CreateUser(context.Background(), params)
+	createdUser, err := r.q.CreateUser(ctx, params)
 	if err != nil {
 		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
 			return nil, conflictErr
@@ -73,7 +73,7 @@ func (r *UsersPostgresRepository) Create(user domain.User) (*domain.User, error)
 	return &user, nil
 }
 
-func (r *UsersPostgresRepository) Update(user domain.User) error {
+func (r *UsersPostgresRepository) Update(ctx context.Context, user domain.User) error {
 	uuid, err := parseUsersUUID(user.UUID)
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func (r *UsersPostgresRepository) Update(user domain.User) error {
 		params.PasswordHash = pgtype.Text{String: user.PasswordHash, Valid: true}
 	}
 
-	if err = r.q.UpdateUser(context.Background(), params); err != nil {
+	if err = r.q.UpdateUser(ctx, params); err != nil {
 		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
 			return conflictErr
 		}
@@ -99,13 +99,13 @@ func (r *UsersPostgresRepository) Update(user domain.User) error {
 	return nil
 }
 
-func (r *UsersPostgresRepository) Delete(uuidStr string) error {
+func (r *UsersPostgresRepository) Delete(ctx context.Context, uuidStr string) error {
 	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {
 		return err
 	}
 
-	err = r.q.DeleteUser(context.Background(), *uuid)
+	err = r.q.DeleteUser(ctx, *uuid)
 	if err != nil {
 		return domain.NewInternalServerError("user.internalServerError", err)
 	}

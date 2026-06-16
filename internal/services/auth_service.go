@@ -34,8 +34,8 @@ func NewAuthService(
 	}
 }
 
-func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.AuthTokens, error) {
-	user, err := s.usersService.GetByEmail(dto.Email)
+func (s *authService) CredentialsLogin(ctx context.Context, dto domain.CredentialsLoginDTO) (domain.AuthTokens, error) {
+	user, err := s.usersService.GetByEmail(ctx, dto.Email)
 	if err != nil || user == nil {
 		var notFoundErr *domain.NotFoundError
 		if err != nil && errors.As(err, &notFoundErr) {
@@ -48,7 +48,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 		return domain.AuthTokens{}, domain.NewUnauthorizedError("auth.authenticate.invalidCredentials")
 	}
 
-	accessToken, err := s.GenerateToken(domain.GenerateTokenDTO{
+	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
 		Subject:  user.UUID,
 		Audience: domain.TokenAudienceAccess,
 	})
@@ -56,7 +56,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed", err)
 	}
 
-	refreshToken, err := s.GenerateToken(domain.GenerateTokenDTO{
+	refreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
 		Subject:  user.UUID,
 		Audience: domain.TokenAudienceRefresh,
 	})
@@ -70,7 +70,7 @@ func (s *authService) CredentialsLogin(dto domain.CredentialsLoginDTO) (domain.A
 	}, nil
 }
 
-func (s *authService) VerifyToken(dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
+func (s *authService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
 	token, err := jwt.Parse(dto.Token, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
@@ -99,8 +99,8 @@ func (s *authService) VerifyToken(dto domain.VerifyTokenDTO) (*domain.VerifiedTo
 	return nil, ErrInvalidToken
 }
 
-func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthTokens, error) {
-	tokenData, err := s.VerifyToken(domain.VerifyTokenDTO{
+func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenDTO) (domain.AuthTokens, error) {
+	tokenData, err := s.VerifyToken(ctx, domain.VerifyTokenDTO{
 		Token:    dto.RefreshToken,
 		Audience: domain.TokenAudienceRefresh,
 	})
@@ -109,7 +109,7 @@ func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthToken
 	}
 	userUUID := tokenData.Subject
 
-	newAccessToken, err := s.GenerateToken(domain.GenerateTokenDTO{
+	newAccessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
 		Subject:  userUUID,
 		Audience: domain.TokenAudienceAccess,
 	})
@@ -117,7 +117,7 @@ func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthToken
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
 	}
 
-	newRefreshToken, err := s.GenerateToken(domain.GenerateTokenDTO{
+	newRefreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
 		Subject:  userUUID,
 		Audience: domain.TokenAudienceRefresh,
 	})
@@ -131,7 +131,7 @@ func (s *authService) RefreshToken(dto domain.RefreshTokenDTO) (domain.AuthToken
 	}, nil
 }
 
-func (s *authService) GenerateToken(dto domain.GenerateTokenDTO) (string, error) {
+func (s *authService) GenerateToken(ctx context.Context, dto domain.GenerateTokenDTO) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":     dto.Subject,
 		"exp":     getTokenExpiration(dto.Audience),
@@ -153,7 +153,7 @@ func (s *authService) GenerateToken(dto domain.GenerateTokenDTO) (string, error)
 	return signedString, nil
 }
 
-func (s *authService) AddUserOAuthProvider(dto domain.AddUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
+func (s *authService) AddUserOAuthProvider(ctx context.Context, dto domain.AddUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
 	provider := domain.UserOAuthProvider{
 		UserUUID:       dto.UserUUID,
 		Provider:       dto.Provider,
@@ -161,22 +161,22 @@ func (s *authService) AddUserOAuthProvider(dto domain.AddUserOAuthProviderDTO) (
 		ProviderEmail:  dto.ProviderEmail,
 	}
 
-	return s.authRepository.CreateUserOAuthProvider(provider)
+	return s.authRepository.CreateUserOAuthProvider(ctx, provider)
 }
 
-func (s *authService) GetUserOAuthProvider(dto domain.GetUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
-	return s.authRepository.GetUserOAuthProviderByProviderAndProviderUserID(dto.Provider, dto.ProviderUserID)
+func (s *authService) GetUserOAuthProvider(ctx context.Context, dto domain.GetUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
+	return s.authRepository.GetUserOAuthProviderByProviderAndProviderUserID(ctx, dto.Provider, dto.ProviderUserID)
 }
 
-func (s *authService) RemoveUserOAuthProvider(dto domain.RemoveUserOAuthProviderDTO) error {
-	return s.authRepository.DeleteUserOAuthProvider(dto.ProviderUUID)
+func (s *authService) RemoveUserOAuthProvider(ctx context.Context, dto domain.RemoveUserOAuthProviderDTO) error {
+	return s.authRepository.DeleteUserOAuthProvider(ctx, dto.ProviderUUID)
 }
 
-func (s *authService) GetUserOAuthProvidersByUserUUID(userUUID string) ([]domain.UserOAuthProvider, error) {
-	return s.authRepository.ListUserOAuthProvidersByUserUUID(userUUID)
+func (s *authService) GetUserOAuthProvidersByUserUUID(ctx context.Context, userUUID string) ([]domain.UserOAuthProvider, error) {
+	return s.authRepository.ListUserOAuthProvidersByUserUUID(ctx, userUUID)
 }
 
-func (s *authService) GetOAuthProviderAuthURL(providerName domain.OAuthProviderName, state string) (string, error) {
+func (s *authService) GetOAuthProviderAuthURL(ctx context.Context, providerName domain.OAuthProviderName, state string) (string, error) {
 	provider, err := s.oauthProviderRegistry.Get(providerName)
 	if err != nil {
 		return "", domain.NewValidationError("auth.oauthProvider.invalid", map[string]string{
@@ -184,7 +184,7 @@ func (s *authService) GetOAuthProviderAuthURL(providerName domain.OAuthProviderN
 		})
 	}
 
-	return provider.GetAuthURL(state), nil
+	return provider.GetAuthURL(ctx, state), nil
 }
 
 func (s *authService) GetOAuthProviderUserInfo(ctx context.Context, providerName domain.OAuthProviderName, code string) (*domain.OAuthProviderUserInfo, error) {

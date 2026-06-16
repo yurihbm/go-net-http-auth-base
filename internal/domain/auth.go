@@ -107,7 +107,7 @@ type RemoveUserOAuthProviderDTO struct {
 }
 
 type OAuthProvider interface {
-	GetAuthURL(string) string
+	GetAuthURL(context.Context, string) string
 	GetUserInfo(context.Context, string) (*OAuthProviderUserInfo, error)
 }
 
@@ -118,21 +118,21 @@ type OAuthProviderRegistry interface {
 }
 
 type AuthService interface {
-	CredentialsLogin(CredentialsLoginDTO) (AuthTokens, error)
-	RefreshToken(RefreshTokenDTO) (AuthTokens, error)
-	VerifyToken(VerifyTokenDTO) (*VerifiedTokenData, error)
-	GenerateToken(GenerateTokenDTO) (string, error)
-	AddUserOAuthProvider(AddUserOAuthProviderDTO) (*UserOAuthProvider, error)
-	GetUserOAuthProvider(GetUserOAuthProviderDTO) (*UserOAuthProvider, error)
-	RemoveUserOAuthProvider(RemoveUserOAuthProviderDTO) error
-	GetUserOAuthProvidersByUserUUID(string) ([]UserOAuthProvider, error)
-	GetOAuthProviderAuthURL(OAuthProviderName, string) (string, error)
+	CredentialsLogin(context.Context, CredentialsLoginDTO) (AuthTokens, error)
+	RefreshToken(context.Context, RefreshTokenDTO) (AuthTokens, error)
+	VerifyToken(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
+	GenerateToken(context.Context, GenerateTokenDTO) (string, error)
+	AddUserOAuthProvider(context.Context, AddUserOAuthProviderDTO) (*UserOAuthProvider, error)
+	GetUserOAuthProvider(context.Context, GetUserOAuthProviderDTO) (*UserOAuthProvider, error)
+	RemoveUserOAuthProvider(context.Context, RemoveUserOAuthProviderDTO) error
+	GetUserOAuthProvidersByUserUUID(context.Context, string) ([]UserOAuthProvider, error)
+	GetOAuthProviderAuthURL(context.Context, OAuthProviderName, string) (string, error)
 	GetOAuthProviderUserInfo(context.Context, OAuthProviderName, string) (*OAuthProviderUserInfo, error)
 }
 
 type AuthRepository interface {
-	CreateUserOAuthProvider(UserOAuthProvider) (*UserOAuthProvider, error)
-	GetUserOAuthProviderByProviderAndProviderUserID(OAuthProviderName, string) (*UserOAuthProvider, error)
-	DeleteUserOAuthProvider(string) error
-	ListUserOAuthProvidersByUserUUID(string) ([]UserOAuthProvider, error)
+	CreateUserOAuthProvider(context.Context, UserOAuthProvider) (*UserOAuthProvider, error)
+	GetUserOAuthProviderByProviderAndProviderUserID(context.Context, OAuthProviderName, string) (*UserOAuthProvider, error)
+	DeleteUserOAuthProvider(context.Context, string) error
+	ListUserOAuthProvidersByUserUUID(context.Context, string) ([]UserOAuthProvider, error)
 }

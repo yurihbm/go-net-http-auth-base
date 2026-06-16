@@ -1,5 +1,7 @@
 package domain
 
+import "context"
+
 type UserRole string
 
 const (
@@ -38,17 +40,17 @@ type UserUpdateDTO struct {
 }
 
 type UsersService interface {
-	GetByUUID(string) (*User, error)
-	GetByEmail(string) (*User, error)
-	Create(CreateUserDTO) (*User, error)
-	Update(string, UserUpdateDTO) error
-	Delete(string) error
+	GetByUUID(context.Context, string) (*User, error)
+	GetByEmail(context.Context, string) (*User, error)
+	Create(context.Context, CreateUserDTO) (*User, error)
+	Update(context.Context, string, UserUpdateDTO) error
+	Delete(context.Context, string) error
 }
 
 type UsersRepository interface {
-	FindByUUID(string) (*User, error)
-	FindByEmail(string) (*User, error)
-	Create(User) (*User, error)
-	Update(User) error
-	Delete(string) error
+	FindByUUID(context.Context, string) (*User, error)
+	FindByEmail(context.Context, string) (*User, error)
+	Create(context.Context, User) (*User, error)
+	Update(context.Context, User) error
+	Delete(context.Context, string) error
 }

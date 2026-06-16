@@ -33,7 +33,7 @@ func setupAuthRepoTest(t *testing.T) (domain.AuthRepository, domain.UsersReposit
 		PasswordHash: "hashed_password",
 	}
 
-	createdUser, err := usersRepo.Create(user)
+	createdUser, err := usersRepo.Create(context.Background(), user)
 	require.NoError(t, err)
 	require.NotNil(t, createdUser)
 
@@ -51,7 +51,7 @@ func TestAuthPostgresRepository_CreateUserOAuthProvider(t *testing.T) {
 			ProviderEmail:  "test@gmail.com",
 		}
 
-		createdProvider, err := repo.CreateUserOAuthProvider(provider)
+		createdProvider, err := repo.CreateUserOAuthProvider(context.Background(), provider)
 		require.NoError(t, err)
 		require.NotNil(t, createdProvider)
 		assert.NotEmpty(t, createdProvider.UUID)
@@ -70,10 +70,10 @@ func TestAuthPostgresRepository_CreateUserOAuthProvider(t *testing.T) {
 			ProviderEmail:  "conflict@gmail.com",
 		}
 
-		_, err := repo.CreateUserOAuthProvider(provider)
+		_, err := repo.CreateUserOAuthProvider(context.Background(), provider)
 		require.NoError(t, err)
 
-		_, err = repo.CreateUserOAuthProvider(provider)
+		_, err = repo.CreateUserOAuthProvider(context.Background(), provider)
 		require.Error(t, err)
 		var conflictErr *domain.ConflictError
 		assert.True(t, errors.As(err, &conflictErr))
@@ -87,7 +87,7 @@ func TestAuthPostgresRepository_CreateUserOAuthProvider(t *testing.T) {
 			ProviderEmail:  "test2@gmail.com",
 		}
 
-		_, err := repo.CreateUserOAuthProvider(provider)
+		_, err := repo.CreateUserOAuthProvider(context.Background(), provider)
 		require.Error(t, err)
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))
@@ -103,7 +103,7 @@ func TestAuthPostgresRepository_CreateUserOAuthProvider(t *testing.T) {
 			ProviderEmail:  "test999@gmail.com",
 		}
 
-		_, err := repo.CreateUserOAuthProvider(provider)
+		_, err := repo.CreateUserOAuthProvider(context.Background(), provider)
 		require.Error(t, err)
 		var notFoundErr *domain.NotFoundError
 		assert.True(t, errors.As(err, &notFoundErr))
@@ -121,11 +121,11 @@ func TestAuthPostgresRepository_GetUserOAuthProviderByProviderAndProviderUserID(
 		ProviderUserID: "google_user_123",
 		ProviderEmail:  "test@gmail.com",
 	}
-	createdProvider, err := repo.CreateUserOAuthProvider(provider)
+	createdProvider, err := repo.CreateUserOAuthProvider(context.Background(), provider)
 	require.NoError(t, err)
 
 	t.Run("success", func(t *testing.T) {
-		foundProvider, err := repo.GetUserOAuthProviderByProviderAndProviderUserID(
+		foundProvider, err := repo.GetUserOAuthProviderByProviderAndProviderUserID(context.Background(),
 			domain.OAuthProviderGoogle,
 			"google_user_123",
 		)
@@ -139,7 +139,7 @@ func TestAuthPostgresRepository_GetUserOAuthProviderByProviderAndProviderUserID(
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		foundProvider, err := repo.GetUserOAuthProviderByProviderAndProviderUserID(
+		foundProvider, err := repo.GetUserOAuthProviderByProviderAndProviderUserID(context.Background(),
 			domain.OAuthProviderGoogle,
 			"nonexistent_user_id",
 		)
@@ -160,11 +160,11 @@ func TestAuthPostgresRepository_ListUserOAuthProvidersByUserUUID(t *testing.T) {
 		ProviderUserID: "google_user_123",
 		ProviderEmail:  "test@gmail.com",
 	}
-	createdProvider, err := repo.CreateUserOAuthProvider(provider)
+	createdProvider, err := repo.CreateUserOAuthProvider(context.Background(), provider)
 	require.NoError(t, err)
 
 	t.Run("success with one provider", func(t *testing.T) {
-		providers, err := repo.ListUserOAuthProvidersByUserUUID(createdUser.UUID)
+		providers, err := repo.ListUserOAuthProvidersByUserUUID(context.Background(), createdUser.UUID)
 		require.NoError(t, err)
 		require.NotNil(t, providers)
 		assert.Equal(t, 1, len(providers))
@@ -181,10 +181,10 @@ func TestAuthPostgresRepository_ListUserOAuthProvidersByUserUUID(t *testing.T) {
 			ProviderEmail:  "test3@gmail.com",
 		}
 
-		_, err := repo.CreateUserOAuthProvider(provider2)
+		_, err := repo.CreateUserOAuthProvider(context.Background(), provider2)
 		require.NoError(t, err)
 
-		providers, err := repo.ListUserOAuthProvidersByUserUUID(createdUser.UUID)
+		providers, err := repo.ListUserOAuthProvidersByUserUUID(context.Background(), createdUser.UUID)
 		require.NoError(t, err)
 		require.NotNil(t, providers)
 		assert.Equal(t, 2, len(providers))
@@ -192,13 +192,13 @@ func TestAuthPostgresRepository_ListUserOAuthProvidersByUserUUID(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		nonExistentUserUUID := uuid.New().String()
-		providers, err := repo.ListUserOAuthProvidersByUserUUID(nonExistentUserUUID)
+		providers, err := repo.ListUserOAuthProvidersByUserUUID(context.Background(), nonExistentUserUUID)
 		require.NoError(t, err)
 		assert.Empty(t, providers)
 	})
 
 	t.Run("invalid uuid", func(t *testing.T) {
-		_, err := repo.ListUserOAuthProvidersByUserUUID("invalid-uuid")
+		_, err := repo.ListUserOAuthProvidersByUserUUID(context.Background(), "invalid-uuid")
 		require.Error(t, err)
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))
@@ -217,14 +217,14 @@ func TestAuthPostgresRepository_DeleteUserOAuthProvider(t *testing.T) {
 			ProviderEmail:  "delete@gmail.com",
 		}
 
-		providerToDelete, err := repo.CreateUserOAuthProvider(provider)
+		providerToDelete, err := repo.CreateUserOAuthProvider(context.Background(), provider)
 		require.NoError(t, err)
 
-		err = repo.DeleteUserOAuthProvider(providerToDelete.UUID)
+		err = repo.DeleteUserOAuthProvider(context.Background(), providerToDelete.UUID)
 		require.NoError(t, err)
 
 		// Verify it's deleted
-		providers, err := repo.ListUserOAuthProvidersByUserUUID(createdUser.UUID)
+		providers, err := repo.ListUserOAuthProvidersByUserUUID(context.Background(), createdUser.UUID)
 		require.NoError(t, err)
 
 		for _, p := range providers {
@@ -234,12 +234,12 @@ func TestAuthPostgresRepository_DeleteUserOAuthProvider(t *testing.T) {
 
 	t.Run("idempotent delete", func(t *testing.T) {
 		// Deleting a non-existent UUID should not return an error
-		err := repo.DeleteUserOAuthProvider(uuid.New().String())
+		err := repo.DeleteUserOAuthProvider(context.Background(), uuid.New().String())
 		assert.NoError(t, err)
 	})
 
 	t.Run("invalid uuid", func(t *testing.T) {
-		err := repo.DeleteUserOAuthProvider("invalid-uuid")
+		err := repo.DeleteUserOAuthProvider(context.Background(), "invalid-uuid")
 		require.Error(t, err)
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))

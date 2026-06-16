@@ -36,7 +36,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		tokenData, err := m.authService.VerifyToken(domain.VerifyTokenDTO{
+		tokenData, err := m.authService.VerifyToken(r.Context(), domain.VerifyTokenDTO{
 			Token:    accessToken.Value,
 			Audience: domain.TokenAudienceAccess,
 		})

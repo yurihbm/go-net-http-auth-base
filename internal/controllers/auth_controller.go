@@ -58,7 +58,7 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := c.authService.CredentialsLogin(dto)
+	tokens, err := c.authService.CredentialsLogin(r.Context(), dto)
 	if err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
@@ -113,7 +113,7 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := c.authService.RefreshToken(domain.RefreshTokenDTO{
+	tokens, err := c.authService.RefreshToken(r.Context(), domain.RefreshTokenDTO{
 		RefreshToken: refreshToken.Value,
 	})
 	if err != nil {
@@ -136,7 +136,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	state, err := c.authService.GenerateToken(domain.GenerateTokenDTO{
+	state, err := c.authService.GenerateToken(r.Context(), domain.GenerateTokenDTO{
 		Audience: domain.TokenAudienceOAuthState,
 		Subject:  string(providerName),
 		Payload: map[string]string{
@@ -149,7 +149,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	authURL, err := c.authService.GetOAuthProviderAuthURL(providerName, state)
+	authURL, err := c.authService.GetOAuthProviderAuthURL(r.Context(), providerName, state)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
@@ -186,7 +186,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	tokenData, err := c.authService.VerifyToken(domain.VerifyTokenDTO{
+	tokenData, err := c.authService.VerifyToken(r.Context(), domain.VerifyTokenDTO{
 		Token:    state,
 		Audience: domain.TokenAudienceOAuthState,
 	})
@@ -235,7 +235,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	userOAuthProvider, _ := c.authService.GetUserOAuthProvider(domain.GetUserOAuthProviderDTO{
+	userOAuthProvider, _ := c.authService.GetUserOAuthProvider(r.Context(), domain.GetUserOAuthProviderDTO{
 		Provider:       providerName,
 		ProviderUserID: userInfo.ID,
 	})
@@ -244,19 +244,19 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 
 	// Case 1: Provider account is already used
 	if userOAuthProvider != nil {
-		authenticatedUser, err = c.usersService.GetByUUID(userOAuthProvider.UserUUID)
+		authenticatedUser, err = c.usersService.GetByUUID(r.Context(), userOAuthProvider.UserUUID)
 		if err != nil {
 			api.HandleError(r.Context(), w, err)
 			return
 		}
 	} else {
 		// Case 2 & 3: Provider is not used, check if user exists by email
-		existingUser, _ := c.usersService.GetByEmail(userInfo.Email)
+		existingUser, _ := c.usersService.GetByEmail(r.Context(), userInfo.Email)
 
 		if existingUser != nil {
 			// Case 2: Provider email matches existing user account (link provider)
 			authenticatedUser = existingUser
-			_, err := c.authService.AddUserOAuthProvider(domain.AddUserOAuthProviderDTO{
+			_, err := c.authService.AddUserOAuthProvider(r.Context(), domain.AddUserOAuthProviderDTO{
 				UserUUID:       existingUser.UUID,
 				Provider:       providerName,
 				ProviderUserID: userInfo.ID,
@@ -269,7 +269,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		} else {
 			// Case 3: Provider is not used and there is no user with email (create user and link)
 			// TODO: Use transaction here to avoid orphaned OAuthProvider records
-			newUser, err := c.usersService.Create(domain.CreateUserDTO{
+			newUser, err := c.usersService.Create(r.Context(), domain.CreateUserDTO{
 				Name:     userInfo.Name,
 				Email:    userInfo.Email,
 				Password: "",
@@ -279,7 +279,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 				return
 			}
 
-			_, err = c.authService.AddUserOAuthProvider(domain.AddUserOAuthProviderDTO{
+			_, err = c.authService.AddUserOAuthProvider(r.Context(), domain.AddUserOAuthProviderDTO{
 				UserUUID:       newUser.UUID,
 				Provider:       providerName,
 				ProviderUserID: userInfo.ID,
@@ -289,7 +289,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 				// TODO: Remove this when transaction is implemented
 				api.HandleError(r.Context(), w, err)
 				// Rollback user creation
-				if err := c.usersService.Delete(newUser.UUID); err != nil {
+				if err := c.usersService.Delete(r.Context(), newUser.UUID); err != nil {
 					slog.Error("oauthProviderCallback.rollback.userDeletionFailed", "user_uuid", newUser.UUID, "error", err)
 				}
 				return
@@ -299,7 +299,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	accessToken, err := c.authService.GenerateToken(domain.GenerateTokenDTO{
+	accessToken, err := c.authService.GenerateToken(r.Context(), domain.GenerateTokenDTO{
 		Subject:  authenticatedUser.UUID,
 		Audience: domain.TokenAudienceAccess,
 	})
@@ -308,7 +308,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	refreshToken, err := c.authService.GenerateToken(domain.GenerateTokenDTO{
+	refreshToken, err := c.authService.GenerateToken(r.Context(), domain.GenerateTokenDTO{
 		Subject:  authenticatedUser.UUID,
 		Audience: domain.TokenAudienceRefresh,
 	})

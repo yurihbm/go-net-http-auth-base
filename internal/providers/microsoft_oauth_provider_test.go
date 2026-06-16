@@ -23,7 +23,7 @@ func TestMicrosoftOAuthProvider_GetAuthURL(t *testing.T) {
 	provider := providers.NewMicrosoftOAuthProvider(config)
 	state := "test-state"
 
-	authURL := provider.GetAuthURL(state)
+	authURL := provider.GetAuthURL(context.Background(), state)
 
 	assert.Contains(t, authURL, "state="+state)
 }

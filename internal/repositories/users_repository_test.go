@@ -34,9 +34,9 @@ func seedUser(t *testing.T, repo domain.UsersRepository) *domain.User {
 		Role:         domain.RoleUser,
 	}
 
-	createdUser, err := repo.FindByEmail(user.Email)
+	createdUser, err := repo.FindByEmail(context.Background(), user.Email)
 	if err != nil || createdUser == nil {
-		createdUser, err = repo.Create(user)
+		createdUser, err = repo.Create(context.Background(), user)
 		require.NoError(t, err)
 		require.NotNil(t, createdUser)
 	}
@@ -55,7 +55,7 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 			Role:         domain.RoleUser,
 		}
 
-		createdUser, err := repo.Create(user)
+		createdUser, err := repo.Create(context.Background(), user)
 		require.NoError(t, err)
 		assert.NotEmpty(t, createdUser.UUID)
 		assert.NotEqual(t, createdUser.CreatedAt, 0)
@@ -75,7 +75,7 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 			Email:        email,
 			PasswordHash: "hashed_password",
 		}
-		_, err := repo.Create(user1)
+		_, err := repo.Create(context.Background(), user1)
 		require.NoError(t, err)
 
 		// Try to create second user with same email
@@ -85,7 +85,7 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 			PasswordHash: "another_password",
 		}
 
-		_, err = repo.Create(user2)
+		_, err = repo.Create(context.Background(), user2)
 		require.Error(t, err)
 		var conflictErr *domain.ConflictError
 		assert.True(t, errors.As(err, &conflictErr))
@@ -98,7 +98,7 @@ func TestUsersPostgresRepository_FindByUUID(t *testing.T) {
 	createdUser := seedUser(t, repo)
 
 	t.Run("success", func(t *testing.T) {
-		foundUser, err := repo.FindByUUID(createdUser.UUID)
+		foundUser, err := repo.FindByUUID(context.Background(), createdUser.UUID)
 		require.NoError(t, err)
 		require.NotNil(t, foundUser)
 		assert.Equal(t, createdUser.UUID, foundUser.UUID)
@@ -109,7 +109,7 @@ func TestUsersPostgresRepository_FindByUUID(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		nonExistentUUID := uuid.New().String()
-		user, err := repo.FindByUUID(nonExistentUUID)
+		user, err := repo.FindByUUID(context.Background(), nonExistentUUID)
 		require.Error(t, err)
 		assert.Nil(t, user)
 		var notFoundErr *domain.NotFoundError
@@ -117,7 +117,7 @@ func TestUsersPostgresRepository_FindByUUID(t *testing.T) {
 	})
 
 	t.Run("invalid uuid", func(t *testing.T) {
-		user, err := repo.FindByUUID("invalid-uuid")
+		user, err := repo.FindByUUID(context.Background(), "invalid-uuid")
 		require.Error(t, err)
 		assert.Nil(t, user)
 		var validationErr *domain.ValidationError
@@ -130,7 +130,7 @@ func TestUsersPostgresRepository_FindByEmail(t *testing.T) {
 	createdUser := seedUser(t, repo)
 
 	t.Run("success", func(t *testing.T) {
-		foundUser, err := repo.FindByEmail(createdUser.Email)
+		foundUser, err := repo.FindByEmail(context.Background(), createdUser.Email)
 		require.NoError(t, err)
 		require.NotNil(t, foundUser)
 		assert.Equal(t, createdUser.UUID, foundUser.UUID)
@@ -140,7 +140,7 @@ func TestUsersPostgresRepository_FindByEmail(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		user, err := repo.FindByEmail("nonexistent@example.com")
+		user, err := repo.FindByEmail(context.Background(), "nonexistent@example.com")
 		require.Error(t, err)
 		assert.Nil(t, user)
 		var notFoundErr *domain.NotFoundError
@@ -156,10 +156,10 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 		createdUser.Name = "John Doe Updated"
 		createdUser.Email = "john.doe.updated@example.com"
 
-		err := repo.Update(*createdUser)
+		err := repo.Update(context.Background(), *createdUser)
 		require.NoError(t, err)
 
-		updatedUser, err := repo.FindByUUID(createdUser.UUID)
+		updatedUser, err := repo.FindByUUID(context.Background(), createdUser.UUID)
 		require.NoError(t, err)
 		require.NotNil(t, updatedUser)
 		assert.Equal(t, "John Doe Updated", updatedUser.Name)
@@ -168,7 +168,7 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 
 	t.Run("invalid uuid", func(t *testing.T) {
 		invalidUser := domain.User{UUID: "invalid"}
-		err := repo.Update(invalidUser)
+		err := repo.Update(context.Background(), invalidUser)
 		require.Error(t, err)
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))
@@ -180,16 +180,16 @@ func TestUsersPostgresRepository_Delete(t *testing.T) {
 	createdUser := seedUser(t, repo)
 
 	t.Run("success", func(t *testing.T) {
-		err := repo.Delete(createdUser.UUID)
+		err := repo.Delete(context.Background(), createdUser.UUID)
 		require.NoError(t, err)
 
-		deletedUser, err := repo.FindByUUID(createdUser.UUID)
+		deletedUser, err := repo.FindByUUID(context.Background(), createdUser.UUID)
 		assert.Error(t, err)
 		assert.Nil(t, deletedUser)
 	})
 
 	t.Run("invalid uuid", func(t *testing.T) {
-		err := repo.Delete("invalid-uuid")
+		err := repo.Delete(context.Background(), "invalid-uuid")
 		require.Error(t, err)
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))

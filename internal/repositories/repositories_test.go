@@ -30,8 +30,8 @@ func TestMain(m *testing.M) {
 		"-d",
 		"--wait",
 	)
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("Could not start testing database: %v", err)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Fatalf("Could not start testing database: %v\n%s", err, out)
 	}
 	log.Printf("Testing database started.")
 

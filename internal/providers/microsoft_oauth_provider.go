@@ -28,7 +28,7 @@ func NewMicrosoftOAuthProvider(config oauth2.Config, infoURL ...string) domain.O
 	}
 }
 
-func (p *microsoftOAuthProvider) GetAuthURL(state string) string {
+func (p *microsoftOAuthProvider) GetAuthURL(_ context.Context, state string) string {
 	return p.config.AuthCodeURL(state)
 }
 

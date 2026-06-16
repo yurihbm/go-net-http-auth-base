@@ -24,7 +24,7 @@ func (m *RoleMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 		if reqCtxData, ok := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData); ok {
 			// TODO: Use token payload instead of fetching user from database when
 			// required info is included in the token
-			user, err := m.usersService.GetByUUID(reqCtxData.UserUUID)
+			user, err := m.usersService.GetByUUID(r.Context(), reqCtxData.UserUUID)
 
 			if err == nil && slices.Contains(m.roles, user.Role) {
 				next.ServeHTTP(w, r)

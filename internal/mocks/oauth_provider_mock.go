@@ -14,7 +14,7 @@ type OAuthProviderMock struct {
 
 var _ domain.OAuthProvider = (*OAuthProviderMock)(nil)
 
-func (m *OAuthProviderMock) GetAuthURL(state string) string {
+func (m *OAuthProviderMock) GetAuthURL(_ context.Context, state string) string {
 	args := m.Called(state)
 	return args.String(0)
 }
