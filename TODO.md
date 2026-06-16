@@ -2,6 +2,15 @@
 
 This file tracks the project features that should be implemented.
 
+> **🧭 Current direction:** This project is a **generic, reusable backend
+> template** for quickly bootstrapping any Go service. The immediate focus is
+> **hardening the existing foundation** (consistency + correctness of what's
+> already here) before layering observability on top. Concretely:
+>
+> 1. Fix the structural gaps first ([2.6 Architecture Hardening](#26-architecture-hardening)).
+> 2. Then add telemetry/o11y the **lean** way — OpenTelemetry used directly in
+>    infra/adapters, **no custom abstraction over OTel** ([2.7 Telemetry & Observability](#27-telemetry--observability-opentelemetry--grafana-lgtm)).
+
 ---
 
 ## 🎯 Quick Navigation
@@ -271,20 +280,144 @@ Enterprise-grade error handling, security, and observability.
 
 ---
 
-### 2.6 Telemetry & Observability (OpenTelemetry + Grafana LGTM)
+### 2.6 Architecture Hardening
 
-Full observability stack with distributed tracing, metrics, and log correlation using OpenTelemetry and the Grafana LGTM stack.
+**Do this before telemetry.** These are consistency/correctness gaps in the
+current foundation. In a _template_ they matter more than in a one-off app:
+whoever bootstraps from it copies whichever pattern they land on first, so
+inconsistency propagates.
 
-> **📄 Detailed implementation plan:** [TELEMETRY_AND_O11Y.md](TELEMETRY_AND_O11Y.md)
+#### 2.6.1 Uniform `context.Context` propagation (highest priority)
 
-**Summary:**
+The `audit` domain propagates `context` correctly, but `users` and `auth` do
+not — their interfaces take no context and the repositories use
+`context.Background()` in ~9 places. This blocks cancellation, deadlines and any
+future tracing. Make it context-everywhere, uniformly.
 
-- [ ] Domain interfaces & provider abstraction (DIP)
-- [ ] OpenTelemetry provider implementation
-- [ ] NoOp provider (for `OTEL_ENABLED=false`)
-- [ ] Dedicated `TelemetryMiddleware` (SRP)
-- [ ] Docker Compose infrastructure (Grafana, Tempo, Loki, Prometheus, OTel Collector)
-- [ ] Documentation & testing
+**Tasks**:
+
+- [ ] Add `context.Context` as the first argument to `UsersService` / `UsersRepository` methods (match `audit`)
+- [ ] Add `context.Context` to `AuthService` / `AuthRepository` methods
+- [ ] Thread `ctx` from controllers → services → repositories (use `r.Context()`)
+- [ ] Replace every `context.Background()` in `users`/`auth` repositories with the request `ctx`
+- [ ] Regenerate/update mocks for the new signatures
+- [ ] Update all affected tests
+
+**Files to modify**:
+
+- `internal/domain/{users,auth}.go`
+- `internal/services/{users,auth}_service.go`
+- `internal/repositories/{users,auth}_repository.go`
+- `internal/controllers/{users,auth}_controller.go`
+- `internal/mocks/*`
+
+#### 2.6.2 Real input validation
+
+Validation is currently **decorative**: `binding:"required"` is a Gin tag (this
+project uses `net/http`) and `validate:"..."` targets go-playground/validator,
+which is **not in `go.mod` and never invoked**. There is no validation layer.
+The template must ship a real one (or be honest and drop the tags).
+
+**Tasks**:
+
+- [ ] Decide approach: wire `go-playground/validator` at a single point, or remove dead tags
+- [ ] Remove unused Gin `binding:` tags from DTOs
+- [ ] Add a validator instance + one validation entry point (e.g. in `internal/api/request.go` decode helper)
+- [ ] Return `domain.ValidationError` with per-field `details` on failure
+- [ ] Add validation tests (success + per-field errors)
+
+**Files to modify**:
+
+- `internal/domain/*.go` (DTO tags)
+- `internal/api/request.go`
+- `internal/controllers/*.go`
+- `go.mod`
+
+#### 2.6.3 De-duplicate factory wiring
+
+The `OAuthProviderRegistry` construction block (Google/GitHub/Microsoft) is
+copy-pasted in `users_factory.go` and `auth_factory.go`.
+
+**Tasks**:
+
+- [ ] Extract OAuth registry construction into a shared factory/helper
+- [ ] Reuse it in `users_factory` and `auth_factory`
+
+**Files to modify**:
+
+- `internal/factories/*.go`
+
+#### 2.6.4 Minor cleanups
+
+**Tasks**:
+
+- [ ] Trim over-verbose godoc to match the project's "Zero Comments" convention (e.g. `internal/api/response.go`)
+- [ ] Replace `// ==========` separators in `internal/domain/errors.go` (optional)
+
+#### 2.6.5 Update `CLAUDE.md` to match the hardened conventions
+
+`CLAUDE.md` still teaches the old patterns — most notably it prescribes
+`context.Background()` in repositories. After the hardening above, the doc must
+not keep teaching the patterns we just eliminated, or every future agent/dev
+re-introduces them.
+
+**Tasks**:
+
+- [ ] Update the repository pattern to use propagated `context.Context` (drop the `context.Background()` example and the "should evolve to pass context" note) (after 2.6.1)
+- [ ] Document the real validation approach (after 2.6.2)
+- [ ] Document the shared OAuth registry factory (after 2.6.3)
+- [ ] Add the dependency rule for telemetry: `otel` only in infra/adapters, never in `services`/`controllers` (after 2.7)
+
+**Files to modify**:
+
+- `CLAUDE.md`
+
+#### 2.6.6 Fix current project TODOs
+
+In-code `TODO` comments that represent real gaps in the template. Resolve them
+(or consciously decide to keep + document why) so a bootstrap doesn't inherit
+half-finished behavior.
+
+**Tasks**:
+
+- [ ] **OAuth callback is not transactional** — `internal/controllers/auth_controller.go:271,289`. In the "create user + link provider" path, if `AddUserOAuthProvider` fails the code manually deletes the just-created user. Wrap create+link in a single DB transaction to avoid orphaned records, then remove the manual rollback.
+- [ ] **Rollback uses the cancelable request context** (Codex review, P2) — `internal/controllers/auth_controller.go:292`. Until the transaction above lands, the compensating `Delete` reuses `r.Context()`; if the request was canceled, the cleanup is canceled too and leaves an orphaned user. Use `context.WithoutCancel(r.Context())` (Go 1.21+) for the rollback. (Subsumed once the transaction is implemented.)
+- [ ] **Invalid-JSON error handling is weak** — `internal/controllers/auth_controller.go:52` (and similar decode sites). Decode failures return a bare error string; return a `domain.ValidationError` with field details. Fold into the 2.6.2 validation entry point.
+- [ ] **Role check hits the DB every request** — `internal/middlewares/role_middleware.go:25`. `RoleMiddleware` fetches the user from the database to read its role; carry the role in the JWT payload and read it from the token instead.
+- [ ] **No authorization on user delete** — `internal/services/users_service.go:62`. `Delete` has no check for whether the caller is deleting itself or is an admin. Add the authorization rule.
+
+**Files to modify**:
+
+- `internal/controllers/auth_controller.go`
+- `internal/middlewares/role_middleware.go`
+- `internal/services/users_service.go`
+
+---
+
+### 2.7 Telemetry & Observability (OpenTelemetry + Grafana LGTM)
+
+Distributed tracing, metrics and log correlation using OpenTelemetry and the
+Grafana LGTM stack.
+
+> **🪶 Lean approach (decided):** Use the **OpenTelemetry SDK directly** in
+> infra/adapters. Do **not** wrap OTel in a custom `domain` abstraction — OTel is
+> _already_ the vendor-neutral layer (no-op default, swappable exporters), and a
+> hand-rolled wrapper duplicates it, is weakly typed, and grows to rival the
+> business code. Vendor-neutrality of business code is preserved simply by
+> keeping `otel` imports out of `services`/`controllers` (the few business
+> metrics use the global meter or are recorded in middleware).
+>
+> The whole plan fits the task list below — no separate design doc needed.
+
+**Tasks**:
+
+- [ ] Single OTel SDK init (traces + metrics + logs exporters), gated by `OTEL_ENABLED`, with graceful shutdown — lives in one place (`internal/providers` or a small `internal/telemetry`)
+- [ ] HTTP RED metrics + spans in a dedicated `TelemetryMiddleware` (otel directly)
+- [ ] DB tracing + `db.query.duration` via a pgx `QueryTracer` (otel directly, co-located with `postgres`)
+- [ ] Pool gauges + Go runtime metrics (`otel ... /instrumentation/runtime`)
+- [ ] Log export to Loki: `slog` → `otelslog` bridge via a fan-out handler (keep stdout), automatic `trace_id` correlation
+- [ ] Grafana LGTM in the **dev** compose + starter dashboards (API RED, Go runtime, Database)
+- [ ] **Explicitly NOT building:** `domain.{TelemetryProvider,Tracer,Meter,Span,Counter,Histogram,Gauge}` interfaces, a NoOp provider, or telemetry mocks
 
 ---
 
@@ -294,7 +427,9 @@ Full observability stack with distributed tracing, metrics, and log correlation 
 - [x] Rate limiter rejects requests after limit
 - [x] Audit logs record sensitive operations
 - [x] Request IDs appear in all logs
-- [ ] Telemetry & observability operational (see [TELEMETRY_AND_O11Y.md](TELEMETRY_AND_O11Y.md))
+- [ ] `context.Context` propagated uniformly across all layers (2.6.1)
+- [ ] Input validation is real and tested (2.6.2)
+- [ ] Telemetry & observability operational (lean approach — see 2.7)
 - [ ] Test coverage remains >85%
 - [ ] All Phase 2 features are tested
 
