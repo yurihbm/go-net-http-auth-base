@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"testing"
 
 	"go-net-http-auth-base/postgres"
@@ -15,63 +14,18 @@ import (
 
 var testDB *pgxpool.Pool
 
-const testConnStr = "postgres://testuser:testpassword@localhost:5433/testdb?sslmode=disable"
-
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
-	// Start docker container.
-	cmd := exec.Command(
-		"docker",
-		"compose",
-		"-f",
-		"../../docker/docker-compose.test.yaml",
-		"up",
-		"-d",
-		"--wait",
-	)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Fatalf("Could not start testing database: %v\n%s", err, out)
-	}
-	log.Printf("Testing database started.")
-
-	// Migrate database using golang-migrate.
-	cmd = exec.Command(
-		"migrate",
-		"-path",
-		"./../../postgres/migrations",
-		"-database",
-		testConnStr,
-		"up",
-	)
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("Could not migrate the database: %v", err)
-	}
-
-	// Setup database connection using the shared postgres package helper so
-	// that production pool configuration logic is exercised during tests.
-	os.Setenv("DATABASE_URL", testConnStr)
-	var err error
-	testDB, err = postgres.NewConnectionPool(ctx)
+	pool, cleanup, err := postgres.NewTestPool(ctx)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
+		log.Fatalf("Could not start testing database: %v", err)
 	}
+	testDB = pool
 
-	// Run tests.
 	code := m.Run()
 
-	// Teardown.
-	testDB.Close()
-	cmd = exec.Command(
-		"docker",
-		"compose",
-		"-f",
-		"../../docker/docker-compose.test.yaml",
-		"down",
-	)
-	if err := cmd.Run(); err != nil {
-		log.Printf("could not stop docker-compose: %v", err)
-	}
+	cleanup()
 
 	os.Exit(code)
 }
