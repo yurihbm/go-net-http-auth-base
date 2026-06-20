@@ -52,18 +52,18 @@ const (
 //	    os.Exit(code)
 //	}
 func NewTestPool(ctx context.Context) (*pgxpool.Pool, func(), error) {
-	container, err := runTestPostgresContainer(ctx)
+	pgContainer, err := runTestPostgresContainer(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	terminate := func() {
-		if err := testcontainers.TerminateContainer(container); err != nil {
+		if err := testcontainers.TerminateContainer(pgContainer); err != nil {
 			slog.Error("failed to terminate postgres test container", "error", err)
 		}
 	}
 
-	dbURL, err := container.ConnectionString(ctx, "sslmode=disable")
+	dbURL, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		terminate()
 		return nil, nil, fmt.Errorf("failed to get connection string: %w", err)
@@ -94,8 +94,10 @@ func NewTestPool(ctx context.Context) (*pgxpool.Pool, func(), error) {
 }
 
 func runTestPostgresContainer(ctx context.Context) (*testContainerPg.PostgresContainer, error) {
-	if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
-		return nil, fmt.Errorf("failed to disable Ryuk: %w", err)
+	if _, ok := os.LookupEnv("TESTCONTAINERS_RYUK_DISABLED"); !ok {
+		if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
+			return nil, fmt.Errorf("failed to disable Ryuk: %w", err)
+		}
 	}
 
 	portStart, portEnd, err := testDBPortRange()

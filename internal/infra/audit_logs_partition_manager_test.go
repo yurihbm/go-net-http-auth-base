@@ -2,6 +2,7 @@ package infra_test
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -18,6 +19,11 @@ import (
 var testDB *pgxpool.Pool
 
 func TestMain(m *testing.M) {
+	flag.Parse()
+	if testing.Short() {
+		os.Exit(m.Run())
+	}
+
 	ctx := context.Background()
 
 	pool, cleanup, err := postgres.NewTestPool(ctx)
