@@ -3,9 +3,9 @@ ifneq (,$(wildcard .env))
 	export
 endif
 
-AIR_VERSION = v1.62.0
-SQLC_VERSION = v1.30.0
-GOLANG_MIGRATE_VERSION = v4.19.0
+AIR_VERSION = v1.65.3
+SQLC_VERSION = v1.31.1
+GOLANG_MIGRATE_VERSION = v4.19.1
 
 .PHONY: install-tools \
 	install-air \

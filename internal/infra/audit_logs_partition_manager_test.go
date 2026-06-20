@@ -2,10 +2,10 @@ package infra_test
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -13,89 +13,30 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go-net-http-auth-base/internal/infra"
+	"go-net-http-auth-base/postgres"
 )
 
 var testDB *pgxpool.Pool
 
 func TestMain(m *testing.M) {
+	flag.Parse()
+	if testing.Short() {
+		os.Exit(m.Run())
+	}
+
 	ctx := context.Background()
 
-	// Use a unique container name for infra tests: auth-base-infra-test
-	cmd := exec.Command(
-		"docker",
-		"run",
-		"--name", "auth-base-infra-test",
-		"-e", "POSTGRES_USER=testuser",
-		"-e", "POSTGRES_PASSWORD=testpassword",
-		"-e", "POSTGRES_DB=testdb",
-		"-p", "5434:5432",
-		"-d",
-		"--rm", // Auto remove on stop
-		"postgres:18-alpine",
-	)
-	if err := cmd.Run(); err != nil {
+	pool, cleanup, err := postgres.NewTestPool(ctx)
+	if err != nil {
 		log.Fatalf("Could not start infra testing database: %v", err)
 	}
+	testDB = pool
 
-	connStr := "postgres://testuser:testpassword@localhost:5434/testdb?sslmode=disable"
-
-	// Wait for DB
-	waitForDB(connStr)
-
-	// Migrate database using golang-migrate.
-	cmd = exec.Command(
-		"migrate",
-		"-path",
-		"./../../postgres/migrations",
-		"-database",
-		connStr,
-		"up",
-	)
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("Could not migrate the infra database: %v", err)
-	}
-
-	// Setup database connection.
-	var err error
-	testDB, err = pgxpool.New(ctx, connStr)
-	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
-	}
-
-	// Run tests.
 	code := m.Run()
 
-	// Teardown.
-	testDB.Close()
-	if err := exec.Command("docker", "stop", "auth-base-infra-test").Run(); err != nil {
-		log.Printf("Warning: Failed to stop Docker container: %v", err)
-	}
+	cleanup()
 
 	os.Exit(code)
-}
-
-func waitForDB(connStr string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Fatalf("Timed out waiting for database")
-		case <-ticker.C:
-			conn, err := pgxpool.New(ctx, connStr)
-			if err == nil {
-				if err := conn.Ping(ctx); err == nil {
-					conn.Close()
-					return
-				}
-				conn.Close()
-			}
-		}
-	}
 }
 
 func TestAuditLogsPartitionManager_EnsurePartition(t *testing.T) {
