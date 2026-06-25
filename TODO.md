@@ -296,12 +296,12 @@ future tracing. Make it context-everywhere, uniformly.
 
 **Tasks**:
 
-- [ ] Add `context.Context` as the first argument to `UsersService` / `UsersRepository` methods (match `audit`)
-- [ ] Add `context.Context` to `AuthService` / `AuthRepository` methods
-- [ ] Thread `ctx` from controllers → services → repositories (use `r.Context()`)
-- [ ] Replace every `context.Background()` in `users`/`auth` repositories with the request `ctx`
-- [ ] Regenerate/update mocks for the new signatures
-- [ ] Update all affected tests
+- [x] Add `context.Context` as the first argument to `UsersService` / `UsersRepository` methods (match `audit`)
+- [x] Add `context.Context` to `AuthService` / `AuthRepository` methods
+- [x] Thread `ctx` from controllers → services → repositories (use `r.Context()`)
+- [x] Replace every `context.Background()` in `users`/`auth` repositories with the request `ctx`
+- [x] Regenerate/update mocks for the new signatures
+- [x] Update all affected tests
 
 **Files to modify**:
 
@@ -427,7 +427,7 @@ Grafana LGTM stack.
 - [x] Rate limiter rejects requests after limit
 - [x] Audit logs record sensitive operations
 - [x] Request IDs appear in all logs
-- [ ] `context.Context` propagated uniformly across all layers (2.6.1)
+- [x] `context.Context` propagated uniformly across all layers (2.6.1)
 - [ ] Input validation is real and tested (2.6.2)
 - [ ] Telemetry & observability operational (lean approach — see 2.7)
 - [ ] Test coverage remains >85%
