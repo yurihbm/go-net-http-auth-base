@@ -38,6 +38,14 @@ func (m *UsersServiceMock) Create(ctx context.Context, dto domain.CreateUserDTO)
 	return nil, args.Error(1)
 }
 
+func (m *UsersServiceMock) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUserDTO) (*domain.User, error) {
+	args := m.Called(dto)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func (m *UsersServiceMock) Update(ctx context.Context, uuid string, dto domain.UserUpdateDTO) error {
 	args := m.Called(uuid, dto)
 	return args.Error(0)

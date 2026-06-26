@@ -1,13 +1,109 @@
 package api_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/domain"
 
 	"github.com/stretchr/testify/assert"
 )
+
+type testDTO struct {
+	Name  string `json:"name"  validate:"required"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age"   validate:"omitempty,min=1"`
+}
+
+func TestDecodeAndValidate(t *testing.T) {
+	t.Run("valid body returns decoded value", func(t *testing.T) {
+		body, _ := json.Marshal(testDTO{Name: "Alice", Email: "alice@example.com"})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		result, err := api.DecodeAndValidate[testDTO](req)
+
+		assert.NoError(t, err)
+		assert.Equal(t, "Alice", result.Name)
+		assert.Equal(t, "alice@example.com", result.Email)
+	})
+
+	t.Run("invalid JSON returns ValidationError with body key", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte(`not json`)))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		assert.True(t, errors.As(err, &valErr))
+		assert.NotEmpty(t, valErr.Details()["body"])
+	})
+
+	t.Run("unknown field returns ValidationError with body key", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte(`{"name":"x","email":"x@x.com","unknown":"y"}`)))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		assert.True(t, errors.As(err, &valErr))
+		assert.NotEmpty(t, valErr.Details()["body"])
+	})
+
+	t.Run("missing required field returns ValidationError with field key", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]any{"email": "alice@example.com"})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		assert.True(t, errors.As(err, &valErr))
+		assert.NotEmpty(t, valErr.Details()["name"])
+	})
+
+	t.Run("invalid email returns ValidationError with field key", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]any{"name": "Alice", "email": "not-an-email"})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		assert.True(t, errors.As(err, &valErr))
+		assert.NotEmpty(t, valErr.Details()["email"])
+	})
+
+	t.Run("omitempty field below min returns ValidationError", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]any{"name": "Alice", "email": "alice@example.com", "age": 0})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		// age=0 is zero value, omitempty skips it — should pass
+		_, err := api.DecodeAndValidate[testDTO](req)
+		assert.NoError(t, err)
+	})
+
+	t.Run("trailing JSON after object returns ValidationError", func(t *testing.T) {
+		body := []byte(`{"name":"Alice","email":"alice@example.com"}{"extra":true}`)
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		assert.True(t, errors.As(err, &valErr))
+		assert.NotEmpty(t, valErr.Details()["body"])
+	})
+
+	t.Run("multiple missing fields returns multiple keys in details", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte(`{}`)))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		assert.True(t, errors.As(err, &valErr))
+		assert.NotEmpty(t, valErr.Details()["name"])
+		assert.NotEmpty(t, valErr.Details()["email"])
+	})
+}
 
 func TestGetClientMetadata(t *testing.T) {
 	t.Run("returns X-Forwarded-For first address", func(t *testing.T) {

@@ -68,9 +68,10 @@ func (p *googleOAuthProvider) GetUserInfo(ctx context.Context, code string) (*do
 	}
 
 	userInfo := &domain.OAuthProviderUserInfo{
-		ID:    googleUser.ID,
-		Name:  googleUser.Name,
-		Email: googleUser.Email,
+		ID:            googleUser.ID,
+		Name:          googleUser.Name,
+		Email:         googleUser.Email,
+		EmailVerified: googleUser.VerifiedEmail,
 	}
 
 	return userInfo, nil
@@ -78,7 +79,8 @@ func (p *googleOAuthProvider) GetUserInfo(ctx context.Context, code string) (*do
 }
 
 type googleUserInfo struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Email         string `json:"email"`
+	VerifiedEmail bool   `json:"verified_email"`
 }

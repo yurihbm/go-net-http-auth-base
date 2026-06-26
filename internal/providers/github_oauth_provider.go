@@ -70,9 +70,10 @@ func (p *githubOAuthProvider) GetUserInfo(ctx context.Context, code string) (*do
 	}
 
 	userInfo := &domain.OAuthProviderUserInfo{
-		ID:    fmt.Sprintf("%d", githubUser.ID),
-		Name:  githubUser.Name,
-		Email: githubUser.Email,
+		ID:            fmt.Sprintf("%d", githubUser.ID),
+		Name:          githubUser.Name,
+		Email:         githubUser.Email,
+		EmailVerified: true, // GitHub only exposes verified emails via /user
 	}
 
 	return userInfo, nil

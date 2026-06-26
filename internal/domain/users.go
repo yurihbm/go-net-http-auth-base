@@ -29,20 +29,26 @@ type User struct {
 }
 
 type CreateUserDTO struct {
-	Name     string `json:"name" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
+	Name     string `json:"name"     validate:"required"`
+	Email    string `json:"email"    validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
+}
+
+type CreateOAuthUserDTO struct {
+	Name  string
+	Email string
 }
 
 type UserUpdateDTO struct {
 	Name  *string `json:"name,omitempty"`
-	Email *string `json:"email,omitempty"`
+	Email *string `json:"email,omitempty" validate:"omitempty,email"`
 }
 
 type UsersService interface {
 	GetByUUID(context.Context, string) (*User, error)
 	GetByEmail(context.Context, string) (*User, error)
 	Create(context.Context, CreateUserDTO) (*User, error)
+	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
 	Update(context.Context, string, UserUpdateDTO) error
 	Delete(context.Context, string) error
 }

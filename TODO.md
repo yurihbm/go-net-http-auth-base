@@ -320,11 +320,11 @@ The template must ship a real one (or be honest and drop the tags).
 
 **Tasks**:
 
-- [ ] Decide approach: wire `go-playground/validator` at a single point, or remove dead tags
-- [ ] Remove unused Gin `binding:` tags from DTOs
-- [ ] Add a validator instance + one validation entry point (e.g. in `internal/api/request.go` decode helper)
-- [ ] Return `domain.ValidationError` with per-field `details` on failure
-- [ ] Add validation tests (success + per-field errors)
+- [x] Decide approach: wire `go-playground/validator` at a single point, or remove dead tags
+- [x] Remove unused Gin `binding:` tags from DTOs
+- [x] Add a validator instance + one validation entry point (e.g. in `internal/api/request.go` decode helper)
+- [x] Return `domain.ValidationError` with per-field `details` on failure
+- [x] Add validation tests (success + per-field errors)
 
 **Files to modify**:
 
@@ -428,7 +428,7 @@ Grafana LGTM stack.
 - [x] Audit logs record sensitive operations
 - [x] Request IDs appear in all logs
 - [x] `context.Context` propagated uniformly across all layers (2.6.1)
-- [ ] Input validation is real and tested (2.6.2)
+- [x] Input validation is real and tested (2.6.2)
 - [ ] Telemetry & observability operational (lean approach — see 2.7)
 - [ ] Test coverage remains >85%
 - [ ] All Phase 2 features are tested

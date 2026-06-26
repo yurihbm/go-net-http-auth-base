@@ -68,9 +68,10 @@ func (p *microsoftOAuthProvider) GetUserInfo(ctx context.Context, code string) (
 	}
 
 	userInfo := &domain.OAuthProviderUserInfo{
-		ID:    microsoftUser.ID,
-		Name:  microsoftUser.Name,
-		Email: microsoftUser.Email,
+		ID:            microsoftUser.ID,
+		Name:          microsoftUser.Name,
+		Email:         microsoftUser.Email,
+		EmailVerified: microsoftUser.EmailVerified,
 	}
 
 	return userInfo, nil
@@ -78,7 +79,8 @@ func (p *microsoftOAuthProvider) GetUserInfo(ctx context.Context, code string) (
 }
 
 type microsoftUserInfo struct {
-	ID    string `json:"sub"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID            string `json:"sub"`
+	Name          string `json:"name"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
 }

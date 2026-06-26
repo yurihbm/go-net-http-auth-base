@@ -107,14 +107,14 @@ func TestUsersService_Create(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("success without password", func(t *testing.T) {
-		dto := domain.CreateUserDTO{
+	t.Run("success oauth (no password)", func(t *testing.T) {
+		dto := domain.CreateOAuthUserDTO{
 			Name:  "Test User",
 			Email: "test@example.com",
 		}
 
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
-			return u.Role == domain.RoleUser
+			return u.Role == domain.RoleUser && u.PasswordHash == ""
 		})).Return(&domain.User{
 			UUID:         "generated-uuid",
 			Name:         "Test User",
@@ -124,7 +124,7 @@ func TestUsersService_Create(t *testing.T) {
 			CreatedAt:    1234567890,
 		}, nil).Once()
 
-		user, err := service.Create(context.Background(), dto)
+		user, err := service.CreateOAuth(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, user)

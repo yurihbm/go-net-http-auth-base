@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"go-net-http-auth-base/internal/api"
@@ -38,25 +37,9 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 }
 
 func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var dto domain.CreateUserDTO
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&dto); err != nil {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "user.create.bad_request",
-			Error:   err.Error(),
-		})
-		return
-	}
-
-	if dto.Password == "" || len(dto.Password) < 8 {
-		api.HandleError(r.Context(), w,
-			domain.NewValidationError("user.create.badRequest",
-				map[string]string{
-					"password": "password must be at least 8 characters long",
-				},
-			),
-		)
+	dto, err := api.DecodeAndValidate[domain.CreateUserDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -128,18 +111,10 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 
 func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
-	var dto domain.UserUpdateDTO
 
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(&dto); err != nil {
-		api.WriteJSONResponse(w, http.StatusBadRequest,
-			api.ResponseBody[any]{
-				Message: "user.update.badRequest",
-				Error:   err.Error(),
-			},
-		)
+	dto, err := api.DecodeAndValidate[domain.UserUpdateDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 

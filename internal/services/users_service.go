@@ -25,20 +25,25 @@ func (s *usersService) GetByEmail(ctx context.Context, email string) (*domain.Us
 }
 
 func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*domain.User, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, domain.NewInternalServerError("users.create.passwordHashingFailed", err)
+	}
+	user := domain.User{
+		Name:         dto.Name,
+		Email:        dto.Email,
+		PasswordHash: string(hash),
+		Role:         domain.RoleUser,
+	}
+	return s.repo.Create(ctx, user)
+}
+
+func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUserDTO) (*domain.User, error) {
 	user := domain.User{
 		Name:  dto.Name,
 		Email: dto.Email,
 		Role:  domain.RoleUser,
 	}
-
-	if dto.Password != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, domain.NewInternalServerError("users.create.passwordHashingFailed", err)
-		}
-		user.PasswordHash = string(hash)
-	}
-
 	return s.repo.Create(ctx, user)
 }
 

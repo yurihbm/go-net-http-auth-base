@@ -1,10 +1,67 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
+
+	"go-net-http-auth-base/internal/domain"
+
+	"github.com/go-playground/validator/v10"
 )
+
+var validate = func() *validator.Validate {
+	v := validator.New()
+	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name, _, _ := strings.Cut(fld.Tag.Get("json"), ",")
+		if name == "-" {
+			return ""
+		}
+		return name
+	})
+	return v
+}()
+
+func DecodeAndValidate[T any](r *http.Request) (T, error) {
+	var v T
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&v); err != nil {
+		return v, domain.NewValidationError("request.invalid",
+			map[string]string{"body": err.Error()})
+	}
+	if dec.More() {
+		return v, domain.NewValidationError("request.invalid",
+			map[string]string{"body": "request body must contain exactly one JSON object"})
+	}
+	if err := validate.Struct(v); err != nil {
+		details := make(map[string]string)
+		for _, fe := range err.(validator.ValidationErrors) {
+			details[fe.Field()] = fieldErrMessage(fe)
+		}
+		return v, domain.NewValidationError("request.validation_failed", details)
+	}
+	return v, nil
+}
+
+func fieldErrMessage(fe validator.FieldError) string {
+	switch fe.Tag() {
+	case "required":
+		return "field is required"
+	case "email":
+		return "must be a valid email address"
+	case "min":
+		if fe.Type().Kind() == reflect.String {
+			return fmt.Sprintf("must be at least %s characters long", fe.Param())
+		}
+		return fmt.Sprintf("must be at least %s", fe.Param())
+	default:
+		return fmt.Sprintf("failed validation: %s", fe.Tag())
+	}
+}
 
 // GetClientMetadata extracts the client IP address and User-Agent from the
 // request. IP resolution follows the priority order:

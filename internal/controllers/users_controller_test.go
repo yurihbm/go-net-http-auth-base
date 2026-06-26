@@ -76,7 +76,7 @@ func TestUsersController_CreateUser(t *testing.T) {
 		auditMock.AssertExpectations(t)
 	})
 
-	t.Run("bad request", func(t *testing.T) {
+	t.Run("bad request - short password", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
 		w, req := getControllerArgs(

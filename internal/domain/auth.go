@@ -43,9 +43,10 @@ func (e OAuthProviderName) IsValid() bool {
 }
 
 type OAuthProviderUserInfo struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
 }
 
 type UserOAuthProvider struct {
@@ -58,8 +59,8 @@ type UserOAuthProvider struct {
 }
 
 type CredentialsLoginDTO struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password"`
+	Email    string `json:"email"    validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 type AuthTokens struct {
@@ -68,12 +69,12 @@ type AuthTokens struct {
 }
 
 type RefreshTokenDTO struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 type VerifyTokenDTO struct {
-	Token    string        `json:"token" validate:"required"`
-	Audience TokenAudience `json:"audience" validate:"required,oneof=access_token refresh_token exchange_token oauth_state_token"`
+	Token    string        `json:"token"`
+	Audience TokenAudience `json:"audience"`
 }
 
 type VerifiedTokenData struct {
@@ -84,26 +85,26 @@ type VerifiedTokenData struct {
 }
 
 type GenerateTokenDTO struct {
-	Subject  string        `json:"subject" validate:"required"`
-	Audience TokenAudience `json:"token_audience" validate:"required,oneof=access_token refresh_token exchange_token oauth_state_token"`
+	Subject  string        `json:"subject"`
+	Audience TokenAudience `json:"token_audience"`
 	Payload  any           `json:"payload,omitempty"`
 }
 
 type AddUserOAuthProviderDTO struct {
-	UserUUID       string            `json:"user_uuid" validate:"required"`
-	Provider       OAuthProviderName `json:"provider" validate:"required,oneof=google"`
-	ProviderUserID string            `json:"provider_user_id" validate:"required"`
-	ProviderEmail  string            `json:"provider_email" validate:"required,email"`
+	UserUUID       string            `json:"user_uuid"`
+	Provider       OAuthProviderName `json:"provider"`
+	ProviderUserID string            `json:"provider_user_id"`
+	ProviderEmail  string            `json:"provider_email"`
 }
 
 type GetUserOAuthProviderDTO struct {
-	Provider       OAuthProviderName `json:"provider" validate:"required,oneof=google"`
-	ProviderUserID string            `json:"provider_user_id" validate:"required"`
+	Provider       OAuthProviderName `json:"provider"`
+	ProviderUserID string            `json:"provider_user_id"`
 }
 
 type RemoveUserOAuthProviderDTO struct {
-	UserUUID     string `json:"user_uuid" validate:"required"`
-	ProviderUUID string `json:"provider_uuid" validate:"required"`
+	UserUUID     string `json:"user_uuid"`
+	ProviderUUID string `json:"provider_uuid"`
 }
 
 type OAuthProvider interface {

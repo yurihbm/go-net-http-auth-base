@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
@@ -46,15 +45,9 @@ func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 }
 
 func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
-	var dto domain.CredentialsLoginDTO
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	// TODO: Improve error handling for invalid JSON. Add better details (domain.ValidationError).
-	if err := decoder.Decode(&dto); err != nil {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "auth.login.badRequest",
-			Error:   err.Error(),
-		})
+	dto, err := api.DecodeAndValidate[domain.CredentialsLoginDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -255,6 +248,18 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 
 		if existingUser != nil {
 			// Case 2: Provider email matches existing user account (link provider)
+			// Require the provider to have verified this email to prevent account takeover.
+			if !userInfo.EmailVerified {
+				api.HandleError(r.Context(), w,
+					domain.NewValidationError(
+						"auth.providerCallback.emailNotVerified",
+						map[string]string{
+							"email": "provider email is not verified",
+						},
+					),
+				)
+				return
+			}
 			authenticatedUser = existingUser
 			_, err := c.authService.AddUserOAuthProvider(r.Context(), domain.AddUserOAuthProviderDTO{
 				UserUUID:       existingUser.UUID,
@@ -269,10 +274,9 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		} else {
 			// Case 3: Provider is not used and there is no user with email (create user and link)
 			// TODO: Use transaction here to avoid orphaned OAuthProvider records
-			newUser, err := c.usersService.Create(r.Context(), domain.CreateUserDTO{
-				Name:     userInfo.Name,
-				Email:    userInfo.Email,
-				Password: "",
+			newUser, err := c.usersService.CreateOAuth(r.Context(), domain.CreateOAuthUserDTO{
+				Name:  userInfo.Name,
+				Email: userInfo.Email,
 			})
 			if err != nil {
 				api.HandleError(r.Context(), w, err)
