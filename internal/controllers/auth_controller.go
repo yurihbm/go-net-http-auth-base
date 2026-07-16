@@ -3,6 +3,7 @@ package controllers
 import (
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"go-net-http-auth-base/internal/api"
@@ -339,6 +340,8 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 }
 
 func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.AuthTokens) {
+	isSecure := os.Getenv("API_ENV") != "development"
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "access_token",
 		Value:    tokens.AccessToken,
@@ -346,7 +349,7 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 		HttpOnly: true,
 		Expires:  time.Time.Add(time.Now(), domain.TokenExpirationAccess),
 		SameSite: http.SameSiteStrictMode,
-		Secure:   true,
+		Secure:   isSecure,
 	})
 
 	http.SetCookie(w, &http.Cookie{
@@ -356,7 +359,7 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 		HttpOnly: true,
 		Expires:  time.Time.Add(time.Now(), domain.TokenExpirationRefresh),
 		SameSite: http.SameSiteStrictMode,
-		Secure:   true,
+		Secure:   isSecure,
 	})
 }
 
