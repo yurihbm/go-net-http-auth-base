@@ -88,11 +88,17 @@ func main() {
 		},
 	)
 
+	deps, err := factories.NewDependencies(pool)
+	if err != nil {
+		slog.Error("Failed to initialize application dependencies", "error", err)
+		os.Exit(1)
+	}
+
 	mux := http.NewServeMux()
-	factories.UsersFactory(pool).RegisterRoutes(mux)
-	factories.AuthFactory(pool).RegisterRoutes(mux)
-	factories.HealthFactory(pool).RegisterRoutes(mux)
-	factories.AuditFactory(pool).RegisterRoutes(mux)
+	factories.UsersFactory(deps).RegisterRoutes(mux)
+	factories.AuthFactory(deps).RegisterRoutes(mux)
+	factories.HealthFactory(deps).RegisterRoutes(mux)
+	factories.AuditFactory(deps).RegisterRoutes(mux)
 
 	rateLimitMiddleware := factories.RateLimitFactory()
 	corsMiddleware := factories.CORSFactory()

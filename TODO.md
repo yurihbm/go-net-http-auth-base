@@ -344,8 +344,8 @@ block" task: with a composition root there is nothing left to duplicate.
 
 **Tasks**:
 
-- [ ] Build shared dependencies once in `cmd/main.go` (repositories, services, OAuth registry, middlewares) and pass them into thin per-controller factories — or drop the factories entirely
-- [ ] Factories/constructors return errors to `main` instead of `panic` (e.g. OAuth registry construction in `users_factory.go:34`)
+- [x] Build shared dependencies once in `cmd/main.go` (repositories, services, OAuth registry, middlewares) and pass them into thin per-controller factories — or drop the factories entirely
+- [x] Factories/constructors return errors to `main` instead of `panic` (e.g. OAuth registry construction in `users_factory.go:34`)
 
 **Files to modify**:
 

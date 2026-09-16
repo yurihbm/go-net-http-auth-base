@@ -12,29 +12,47 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// newTestDependencies builds the shared dependency graph with a nil pool.
+// Passing nil is safe as long as we don't invoke methods that use the DB.
+// The composition root itself only constructs the objects.
+func newTestDependencies(t *testing.T) *factories.Dependencies {
+	t.Helper()
+	deps, err := factories.NewDependencies(nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, deps)
+	return deps
+}
+
+func TestNewDependencies(t *testing.T) {
+	deps := newTestDependencies(t)
+
+	assert.NotNil(t, deps.UsersService)
+	assert.NotNil(t, deps.AuthService)
+	assert.NotNil(t, deps.AuditService)
+	assert.NotNil(t, deps.AuthMiddleware)
+	assert.NotNil(t, deps.AdminRoleMiddleware)
+}
+
 func TestAuthFactory(t *testing.T) {
-	// AuthFactory creates repositories that need a DB connection.
-	// Passing nil is safe as long as we don't invoke methods that use the DB.
-	// The factory itself only constructs the objects.
-	controller := factories.AuthFactory(nil)
+	controller := factories.AuthFactory(newTestDependencies(t))
 	assert.NotNil(t, controller)
 	assert.IsType(t, &controllers.AuthController{}, controller)
 }
 
 func TestUsersFactory(t *testing.T) {
-	controller := factories.UsersFactory(nil)
+	controller := factories.UsersFactory(newTestDependencies(t))
 	assert.NotNil(t, controller)
 	assert.IsType(t, &controllers.UsersController{}, controller)
 }
 
 func TestHealthFactory(t *testing.T) {
-	controller := factories.HealthFactory(nil)
+	controller := factories.HealthFactory(newTestDependencies(t))
 	assert.NotNil(t, controller)
 	assert.IsType(t, &controllers.HealthController{}, controller)
 }
 
 func TestAuditFactory(t *testing.T) {
-	controller := factories.AuditFactory(nil)
+	controller := factories.AuditFactory(newTestDependencies(t))
 	assert.NotNil(t, controller)
 	assert.IsType(t, &controllers.AuditController{}, controller)
 }
