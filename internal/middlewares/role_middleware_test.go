@@ -2,6 +2,7 @@ package middlewares_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -93,5 +94,76 @@ func TestRoleMiddleware_Use(t *testing.T) {
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.Contains(t, rr.Body.String(), "auth.forbidden")
+	})
+
+	t.Run("should deny access when the user is not found", func(t *testing.T) {
+		middleware, serviceMock := getTestRoleMiddleware()
+
+		req := httptest.NewRequest("GET", "/", nil)
+		ctx := req.Context()
+		ctx = context.WithValue(ctx,
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{
+				UserUUID: "test-uuid",
+			},
+		)
+		req = req.WithContext(ctx)
+
+		serviceMock.On("GetByUUID", "test-uuid").Return(nil, domain.NewNotFoundError("user.not_found"))
+
+		rr := httptest.NewRecorder()
+		handler := middleware.Use(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}),
+		)
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "auth.forbidden")
+	})
+
+	t.Run("should return internal server error when the user lookup fails", func(t *testing.T) {
+		middleware, serviceMock := getTestRoleMiddleware()
+
+		req := httptest.NewRequest("GET", "/", nil)
+		ctx := req.Context()
+		ctx = context.WithValue(ctx,
+			shared.RequestContextDataKey,
+			&shared.RequestContextData{
+				UserUUID: "test-uuid",
+			},
+		)
+		req = req.WithContext(ctx)
+
+		serviceMock.On("GetByUUID", "test-uuid").Return(nil, errors.New("db down"))
+
+		rr := httptest.NewRecorder()
+		handler := middleware.Use(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}),
+		)
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+		assert.NotContains(t, rr.Body.String(), "auth.forbidden")
+	})
+
+	t.Run("should return internal server error when request context data is missing", func(t *testing.T) {
+		middleware, serviceMock := getTestRoleMiddleware()
+
+		req := httptest.NewRequest("GET", "/", nil)
+
+		rr := httptest.NewRecorder()
+		handler := middleware.Use(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}),
+		)
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+		serviceMock.AssertNotCalled(t, "GetByUUID")
 	})
 }
