@@ -333,18 +333,23 @@ The template must ship a real one (or be honest and drop the tags).
 - `internal/controllers/*.go`
 - `go.mod`
 
-#### 2.6.3 De-duplicate factory wiring
+#### 2.6.3 Composition root & DI hygiene (architecture review)
 
-The `OAuthProviderRegistry` construction block (Google/GitHub/Microsoft) is
-copy-pasted in `users_factory.go` and `auth_factory.go`.
+Each controller factory currently rebuilds the whole dependency graph:
+`UsersFactory` and `AuthFactory` each construct their own `UsersRepository`,
+`AuthRepository`, OAuth provider registry, and `AuditService` — 3-4 instances
+of everything per process, and no single place where the app's dependencies
+exist. This covers (and replaces) the earlier "de-duplicate the OAuth registry
+block" task: with a composition root there is nothing left to duplicate.
 
 **Tasks**:
 
-- [ ] Extract OAuth registry construction into a shared factory/helper
-- [ ] Reuse it in `users_factory` and `auth_factory`
+- [ ] Build shared dependencies once in `cmd/main.go` (repositories, services, OAuth registry, middlewares) and pass them into thin per-controller factories — or drop the factories entirely
+- [ ] Factories/constructors return errors to `main` instead of `panic` (e.g. OAuth registry construction in `users_factory.go:34`)
 
 **Files to modify**:
 
+- `cmd/main.go`
 - `internal/factories/*.go`
 
 #### 2.6.4 Minor cleanups
@@ -353,6 +358,8 @@ copy-pasted in `users_factory.go` and `auth_factory.go`.
 
 - [ ] Trim over-verbose godoc to match the project's "Zero Comments" convention (e.g. `internal/api/response.go`)
 - [ ] Replace `// ==========` separators in `internal/domain/errors.go` (optional)
+- [ ] **Non-deterministic error mapping precedence** (architecture review) — `internal/api/errors.go:35-62`. `HandleError` runs five sequential `errors.As` blocks, so a wrapped chain matching two types silently takes the *last* match. Use `switch`/`else if` for deterministic precedence.
+- [ ] **Two sources of truth for the authenticated user UUID** (architecture review) — `internal/middlewares/auth_middleware.go:51-58`. `AuthMiddleware` writes the UUID both to the `UserUUIDKey` context value and to `RequestContextData.UserUUID`. Pick one and migrate readers.
 
 #### 2.6.5 Update `CLAUDE.md` to match the hardened conventions
 
@@ -365,7 +372,8 @@ re-introduces them.
 
 - [ ] Update the repository pattern to use propagated `context.Context` (drop the `context.Background()` example and the "should evolve to pass context" note) (after 2.6.1)
 - [ ] Document the real validation approach (after 2.6.2)
-- [ ] Document the shared OAuth registry factory (after 2.6.3)
+- [ ] Document the composition-root wiring (after 2.6.3)
+- [ ] Document the `OAuthLogin` service pattern — controllers stay thin (after 2.6.9)
 - [ ] Add the dependency rule for telemetry: `otel` only in infra/adapters, never in `services`/`controllers` (after 2.7)
 
 **Files to modify**:
@@ -380,17 +388,158 @@ half-finished behavior.
 
 **Tasks**:
 
-- [ ] **OAuth callback is not transactional** — `internal/controllers/auth_controller.go:271,289`. In the "create user + link provider" path, if `AddUserOAuthProvider` fails the code manually deletes the just-created user. Wrap create+link in a single DB transaction to avoid orphaned records, then remove the manual rollback.
-- [ ] **Rollback uses the cancelable request context** (Codex review, P2) — `internal/controllers/auth_controller.go:292`. Until the transaction above lands, the compensating `Delete` reuses `r.Context()`; if the request was canceled, the cleanup is canceled too and leaves an orphaned user. Use `context.WithoutCancel(r.Context())` (Go 1.21+) for the rollback. (Subsumed once the transaction is implemented.)
+> **Note:** the fixes *inside* the OAuth callback flow (missing transaction,
+> cancelable rollback context, swallowed lookup errors, state↔provider
+> binding) moved to [2.6.9](#269-extract-oauth-login-business-logic-into-the-service-layer)
+> — they get fixed once, in the logic's final home, as part of the extraction.
+
 - [ ] **Invalid-JSON error handling is weak** — `internal/controllers/auth_controller.go:52` (and similar decode sites). Decode failures return a bare error string; return a `domain.ValidationError` with field details. Fold into the 2.6.2 validation entry point.
 - [ ] **Role check hits the DB every request** — `internal/middlewares/role_middleware.go:25`. `RoleMiddleware` fetches the user from the database to read its role; carry the role in the JWT payload and read it from the token instead.
-- [ ] **No authorization on user delete** — `internal/services/users_service.go:62`. `Delete` has no check for whether the caller is deleting itself or is an admin. Add the authorization rule.
+- [ ] **No self-or-admin authorization on user read/update/delete** (security review, high) — `internal/controllers/users_controller.go:34-36`, `internal/services/users_service.go:50,66`. Any authenticated user can `GET`, `PUT`, or `DELETE` `/users/{uuid}` for **any** user. Update is takeover-class: change a victim's email to one the attacker controls at an OAuth provider, then OAuth-login — the attacker's provider account gets linked to the victim's user. Read is an IDOR leaking name/email/role (password hash is already excluded via `json:"-"`). Add one self-or-admin rule covering all three endpoints.
+- [ ] **OAuth flow has no browser-session binding (login CSRF) and no PKCE** (security review, medium-high) — `internal/controllers/auth_controller.go:125,155`. The state JWT proves the server minted it but nothing ties it to the browser that started the flow: an attacker can start the flow themselves, take the resulting callback URL (valid state + their code), and make a victim's browser visit it — silently logging the victim into the attacker's account. The open-redirect fix does not cover this. Set a random nonce in a short-lived cookie at login, embed it in the state payload, compare on callback. Also add PKCE via `oauth2.S256ChallengeOption`.
+- [ ] **Rate limiter keys on `r.RemoteAddr` including the port** (security review) — `internal/middlewares/rate_limit_middleware.go:38`. The raw `ip:port` string means every new TCP connection gets a fresh bucket, defeating per-IP limiting (and behind a proxy it keys on the proxy anyway). Use `net.SplitHostPort` and decide on a trusted-proxy header policy.
+- [ ] **No per-account login throttling + timing-based user enumeration** (security review) — `internal/services/auth_service.go:37-49`. Only the (currently broken) global IP limiter protects `/auth/login` from password guessing; add per-account throttling or lockout. Also `bcrypt.CompareHashAndPassword` only runs when the email exists — compare against a dummy hash on the miss path to equalize timing.
+- [ ] **Refresh cookie scoped to `/`** (security review) — `internal/controllers/auth_controller.go:355`. The refresh token is sent on every request instead of only the refresh endpoint. Set `Path: "/auth/refresh"`.
+- [ ] **CORS middleware nits** (security review) — `internal/middlewares/cors_middleware.go:44,69,73`. `Vary: Origin` is only set when the origin is allowed (shared-cache poisoning for the disallowed case — set it unconditionally); preflights return 200 even for disallowed origins; and the handler mutates `m.maxAge` per request — a data race under concurrency (resolve the default in the constructor instead).
+- [ ] **Open redirect via unvalidated `redirect_uri`** (security review) — `internal/controllers/auth_controller.go:137,339`. `redirect_uri` is read raw from the query string on `LoginWithOAuthProvider`, signed into the OAuth state token unchecked, and passed straight to `http.Redirect` at the end of `OAuthProviderCallback`. Signing doesn't help — an attacker gets a legitimately-signed state for any URL just by using the normal login link with their own `redirect_uri`. Add an `OAUTH_CALLBACK_ALLOW_LIST` env var (CSV of exact allowed redirect URIs) and validate against it at login time (before minting the state token), failing closed if unset/empty.
+- [ ] **Unset `JWT_SECRET` silently signs with an empty key** (security review, critical) — `internal/services/auth_service.go:78,143`. Both `GenerateToken` and `VerifyToken` call `os.Getenv(JWT_SECRET_KEY)` with no validation; if the var is unset, HMAC-SHA256 signs/verifies with `[]byte("")` — a known key, letting anyone forge a valid access token for any user. Fail fast at startup (refuse to boot) if `JWT_SECRET` is empty or below a minimum length. Fold into 2.6.7's centralized config validation.
+- [ ] **Unchecked claim type assertions in `VerifyToken` panic on malformed tokens** — `internal/services/auth_service.go:86-88`. `claims["sub"].(string)`, `claims["aud"].(string)`, `int64(claims["exp"].(float64))` run before the `ok`/`token.Valid` check on line 90; a token with a missing/wrong-typed claim panics instead of returning an error — a DoS surface since this path is reachable via attacker-controlled OAuth state and refresh tokens. Use two-value assertions (`v, ok := claims["sub"].(string)`) and return `ErrInvalidToken` on failure.
+- [ ] **GitHub `EmailVerified` is hardcoded `true`** (security review) — `internal/providers/github_oauth_provider.go:76`. Sourced from `GET /user`, whose public `email` field isn't attested as verified by GitHub. The controller's Case-2 account-linking logic relies on `EmailVerified` specifically to prevent account-takeover-by-email-match — for GitHub that gate is currently a no-op. Call `GET /user/emails` instead and check the `verified`+`primary` flags for the matching address.
+- [ ] **OAuth token exchange has no timeout** — `internal/providers/{google,github,microsoft}_oauth_provider.go:36`. `p.config.Exchange(ctx, code)` falls back to `http.DefaultClient` (no timeout) unless the context carries `oauth2.HTTPClient`, unlike the userinfo fetch which already sets one. A slow/unresponsive provider token endpoint can hang the request indefinitely. Set an `oauth2.HTTPClient` with a timeout (e.g. 10s, matching the userinfo client) on the context passed to `Exchange`.
 
 **Files to modify**:
 
 - `internal/controllers/auth_controller.go`
+- `internal/controllers/users_controller.go`
 - `internal/middlewares/role_middleware.go`
+- `internal/middlewares/rate_limit_middleware.go`
+- `internal/middlewares/cors_middleware.go`
 - `internal/services/users_service.go`
+- `internal/services/auth_service.go`
+- `internal/providers/github_oauth_provider.go`
+- `internal/providers/{google,github,microsoft}_oauth_provider.go`
+- `.env.example`
+
+#### 2.6.7 Centralized environment configuration
+
+Env var reading is currently scattered `os.Getenv` calls across the codebase
+(`auth_controller.go`'s `setAuthCookies`, `auth_service.go`'s JWT secret,
+`config/oauth.go`, `cors_factory.go`'s `parseAllowedOrigins`, the rate-limit
+factory, etc.), each with its own ad-hoc parsing and no shared validation. In a
+*template* this means every bootstrap re-invents (or forgets) validation.
+
+**Tasks**:
+
+- [ ] Create `internal/config/config.go` with a `Config` struct covering all env vars (JWT secret, CORS origins, rate limits, OAuth client IDs/secrets, `API_ENV`, DB connection, etc.)
+- [ ] Implement a single `Load()` that parses (CSV lists, durations, bools) and validates (fail-fast) at startup — refuse to boot on missing/invalid required values (e.g. empty `JWT_SECRET`)
+- [ ] Call `config.Load()` once in `cmd/main.go` and inject the relevant sub-config into each factory instead of `os.Getenv` calls
+- [ ] Remove scattered `os.Getenv` calls from `auth_controller.go`, `auth_service.go`, `config/oauth.go`, `cors_factory.go`, rate-limit factory
+- [ ] Add config validation tests (missing/invalid env vars fail fast with a clear error)
+
+**Files to modify**:
+
+- `internal/config/config.go` (create)
+- `cmd/main.go`
+- `internal/controllers/auth_controller.go`
+- `internal/services/auth_service.go`
+- `internal/config/oauth.go`
+- `internal/factories/cors_factory.go`
+- `internal/factories/*.go` (rate limit and others reading env vars)
+
+#### 2.6.8 Refresh token revocation
+
+Refresh tokens are pure stateless JWTs today — `RefreshToken()`
+(`internal/services/auth_service.go:102`) issues a new pair on rotation but
+never invalidates the old one, and `Logout` only clears cookies client-side.
+A stolen refresh token remains valid for the full 7-day
+`TokenExpirationRefresh` window with no server-side revocation path.
+
+Not strictly mandatory (many APIs accept this residual risk with short-lived
+access tokens), but worth closing given the long refresh window already
+exists. Default to the cheaper option: track a single active refresh token
+`jti` per user rather than a growing revocation table — simpler, no
+unbounded storage, at the cost of only one active session per user. A full
+revocation store (dedicated table, checked on every refresh) is the upgrade
+path if/when multi-device sessions are needed.
+
+**Tasks**:
+
+- [ ] Decide: single-`jti`-per-user (default) vs. full revocation table (if multi-device sessions matter)
+- [ ] Add `current_refresh_jti` (or similar) column to the `users` table directly in `postgres/migrations/000001_init_db.up.sql`/`.down.sql` — this is still template setup, not a real app in production, so fold it into the initial migration rather than adding a new one (new migration files are for once the template is bootstrapped into a real app)
+- [ ] Include a `jti` claim when generating refresh tokens (`GenerateToken`)
+- [ ] On `RefreshToken()`, verify the presented `jti` matches the stored one before issuing a new pair; overwrite on rotation
+- [ ] On `Logout`, clear the stored `jti` server-side (not just client-side cookies)
+- [ ] **Re-check the user on refresh** (security review) — `RefreshToken()` issues a new pair from the token subject alone; a deleted user keeps working tokens for the full refresh window. Verify the user still exists before issuing new tokens. (Comes for free with the `jti` lookup above.)
+- [ ] **Cap the total session lifetime** (security review) — every refresh issues a fresh 7-day refresh token, so a stolen token can be renewed forever. Carry an `auth_time` (original login timestamp) claim through rotations and reject refresh once an absolute maximum session age is exceeded.
+- [ ] Add tests: reused/stale refresh token is rejected after rotation; logout invalidates the refresh token server-side; refresh fails for a deleted user; refresh fails past the absolute session lifetime
+
+**Files to modify**:
+
+- `postgres/migrations/000001_init_db.up.sql`
+- `postgres/migrations/000001_init_db.down.sql`
+- `internal/services/auth_service.go`
+- `internal/controllers/auth_controller.go`
+- `internal/domain/{auth,users}.go`
+- `internal/repositories/{auth,users}_repository.go`
+
+#### 2.6.9 Extract OAuth login business logic into the service layer
+
+**Architecture review — do this BEFORE the remaining OAuth callback fixes in
+2.6.6**, so the logic is fixed once in its final home instead of twice.
+
+`OAuthProviderCallback` (`internal/controllers/auth_controller.go:155-340`) is
+~185 lines of authentication business logic living in the controller: the
+three account-resolution cases, the email-verification takeover gate,
+create+link orchestration with manual rollback, and token minting. That's why
+the controller needs `usersService` injected, why the transaction fix is
+awkward (controllers can't own DB transactions cleanly), and why this logic is
+only testable through HTTP-shaped tests. Extract a single
+`AuthService.OAuthLogin(ctx, provider, code, state) (AuthTokens, error)` and
+leave the controller with decode → call → set cookies → redirect.
+
+The following previously-separate fixes are **folded in here** (moved from
+2.6.6):
+
+- [ ] **OAuth callback is not transactional** — in the "create user + link provider" path, if `AddUserOAuthProvider` fails the code manually deletes the just-created user (`auth_controller.go:277-301`), and that compensating `Delete` reuses the cancelable `r.Context()` — a canceled request leaves an orphaned user. Wrap create+link in a single DB transaction inside `OAuthLogin`; the manual rollback (and its context problem) disappears.
+- [ ] **Lookup errors silently swallowed** — `GetUserOAuthProvider` and `GetByEmail` errors are discarded (`_`) at `auth_controller.go:232,248`; a transient DB failure falls through into account-creation/linking instead of surfacing a 500. Branch on `domain.NotFoundError` explicitly and return anything else as an error.
+- [ ] **State token not bound to the path's provider** — the state JWT's `Subject` is the provider name at login, but nothing compares it to the callback's provider (`VerifyToken` checks only signature/expiry/audience), so a `google` state is accepted on `/auth/github/callback`. Compare `Subject` to the provider inside `OAuthLogin` and reject on mismatch.
+
+**Tasks**:
+
+- [ ] Add `OAuthLogin` to `domain.AuthService`; move Cases 1/2/3 and the email-verified gate into `services/auth_service.go`
+- [ ] Add transaction support to the repository layer for the create+link path (fixes the transactional item above)
+- [ ] Fix the swallowed-lookup and state↔provider checks as part of the move
+- [ ] Slim `OAuthProviderCallback` to decode/validate → `OAuthLogin` → cookies → redirect; drop `usersService` from `AuthController` if no longer needed
+- [ ] Restructure tests: business cases become service unit tests; the controller test covers only HTTP concerns
+
+**Files to modify**:
+
+- `internal/domain/auth.go`
+- `internal/services/auth_service.go`
+- `internal/controllers/auth_controller.go`
+- `internal/repositories/auth_repository.go`
+- `internal/mocks/*`
+
+#### 2.6.10 Narrow token interfaces (ISP)
+
+`domain.AuthService` has 10 methods. `AuthMiddleware` depends on the whole
+interface but calls only `VerifyToken`; `GenerateToken` is only public on the
+interface because the controller currently mints tokens itself (resolved by
+2.6.9). `RoleMiddleware` similarly takes the full `UsersService` for one
+`GetByUUID` — which the role-in-JWT fix in 2.6.6 removes anyway.
+
+**Tasks**:
+
+- [ ] Split token generate/verify into a narrow interface (e.g. `domain.TokenService`, with middleware consuming only a `TokenVerifier` view)
+- [ ] Update `AuthMiddleware` to depend on the narrow interface; drop `GenerateToken` from the public `AuthService` surface if 2.6.9 makes it internal
+- [ ] Shrink mocks accordingly
+
+**Files to modify**:
+
+- `internal/domain/auth.go`
+- `internal/middlewares/auth_middleware.go`
+- `internal/services/auth_service.go`
+- `internal/mocks/*`
 
 ---
 
