@@ -22,7 +22,7 @@ func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMoc
 	usersServiceMock := new(mocks.UsersServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, usersServiceMock, auditMock)
+	controller := controllers.NewAuthController(authServiceMock, usersServiceMock, auditMock, true)
 	return controller, authServiceMock, usersServiceMock, auditMock
 }
 
@@ -521,7 +521,7 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
 			Return(nil, errors.New("provider error")).Once()
 
-		controller := controllers.NewAuthController(authServiceMock, usersServiceMock, auditMock)
+		controller := controllers.NewAuthController(authServiceMock, usersServiceMock, auditMock, true)
 
 		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
 		req.SetPathValue("provider", string(provider))
@@ -571,7 +571,7 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		authServiceMock.On("GetOAuthProviderUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), provider, code).
 			Return(userInfo, nil).Once()
 
-		controller := controllers.NewAuthController(authServiceMock, usersServiceMock, auditMock)
+		controller := controllers.NewAuthController(authServiceMock, usersServiceMock, auditMock, true)
 
 		w, req := getControllerArgs("GET", "/auth/google/callback?state="+state+"&code="+code, nil)
 		req.SetPathValue("provider", string(provider))

@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"go-net-http-auth-base/internal/env"
+	"go-net-http-auth-base/config"
 	"go-net-http-auth-base/internal/factories"
 	"go-net-http-auth-base/internal/infra"
 	"go-net-http-auth-base/internal/logger"
@@ -40,9 +40,16 @@ func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, f
 
 func main() {
 	err := godotenv.Load()
-	logger.Setup()
 
-	if err != nil && os.Getenv("API_ENV") != "production" {
+	cfg, cfgErr := config.Load()
+	if cfgErr != nil {
+		slog.Error("Failed to load configuration", "error", cfgErr)
+		os.Exit(1)
+	}
+
+	logger.Setup(cfg.IsProduction())
+
+	if err != nil && !cfg.IsProduction() {
 		slog.Warn("Warning: .env file not found or failed to load")
 	}
 
@@ -53,7 +60,7 @@ func main() {
 	)
 	defer stopBackgroundTasks()
 
-	pool, err := postgres.NewConnectionPool(ctx)
+	pool, err := postgres.NewConnectionPool(ctx, cfg.Database)
 	if err != nil {
 		slog.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
@@ -82,13 +89,13 @@ func main() {
 	// Log pool stats periodically for health monitoring — stops on shutdown signal.
 	runEvery(
 		ctx, &wg,
-		env.GetEnvAsDuration("DB_STATS_LOG_INTERVAL", 30*time.Second),
+		cfg.DBStatsLogInterval,
 		func() {
 			postgres.LogPoolStats(pool)
 		},
 	)
 
-	deps, err := factories.NewDependencies(pool)
+	deps, err := factories.NewDependencies(pool, cfg)
 	if err != nil {
 		slog.Error("Failed to initialize application dependencies", "error", err)
 		os.Exit(1)
@@ -96,12 +103,12 @@ func main() {
 
 	mux := http.NewServeMux()
 	factories.UsersFactory(deps).RegisterRoutes(mux)
-	factories.AuthFactory(deps).RegisterRoutes(mux)
+	factories.AuthFactory(deps, cfg).RegisterRoutes(mux)
 	factories.HealthFactory(deps).RegisterRoutes(mux)
 	factories.AuditFactory(deps).RegisterRoutes(mux)
 
-	rateLimitMiddleware := factories.RateLimitFactory()
-	corsMiddleware := factories.CORSFactory()
+	rateLimitMiddleware := factories.RateLimitFactory(cfg.RateLimit)
+	corsMiddleware := factories.CORSFactory(cfg.CORS)
 	loggerMiddleware := factories.LoggerFactory()
 	requestIDMiddleware := factories.RequestUUIDFactory()
 	requestContextDataMiddleware := factories.RequestContextDataFactory()
@@ -117,10 +124,7 @@ func main() {
 		),
 	)
 
-	port := os.Getenv("API_PORT")
-	if port == "" {
-		port = "8080"
-	}
+	port := cfg.Port
 
 	server := &http.Server{
 		Addr:    ":" + port,

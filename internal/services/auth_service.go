@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"os"
 	"time"
 
 	"go-net-http-auth-base/internal/domain"
@@ -12,25 +11,26 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const JWT_SECRET_KEY = "JWT_SECRET"
-
 var ErrInvalidToken = domain.NewUnauthorizedError("auth.invalidToken")
 
 type authService struct {
 	usersService          domain.UsersService
 	authRepository        domain.AuthRepository
 	oauthProviderRegistry domain.OAuthProviderRegistry
+	jwtSecret             string
 }
 
 func NewAuthService(
 	usersService domain.UsersService,
 	authRepository domain.AuthRepository,
 	oauthProviderRegistry domain.OAuthProviderRegistry,
+	jwtSecret string,
 ) domain.AuthService {
 	return &authService{
 		usersService,
 		authRepository,
 		oauthProviderRegistry,
+		jwtSecret,
 	}
 }
 
@@ -75,7 +75,7 @@ func (s *authService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
 		}
-		return []byte(os.Getenv(JWT_SECRET_KEY)), nil
+		return []byte(s.jwtSecret), nil
 	})
 
 	if err != nil {
@@ -140,7 +140,7 @@ func (s *authService) GenerateToken(ctx context.Context, dto domain.GenerateToke
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedString, err := token.SignedString([]byte(os.Getenv(JWT_SECRET_KEY)))
+	signedString, err := token.SignedString([]byte(s.jwtSecret))
 
 	if err != nil {
 		// Inner service usage of GenerateToken checks this error and return this

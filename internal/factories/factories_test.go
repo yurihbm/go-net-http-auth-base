@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go-net-http-auth-base/config"
 	"go-net-http-auth-base/internal/controllers"
 	"go-net-http-auth-base/internal/factories"
 	"go-net-http-auth-base/internal/middlewares"
@@ -12,12 +13,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// newTestConfig builds a minimal config with all required fields set.
+func newTestConfig() *config.Config {
+	return &config.Config{
+		JWTSecret: "test-secret-key",
+	}
+}
+
 // newTestDependencies builds the shared dependency graph with a nil pool.
 // Passing nil is safe as long as we don't invoke methods that use the DB.
 // The composition root itself only constructs the objects.
 func newTestDependencies(t *testing.T) *factories.Dependencies {
 	t.Helper()
-	deps, err := factories.NewDependencies(nil)
+	deps, err := factories.NewDependencies(nil, newTestConfig())
 	assert.NoError(t, err)
 	assert.NotNil(t, deps)
 	return deps
@@ -34,7 +42,7 @@ func TestNewDependencies(t *testing.T) {
 }
 
 func TestAuthFactory(t *testing.T) {
-	controller := factories.AuthFactory(newTestDependencies(t))
+	controller := factories.AuthFactory(newTestDependencies(t), newTestConfig())
 	assert.NotNil(t, controller)
 	assert.IsType(t, &controllers.AuthController{}, controller)
 }
@@ -65,20 +73,21 @@ func TestLoggerFactory(t *testing.T) {
 
 func TestCORSFactory(t *testing.T) {
 	t.Run("default values", func(t *testing.T) {
-		t.Setenv("CORS_ALLOWED_ORIGINS", "")
-		t.Setenv("CORS_ALLOWED_METHODS", "")
-
-		middleware := factories.CORSFactory()
+		middleware := factories.CORSFactory(config.CORSConfig{
+			AllowedOrigins: []string{},
+			AllowedMethods: []string{},
+		})
 		assert.NotNil(t, middleware)
 		assert.IsType(t, &middlewares.CORSMiddleware{}, middleware)
 	})
 
-	t.Run("with env vars", func(t *testing.T) {
+	t.Run("with configured values", func(t *testing.T) {
 		origin := "http://example.com"
-		t.Setenv("CORS_ALLOWED_ORIGINS", origin)
-		t.Setenv("CORS_ALLOWED_METHODS", "GET,POST")
 
-		middleware := factories.CORSFactory()
+		middleware := factories.CORSFactory(config.CORSConfig{
+			AllowedOrigins: []string{origin},
+			AllowedMethods: []string{"GET", "POST"},
+		})
 		assert.NotNil(t, middleware)
 
 		// Verify behavior
@@ -98,7 +107,10 @@ func TestCORSFactory(t *testing.T) {
 }
 
 func TestRateLimitFactory(t *testing.T) {
-	middleware := factories.RateLimitFactory()
+	middleware := factories.RateLimitFactory(config.RateLimitConfig{
+		RequestsPerSecond: 20.0,
+		Burst:             50,
+	})
 
 	assert.NotNil(t, middleware)
 	assert.IsType(t, &middlewares.RateLimitMiddleware{}, middleware)

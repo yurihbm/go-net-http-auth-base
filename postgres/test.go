@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"go-net-http-auth-base/config"
+
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -79,7 +81,7 @@ func NewTestPool(ctx context.Context) (*pgxpool.Pool, func(), error) {
 		return nil, nil, fmt.Errorf("failed to set DATABASE_URL: %w", err)
 	}
 
-	pool, err := NewConnectionPool(ctx)
+	pool, err := NewConnectionPool(ctx, config.LoadDatabaseConfig())
 	if err != nil {
 		terminate()
 		return nil, nil, fmt.Errorf("failed to create connection pool: %w", err)

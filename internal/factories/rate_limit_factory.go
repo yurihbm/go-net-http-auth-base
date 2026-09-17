@@ -1,15 +1,12 @@
 package factories
 
 import (
-	"go-net-http-auth-base/internal/env"
+	"go-net-http-auth-base/config"
 	"go-net-http-auth-base/internal/middlewares"
 
 	"golang.org/x/time/rate"
 )
 
-func RateLimitFactory() middlewares.GlobalMiddleware {
-	rps := env.GetEnvAsFloat("RATE_LIMIT_REQUESTS_PER_SECOND", 20.0)
-	burst := env.GetEnvAsInt("RATE_LIMIT_BURST", 50)
-
-	return middlewares.NewRateLimitMiddleware(rate.Limit(rps), burst)
+func RateLimitFactory(rlCfg config.RateLimitConfig) middlewares.GlobalMiddleware {
+	return middlewares.NewRateLimitMiddleware(rate.Limit(rlCfg.RequestsPerSecond), rlCfg.Burst)
 }

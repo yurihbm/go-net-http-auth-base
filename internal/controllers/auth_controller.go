@@ -3,7 +3,6 @@ package controllers
 import (
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"go-net-http-auth-base/internal/api"
@@ -18,9 +17,10 @@ var ErrInvalidOAuthProvider = domain.NewValidationError(
 )
 
 type AuthController struct {
-	authService  domain.AuthService
-	usersService domain.UsersService
-	auditService domain.AuditService
+	authService    domain.AuthService
+	usersService   domain.UsersService
+	auditService   domain.AuditService
+	isSecureCookie bool
 }
 
 var _ Controller = (*AuthController)(nil)
@@ -29,11 +29,13 @@ func NewAuthController(
 	authService domain.AuthService,
 	usersService domain.UsersService,
 	auditService domain.AuditService,
+	isSecureCookie bool,
 ) *AuthController {
 	return &AuthController{
 		authService,
 		usersService,
 		auditService,
+		isSecureCookie,
 	}
 }
 
@@ -340,7 +342,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 }
 
 func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.AuthTokens) {
-	isSecure := os.Getenv("API_ENV") != "development"
+	isSecure := c.isSecureCookie
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "access_token",

@@ -22,7 +22,7 @@ type Dependencies struct {
 	AdminRoleMiddleware middlewares.HandlerMiddleware
 }
 
-func NewDependencies(pool *pgxpool.Pool) (*Dependencies, error) {
+func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, error) {
 	usersRepository := repositories.NewUsersPostgresRepository(pool)
 	usersService := services.NewUserService(usersRepository)
 
@@ -30,13 +30,13 @@ func NewDependencies(pool *pgxpool.Pool) (*Dependencies, error) {
 	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
 		map[domain.OAuthProviderName]domain.OAuthProvider{
 			domain.OAuthProviderGoogle: providers.NewGoogleOAuthProvider(
-				config.NewGoogleOAuthConfig(),
+				config.NewGoogleOAuthConfig(cfg.OAuth.Google, cfg.APIURL),
 			),
 			domain.OAuthProviderGitHub: providers.NewGitHubOAuthProvider(
-				config.NewGitHubOAuthConfig(),
+				config.NewGitHubOAuthConfig(cfg.OAuth.GitHub, cfg.APIURL),
 			),
 			domain.OAuthProviderMicrosoft: providers.NewMicrosoftOAuthProvider(
-				config.NewMicrosoftOAuthConfig(),
+				config.NewMicrosoftOAuthConfig(cfg.OAuth.Microsoft, cfg.APIURL),
 			),
 		},
 	)
@@ -47,16 +47,17 @@ func NewDependencies(pool *pgxpool.Pool) (*Dependencies, error) {
 		usersService,
 		authRepository,
 		oauthProviderRegistry,
+		cfg.JWTSecret,
 	)
 
 	auditRepository := repositories.NewAuditPostgresRepository(pool)
 	auditService := services.NewAuditService(auditRepository)
 
 	return &Dependencies{
-		Pool:           pool,
-		UsersService:   usersService,
-		AuthService:    authService,
-		AuditService:   auditService,
+		Pool:                pool,
+		UsersService:        usersService,
+		AuthService:         authService,
+		AuditService:        auditService,
 		AuthMiddleware:      middlewares.NewAuthMiddleware(authService),
 		AdminRoleMiddleware: middlewares.NewRoleMiddleware(usersService, []domain.UserRole{domain.RoleAdmin}),
 	}, nil
