@@ -35,25 +35,17 @@ func HandleError(ctx context.Context, w http.ResponseWriter, err error) {
 	if errors.As(err, &notFoundErr) {
 		statusCode = http.StatusNotFound
 		message = notFoundErr.Error()
-	}
-
-	if errors.As(err, &validationErr) {
+	} else if errors.As(err, &validationErr) {
 		statusCode = http.StatusBadRequest
 		message = validationErr.Error()
 		details = validationErr.Details()
-	}
-
-	if errors.As(err, &conflictErr) {
+	} else if errors.As(err, &conflictErr) {
 		statusCode = http.StatusConflict
 		message = conflictErr.Error()
-	}
-
-	if errors.As(err, &unauthorizedErr) {
+	} else if errors.As(err, &unauthorizedErr) {
 		statusCode = http.StatusUnauthorized
 		message = unauthorizedErr.Error()
-	}
-
-	if errors.As(err, &internalServerErr) {
+	} else if errors.As(err, &internalServerErr) {
 		statusCode = http.StatusInternalServerError
 		message = internalServerErr.Error()
 		if hasReqContextData {

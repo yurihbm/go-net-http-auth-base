@@ -81,6 +81,20 @@ func TestHandleError(t *testing.T) {
 				Error: "internalServerError",
 			},
 		},
+		{
+			name: "WrappedErrorMatchesFirstDeclaredTypeInChain",
+			err: domain.NewInternalServerError("internal.error", domain.NewValidationError(
+				"validation.failed",
+				map[string]string{"field": "required"},
+			)),
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: api.ResponseBody[any]{
+				Error: "validation.failed",
+				Details: map[string]string{
+					"field": "required",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
