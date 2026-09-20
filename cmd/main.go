@@ -41,13 +41,14 @@ func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, f
 func main() {
 	err := godotenv.Load()
 
+	// Single os.Getenv call before config.Load, so config errors can be logged properly.
+	logger.Setup(os.Getenv("API_ENV") == "production")
+
 	cfg, cfgErr := config.Load()
 	if cfgErr != nil {
 		slog.Error("Failed to load configuration", "error", cfgErr)
 		os.Exit(1)
 	}
-
-	logger.Setup(cfg.IsProduction())
 
 	if err != nil && !cfg.IsProduction() {
 		slog.Warn("Warning: .env file not found or failed to load")
