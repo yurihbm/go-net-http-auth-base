@@ -356,10 +356,10 @@ block" task: with a composition root there is nothing left to duplicate.
 
 **Tasks**:
 
-- [ ] Trim over-verbose godoc to match the project's "Zero Comments" convention (e.g. `internal/api/response.go`)
-- [ ] Replace `// ==========` separators in `internal/domain/errors.go` (optional)
-- [ ] **Non-deterministic error mapping precedence** (architecture review) — `internal/api/errors.go:35-62`. `HandleError` runs five sequential `errors.As` blocks, so a wrapped chain matching two types silently takes the *last* match. Use `switch`/`else if` for deterministic precedence.
-- [ ] **Two sources of truth for the authenticated user UUID** (architecture review) — `internal/middlewares/auth_middleware.go:51-58`. `AuthMiddleware` writes the UUID both to the `UserUUIDKey` context value and to `RequestContextData.UserUUID`. Pick one and migrate readers.
+- [x] Trim over-verbose godoc to match the project's "Zero Comments" convention (e.g. `internal/api/response.go`)
+- [x] Replace `// ==========` separators in `internal/domain/errors.go` (optional)
+- [x] **Non-deterministic error mapping precedence** (architecture review) — `internal/api/errors.go:35-62`. `HandleError` runs five sequential `errors.As` blocks, so a wrapped chain matching two types silently takes the *last* match. Use `switch`/`else if` for deterministic precedence.
+- [x] **Two sources of truth for the authenticated user UUID** (architecture review) — `internal/middlewares/auth_middleware.go:51-58`. `AuthMiddleware` writes the UUID both to the `UserUUIDKey` context value and to `RequestContextData.UserUUID`. Pick one and migrate readers.
 
 #### 2.6.5 Update `CLAUDE.md` to match the hardened conventions
 
