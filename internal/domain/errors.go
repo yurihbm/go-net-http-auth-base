@@ -14,8 +14,6 @@ func (e *NotFoundError) Error() string {
 
 var _ error = (*NotFoundError)(nil)
 
-// ==========
-
 type ValidationError struct {
 	details map[string]string
 	message string
@@ -38,8 +36,6 @@ func (e *ValidationError) Error() string {
 
 var _ error = (*ValidationError)(nil)
 
-// ==========
-
 type ConflictError struct {
 	message string
 }
@@ -54,8 +50,6 @@ func (e *ConflictError) Error() string {
 
 var _ error = (*ConflictError)(nil)
 
-// ==========
-
 type UnauthorizedError struct {
 	message string
 }
@@ -69,8 +63,6 @@ func (e *UnauthorizedError) Error() string {
 }
 
 var _ error = (*UnauthorizedError)(nil)
-
-// ==========
 
 type InternalServerError struct {
 	message string
