@@ -47,13 +47,12 @@ func TestAuthMiddleware_Use(t *testing.T) {
 			Subject: userUUID,
 		}, nil)
 
+		reqContextData := &shared.RequestContextData{}
+
 		// Create a test handler that will be wrapped by the middleware
 		handlerCalled := false
 		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			handlerCalled = true
-			// Verify that the user UUID was added to the context
-			contextUserUUID := r.Context().Value(middlewares.UserUUIDKey)
-			assert.Equal(t, userUUID, contextUserUUID)
 			w.WriteHeader(http.StatusOK)
 		})
 
@@ -66,6 +65,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 			Name:  "access_token",
 			Value: token,
 		})
+		ctx := context.WithValue(req.Context(), shared.RequestContextDataKey, reqContextData)
+		req = req.WithContext(ctx)
 		w := httptest.NewRecorder()
 
 		// Execute the handler
@@ -73,6 +74,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 
 		assert.True(t, handlerCalled)
 		assert.Equal(t, http.StatusOK, w.Code)
+		// Verify that the user UUID was added to the shared request context data
+		assert.Equal(t, userUUID, reqContextData.UserUUID)
 		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,

@@ -6,6 +6,7 @@ import (
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
+	"go-net-http-auth-base/internal/shared"
 )
 
 type UsersController struct {
@@ -73,8 +74,8 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
-	userUUID, ok := r.Context().Value(middlewares.UserUUIDKey).(string)
-	if !ok {
+	reqContextData, ok := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData)
+	if !ok || reqContextData.UserUUID == "" {
 		api.HandleError(r.Context(), w,
 			domain.NewUnauthorizedError(
 				"user.getMe.unauthorized",
@@ -83,7 +84,7 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := c.userService.GetByUUID(r.Context(), userUUID)
+	user, err := c.userService.GetByUUID(r.Context(), reqContextData.UserUUID)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return

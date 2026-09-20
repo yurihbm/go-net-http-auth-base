@@ -9,8 +9,8 @@ import (
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/controllers"
 	"go-net-http-auth-base/internal/domain"
-	"go-net-http-auth-base/internal/middlewares"
 	"go-net-http-auth-base/internal/mocks"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -163,7 +163,9 @@ func TestUsersController_GetMe(t *testing.T) {
 
 		w, req := getControllerArgs("GET", "/users/me", nil)
 		// Inject user UUID into context
-		ctx := context.WithValue(req.Context(), middlewares.UserUUIDKey, "test-uuid")
+		ctx := context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{
+			UserUUID: "test-uuid",
+		})
 		req = req.WithContext(ctx)
 
 		controller.GetMe(w, req)
@@ -206,7 +208,9 @@ func TestUsersController_GetMe(t *testing.T) {
 		)
 
 		w, req := getControllerArgs("GET", "/users/me", nil)
-		ctx := context.WithValue(req.Context(), middlewares.UserUUIDKey, "test-uuid")
+		ctx := context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{
+			UserUUID: "test-uuid",
+		})
 		req = req.WithContext(ctx)
 
 		controller.GetMe(w, req)

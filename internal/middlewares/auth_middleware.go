@@ -1,18 +1,11 @@
 package middlewares
 
 import (
-	"context"
 	"net/http"
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/shared"
-)
-
-type AuthContextKey string
-
-const (
-	UserUUIDKey AuthContextKey = "userUUID"
 )
 
 type AuthMiddleware struct {
@@ -54,7 +47,6 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			reqContextData.UserUUID = tokenData.Subject
 		}
 
-		ctx := context.WithValue(r.Context(), UserUUIDKey, tokenData.Subject)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r)
 	}
 }
