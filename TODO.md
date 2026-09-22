@@ -370,9 +370,9 @@ re-introduces them.
 
 **Tasks**:
 
-- [ ] Update the repository pattern to use propagated `context.Context` (drop the `context.Background()` example and the "should evolve to pass context" note) (after 2.6.1)
-- [ ] Document the real validation approach (after 2.6.2)
-- [ ] Document the composition-root wiring (after 2.6.3)
+- [x] Update the repository pattern to use propagated `context.Context` (drop the `context.Background()` example and the "should evolve to pass context" note) (after 2.6.1)
+- [x] Document the real validation approach (after 2.6.2)
+- [x] Document the composition-root wiring (after 2.6.3)
 - [ ] Document the `OAuthLogin` service pattern — controllers stay thin (after 2.6.9)
 - [ ] Add the dependency rule for telemetry: `otel` only in infra/adapters, never in `services`/`controllers` (after 2.7)
 
