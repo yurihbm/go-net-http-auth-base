@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -35,7 +36,10 @@ func NewRateLimitMiddleware(r rate.Limit, b int) GlobalMiddleware {
 
 func (m *RateLimitMiddleware) Use(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			ip = r.RemoteAddr
+		}
 
 		limiter := m.getVisitor(ip)
 
