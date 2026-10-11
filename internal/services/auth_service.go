@@ -221,7 +221,8 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		return nil, domain.NewUnauthorizedError("auth.oauthLogin.providerMismatch")
 	}
 
-	redirectURI, ok := tokenData.Payload.(map[string]any)["redirect_uri"].(string)
+	payload, _ := tokenData.Payload.(map[string]any)
+	redirectURI, ok := payload["redirect_uri"].(string)
 	if !ok {
 		return nil, domain.NewValidationError(
 			"auth.providerCallback.invalidStatePayload",

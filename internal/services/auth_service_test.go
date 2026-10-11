@@ -1014,6 +1014,31 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		assert.Nil(t, result)
 	})
 
+	t.Run("error - non-object state payload", func(t *testing.T) {
+		for name, payload := range map[string]any{"nil": nil, "string": "not-an-object"} {
+			t.Run(name, func(t *testing.T) {
+				usersService := new(mocks.UsersServiceMock)
+				authRepo := new(mocks.AuthRepositoryMock)
+				oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
+				service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+
+				state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+					Subject:  string(provider),
+					Audience: domain.TokenAudienceOAuthState,
+					Payload:  payload,
+				})
+				require.NoError(t, err)
+
+				result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+
+				var validationErr *domain.ValidationError
+				require.True(t, errors.As(err, &validationErr))
+				assert.Equal(t, "auth.providerCallback.invalidStatePayload", err.Error())
+				assert.Nil(t, result)
+			})
+		}
+	})
+
 	t.Run("error - provider userinfo fetch fails", func(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
