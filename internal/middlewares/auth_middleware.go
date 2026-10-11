@@ -20,7 +20,7 @@ func NewAuthMiddleware(authService domain.AuthService) HandlerMiddleware {
 
 func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accessToken, err := r.Cookie("access_token")
+		accessToken, err := r.Cookie(api.AccessTokenCookieName)
 		if err != nil {
 			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 				Message: "auth.unauthorized",

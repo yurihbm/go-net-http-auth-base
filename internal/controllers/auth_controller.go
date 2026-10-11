@@ -48,7 +48,7 @@ func NewAuthController(
 
 func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /auth/login", c.Login)
-	router.HandleFunc("POST /auth/refresh", c.RefreshToken)
+	router.HandleFunc("POST "+api.RefreshTokenCookiePath, c.RefreshToken)
 	router.HandleFunc("POST /auth/logout", c.Logout)
 	router.HandleFunc("GET /auth/{provider}/login", c.LoginWithOAuthProvider)
 	router.HandleFunc("GET /auth/{provider}/callback", c.OAuthProviderCallback)
@@ -106,7 +106,7 @@ func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	refreshToken, err := r.Cookie("refresh_token")
+	refreshToken, err := r.Cookie(api.RefreshTokenCookieName)
 	if err != nil {
 		api.HandleError(r.Context(), w,
 			domain.NewUnauthorizedError(
@@ -231,9 +231,9 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 	isSecure := c.isSecureCookie
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
+		Name:     api.AccessTokenCookieName,
 		Value:    tokens.AccessToken,
-		Path:     "/",
+		Path:     api.AccessTokenCookiePath,
 		HttpOnly: true,
 		Expires:  time.Time.Add(time.Now(), domain.TokenExpirationAccess),
 		SameSite: http.SameSiteStrictMode,
@@ -241,9 +241,9 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 	})
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
+		Name:     api.RefreshTokenCookieName,
 		Value:    tokens.RefreshToken,
-		Path:     "/auth/refresh",
+		Path:     api.RefreshTokenCookiePath,
 		HttpOnly: true,
 		Expires:  time.Time.Add(time.Now(), domain.TokenExpirationRefresh),
 		SameSite: http.SameSiteStrictMode,
@@ -253,17 +253,17 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 
 func (c *AuthController) deleteAuthCookies(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
+		Name:     api.AccessTokenCookieName,
 		Value:    "",
-		Path:     "/",
+		Path:     api.AccessTokenCookiePath,
 		HttpOnly: true,
 		Expires:  time.Unix(0, 0),
 	})
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
+		Name:     api.RefreshTokenCookieName,
 		Value:    "",
-		Path:     "/auth/refresh",
+		Path:     api.RefreshTokenCookiePath,
 		HttpOnly: true,
 		Expires:  time.Unix(0, 0),
 	})
