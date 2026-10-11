@@ -23,10 +23,12 @@ type Dependencies struct {
 }
 
 func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, error) {
-	usersRepository := repositories.NewUsersPostgresRepository(pool)
+	db := repositories.NewTxAwareDB(pool)
+
+	usersRepository := repositories.NewUsersPostgresRepository(db)
 	usersService := services.NewUserService(usersRepository)
 
-	authRepository := repositories.NewAuthPostgresRepository(pool)
+	authRepository := repositories.NewAuthPostgresRepository(db)
 	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
 		map[domain.OAuthProviderName]domain.OAuthProvider{
 			domain.OAuthProviderGoogle: providers.NewGoogleOAuthProvider(
@@ -50,7 +52,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		cfg.JWTSecret,
 	)
 
-	auditRepository := repositories.NewAuditPostgresRepository(pool)
+	auditRepository := repositories.NewAuditPostgresRepository(db)
 	auditService := services.NewAuditService(auditRepository)
 
 	return &Dependencies{
