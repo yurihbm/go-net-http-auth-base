@@ -49,26 +49,12 @@ func (s *authService) CredentialsLogin(ctx context.Context, dto domain.Credentia
 		return domain.AuthTokens{}, domain.NewUnauthorizedError("auth.authenticate.invalidCredentials")
 	}
 
-	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
-		Subject:  user.UUID,
-		Audience: domain.TokenAudienceAccess,
-	})
+	tokens, err := s.issueTokens(ctx, user.UUID)
 	if err != nil {
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed", err)
 	}
 
-	refreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
-		Subject:  user.UUID,
-		Audience: domain.TokenAudienceRefresh,
-	})
-	if err != nil {
-		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed", err)
-	}
-
-	return domain.AuthTokens{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}, nil
+	return tokens, nil
 }
 
 func (s *authService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
@@ -114,25 +100,34 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 	}
 	userUUID := tokenData.Subject
 
-	newAccessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
+	tokens, err := s.issueTokens(ctx, userUUID)
+	if err != nil {
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
+	}
+
+	return tokens, nil
+}
+
+func (s *authService) issueTokens(ctx context.Context, userUUID string) (domain.AuthTokens, error) {
+	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
 		Subject:  userUUID,
 		Audience: domain.TokenAudienceAccess,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
+		return domain.AuthTokens{}, err
 	}
 
-	newRefreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
+	refreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
 		Subject:  userUUID,
 		Audience: domain.TokenAudienceRefresh,
 	})
 	if err != nil {
-		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
+		return domain.AuthTokens{}, err
 	}
 
 	return domain.AuthTokens{
-		AccessToken:  newAccessToken,
-		RefreshToken: newRefreshToken,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}, nil
 }
 
@@ -253,28 +248,14 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		return nil, err
 	}
 
-	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
-		Subject:  authenticatedUser.UUID,
-		Audience: domain.TokenAudienceAccess,
-	})
+	tokens, err := s.issueTokens(ctx, authenticatedUser.UUID)
 	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
-		Subject:  authenticatedUser.UUID,
-		Audience: domain.TokenAudienceRefresh,
-	})
-	if err != nil {
-		return nil, err
+		return nil, domain.NewInternalServerError("auth.oauthLogin.tokenGenerationFailed", err)
 	}
 
 	return &domain.OAuthLoginResult{
-		User: authenticatedUser,
-		Tokens: domain.AuthTokens{
-			AccessToken:  accessToken,
-			RefreshToken: refreshToken,
-		},
+		User:        authenticatedUser,
+		Tokens:      tokens,
 		RedirectURI: redirectURI,
 	}, nil
 }
