@@ -186,6 +186,7 @@ Services implement business logic. Key patterns:
   - Validation logic (e.g., checking if password is required for email auth) is handled here.
   - Services perform partial updates by fetching existing entities, modifying only provided fields, then calling repository update.
 - **Error Handling**: Services return domain-specific errors with meaningful messages (e.g., `"user.create.password_required"`).
+- **Multi-Step Orchestration**: Flows spanning several steps and services (e.g., `AuthService.OAuthLogin`, which verifies the state token, resolves/creates the user via `UsersService`, links the OAuth provider, and mints tokens) are implemented as a single service method. Controllers stay thin: decode input, call the one service method, then handle the HTTP concerns (cookies, redirect, audit log).
 
 **Example Structure**:
 

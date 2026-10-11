@@ -373,7 +373,7 @@ re-introduces them.
 - [x] Update the repository pattern to use propagated `context.Context` (drop the `context.Background()` example and the "should evolve to pass context" note) (after 2.6.1)
 - [x] Document the real validation approach (after 2.6.2)
 - [x] Document the composition-root wiring (after 2.6.3)
-- [ ] Document the `OAuthLogin` service pattern — controllers stay thin (after 2.6.9)
+- [x] Document the `OAuthLogin` service pattern — controllers stay thin (after 2.6.9)
 - [ ] Add the dependency rule for telemetry: `otel` only in infra/adapters, never in `services`/`controllers` (after 2.7)
 
 **Files to modify**:
@@ -500,17 +500,18 @@ leave the controller with decode → call → set cookies → redirect.
 The following previously-separate fixes are **folded in here** (moved from
 2.6.6):
 
-- [ ] **OAuth callback is not transactional** — in the "create user + link provider" path, if `AddUserOAuthProvider` fails the code manually deletes the just-created user (`auth_controller.go:277-301`), and that compensating `Delete` reuses the cancelable `r.Context()` — a canceled request leaves an orphaned user. Wrap create+link in a single DB transaction inside `OAuthLogin`; the manual rollback (and its context problem) disappears.
-- [ ] **Lookup errors silently swallowed** — `GetUserOAuthProvider` and `GetByEmail` errors are discarded (`_`) at `auth_controller.go:232,248`; a transient DB failure falls through into account-creation/linking instead of surfacing a 500. Branch on `domain.NotFoundError` explicitly and return anything else as an error.
-- [ ] **State token not bound to the path's provider** — the state JWT's `Subject` is the provider name at login, but nothing compares it to the callback's provider (`VerifyToken` checks only signature/expiry/audience), so a `google` state is accepted on `/auth/github/callback`. Compare `Subject` to the provider inside `OAuthLogin` and reject on mismatch.
+- [x] **OAuth callback is not transactional** — in the "create user + link provider" path, if `AddUserOAuthProvider` fails the code manually deletes the just-created user (`auth_controller.go:277-301`), and that compensating `Delete` reuses the cancelable `r.Context()` — a canceled request leaves an orphaned user. Wrap create+link in a single DB transaction inside `OAuthLogin`; the manual rollback (and its context problem) disappears.
+  > **Decision:** no DB transaction was added. There is no transaction pattern anywhere in the repo, and building one (a `Transactor` abstraction, tx-scoped repositories, wiring through `factories/dependencies.go`) is disproportionate to the residual risk — a harmless orphaned `users` row with no linked provider, not a security issue. Moving the rollback into `OAuthLogin` already fixes the actual named bug: the compensating `Delete` now runs on `context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)` instead of the cancelable request context, and runs before the single error is returned (previously the HTTP response was sent before cleanup ran).
+- [x] **Lookup errors silently swallowed** — `GetUserOAuthProvider` and `GetByEmail` errors are discarded (`_`) at `auth_controller.go:232,248`; a transient DB failure falls through into account-creation/linking instead of surfacing a 500. Branch on `domain.NotFoundError` explicitly and return anything else as an error.
+- [x] **State token not bound to the path's provider** — the state JWT's `Subject` is the provider name at login, but nothing compares it to the callback's provider (`VerifyToken` checks only signature/expiry/audience), so a `google` state is accepted on `/auth/github/callback`. Compare `Subject` to the provider inside `OAuthLogin` and reject on mismatch.
 
 **Tasks**:
 
-- [ ] Add `OAuthLogin` to `domain.AuthService`; move Cases 1/2/3 and the email-verified gate into `services/auth_service.go`
-- [ ] Add transaction support to the repository layer for the create+link path (fixes the transactional item above)
-- [ ] Fix the swallowed-lookup and state↔provider checks as part of the move
-- [ ] Slim `OAuthProviderCallback` to decode/validate → `OAuthLogin` → cookies → redirect; drop `usersService` from `AuthController` if no longer needed
-- [ ] Restructure tests: business cases become service unit tests; the controller test covers only HTTP concerns
+- [x] Add `OAuthLogin` to `domain.AuthService`; move Cases 1/2/3 and the email-verified gate into `services/auth_service.go`
+- [x] ~~Add transaction support to the repository layer for the create+link path (fixes the transactional item above)~~ — deliberately skipped, see decision note above
+- [x] Fix the swallowed-lookup and state↔provider checks as part of the move
+- [x] Slim `OAuthProviderCallback` to decode/validate → `OAuthLogin` → cookies → redirect; drop `usersService` from `AuthController` if no longer needed
+- [x] Restructure tests: business cases become service unit tests; the controller test covers only HTTP concerns
 
 **Files to modify**:
 
