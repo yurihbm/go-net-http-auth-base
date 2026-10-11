@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -11,6 +12,8 @@ import (
 
 const (
 	defaultPort = "8080"
+
+	minJWTSecretLength = 32
 
 	defaultDBMaxConns          = int32(25)
 	defaultDBMinConns          = int32(5)
@@ -81,6 +84,9 @@ func Load() (*Config, error) {
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		return nil, errors.New("JWT_SECRET not set in environment")
+	}
+	if len(jwtSecret) < minJWTSecretLength {
+		return nil, fmt.Errorf("JWT_SECRET must be at least %d characters long", minJWTSecretLength)
 	}
 
 	dbCfg := LoadDatabaseConfig()

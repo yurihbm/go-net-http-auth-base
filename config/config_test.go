@@ -10,9 +10,11 @@ import (
 	"go-net-http-auth-base/config"
 )
 
+const validJWTSecret = "test-secret-with-at-least-32-characters"
+
 func TestLoad(t *testing.T) {
 	t.Run("returns error when DATABASE_URL is missing", func(t *testing.T) {
-		t.Setenv("JWT_SECRET", "test-secret")
+		t.Setenv("JWT_SECRET", validJWTSecret)
 		t.Setenv("DATABASE_URL", "")
 
 		cfg, err := config.Load()
@@ -33,8 +35,20 @@ func TestLoad(t *testing.T) {
 		assert.Nil(t, cfg)
 	})
 
+	t.Run("returns error when JWT_SECRET is shorter than the minimum length", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", "short-secret")
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+
+		cfg, err := config.Load()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "JWT_SECRET")
+		assert.Contains(t, err.Error(), "32")
+		assert.Nil(t, cfg)
+	})
+
 	t.Run("applies defaults for optional vars", func(t *testing.T) {
-		t.Setenv("JWT_SECRET", "test-secret")
+		t.Setenv("JWT_SECRET", validJWTSecret)
 		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
 		t.Setenv("API_PORT", "")
 		t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "")
@@ -53,7 +67,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("reads and parses all optional vars", func(t *testing.T) {
-		t.Setenv("JWT_SECRET", "test-secret")
+		t.Setenv("JWT_SECRET", validJWTSecret)
 		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
 		t.Setenv("API_ENV", "production")
 		t.Setenv("API_PORT", "9090")
@@ -78,7 +92,7 @@ func TestLoad(t *testing.T) {
 		assert.False(t, cfg.IsDevelopment())
 		assert.Equal(t, "9090", cfg.Port)
 		assert.Equal(t, "https://api.example.com", cfg.APIURL)
-		assert.Equal(t, "test-secret", cfg.JWTSecret)
+		assert.Equal(t, validJWTSecret, cfg.JWTSecret)
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "google-id", ClientSecret: "google-secret"}, cfg.OAuth.Google)
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "github-id", ClientSecret: "github-secret"}, cfg.OAuth.GitHub)
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "microsoft-id", ClientSecret: "microsoft-secret"}, cfg.OAuth.Microsoft)
