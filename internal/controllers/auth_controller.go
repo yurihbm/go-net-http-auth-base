@@ -243,7 +243,7 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    tokens.RefreshToken,
-		Path:     "/",
+		Path:     "/auth/refresh",
 		HttpOnly: true,
 		Expires:  time.Time.Add(time.Now(), domain.TokenExpirationRefresh),
 		SameSite: http.SameSiteStrictMode,
@@ -263,7 +263,7 @@ func (c *AuthController) deleteAuthCookies(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
-		Path:     "/",
+		Path:     "/auth/refresh",
 		HttpOnly: true,
 		Expires:  time.Unix(0, 0),
 	})
