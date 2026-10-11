@@ -234,6 +234,7 @@ Repositories handle data persistence. Key patterns:
 - **Data Transformation**: Use dedicated mapper functions (e.g., `toDomainUser()`) to convert between database models and domain models.
 - **Pointer Updates**: Repository `Create()` methods update the passed entity pointer with database-generated fields (UUID, timestamps).
 - **pgtype Usage**: Nullable database fields use `pgtype` types (e.g., `pgtype.Text`, `pgtype.UUID`).
+- **Transactions**: Services that need several repository calls to succeed or fail together depend on `domain.Transactor` and call `WithinTx(ctx, func(ctx) error)`, using the closure's `ctx` for every call inside it. `repositories.PostgresTransactor` stores the `pgx.Tx` in the context, and repositories are built on `repositories.TxAwareDB` (a `postgres.DBTX`) so they join the active transaction automatically. A nested `WithinTx` joins the outer transaction.
 
 **Example Structure**:
 

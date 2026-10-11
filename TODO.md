@@ -501,14 +501,14 @@ The following previously-separate fixes are **folded in here** (moved from
 2.6.6):
 
 - [x] **OAuth callback is not transactional** — in the "create user + link provider" path, if `AddUserOAuthProvider` fails the code manually deletes the just-created user (`auth_controller.go:277-301`), and that compensating `Delete` reuses the cancelable `r.Context()` — a canceled request leaves an orphaned user. Wrap create+link in a single DB transaction inside `OAuthLogin`; the manual rollback (and its context problem) disappears.
-  > **Decision:** no DB transaction was added. There is no transaction pattern anywhere in the repo, and building one (a `Transactor` abstraction, tx-scoped repositories, wiring through `factories/dependencies.go`) is disproportionate to the residual risk — a harmless orphaned `users` row with no linked provider, not a security issue. Moving the rollback into `OAuthLogin` already fixes the actual named bug: the compensating `Delete` now runs on `context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)` instead of the cancelable request context, and runs before the single error is returned (previously the HTTP response was sent before cleanup ran).
+  > **Resolved:** create+link now runs inside `Transactor.WithinTx` (`domain.Transactor`, implemented by `repositories.PostgresTransactor`). The transaction travels in the `context` and `repositories.TxAwareDB`, which implements `postgres.DBTX`, picks it up, so repositories are unchanged. The compensating `Delete` and its context workaround are gone.
 - [x] **Lookup errors silently swallowed** — `GetUserOAuthProvider` and `GetByEmail` errors are discarded (`_`) at `auth_controller.go:232,248`; a transient DB failure falls through into account-creation/linking instead of surfacing a 500. Branch on `domain.NotFoundError` explicitly and return anything else as an error.
 - [x] **State token not bound to the path's provider** — the state JWT's `Subject` is the provider name at login, but nothing compares it to the callback's provider (`VerifyToken` checks only signature/expiry/audience), so a `google` state is accepted on `/auth/github/callback`. Compare `Subject` to the provider inside `OAuthLogin` and reject on mismatch.
 
 **Tasks**:
 
 - [x] Add `OAuthLogin` to `domain.AuthService`; move Cases 1/2/3 and the email-verified gate into `services/auth_service.go`
-- [x] ~~Add transaction support to the repository layer for the create+link path (fixes the transactional item above)~~ — deliberately skipped, see decision note above
+- [x] Add transaction support for the create+link path via `Transactor` / `PostgresTransactor` (fixes the transactional item above)
 - [x] Fix the swallowed-lookup and state↔provider checks as part of the move
 - [x] Slim `OAuthProviderCallback` to decode/validate → `OAuthLogin` → cookies → redirect; drop `usersService` from `AuthController` if no longer needed
 - [x] Restructure tests: business cases become service unit tests; the controller test covers only HTTP concerns
