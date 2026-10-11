@@ -51,7 +51,7 @@ func (s *authService) CredentialsLogin(ctx context.Context, dto domain.Credentia
 		return domain.AuthTokens{}, domain.NewUnauthorizedError("auth.authenticate.invalidCredentials")
 	}
 
-	tokens, err := s.issueTokens(ctx, user.UUID)
+	tokens, err := s.issueTokens(ctx, user.UUID, user.Role)
 	if err != nil {
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed", err)
 	}
@@ -79,6 +79,7 @@ func (s *authService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO
 	sub, subOk := claims["sub"].(string)
 	audClaim, audOk := claims["aud"].(string)
 	exp, expOk := claims["exp"].(float64)
+	role, _ := claims["role"].(string)
 	aud := domain.TokenAudience(audClaim)
 	if !subOk || !audOk || !expOk || aud != dto.Audience {
 		return nil, ErrInvalidToken
@@ -88,6 +89,7 @@ func (s *authService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO
 		Subject:    sub,
 		Audience:   aud,
 		Expiration: int64(exp),
+		Role:       domain.UserRole(role),
 		Payload:    claims["payload"],
 	}, nil
 }
@@ -100,9 +102,13 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 	if err != nil {
 		return domain.AuthTokens{}, err
 	}
-	userUUID := tokenData.Subject
 
-	tokens, err := s.issueTokens(ctx, userUUID)
+	user, err := s.usersService.GetByUUID(ctx, domain.Actor{UUID: tokenData.Subject}, tokenData.Subject)
+	if err != nil {
+		return domain.AuthTokens{}, err
+	}
+
+	tokens, err := s.issueTokens(ctx, user.UUID, user.Role)
 	if err != nil {
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
 	}
@@ -110,10 +116,11 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 	return tokens, nil
 }
 
-func (s *authService) issueTokens(ctx context.Context, userUUID string) (domain.AuthTokens, error) {
+func (s *authService) issueTokens(ctx context.Context, userUUID string, role domain.UserRole) (domain.AuthTokens, error) {
 	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
 		Subject:  userUUID,
 		Audience: domain.TokenAudienceAccess,
+		Role:     role,
 	})
 	if err != nil {
 		return domain.AuthTokens{}, err
@@ -139,6 +146,9 @@ func (s *authService) GenerateToken(ctx context.Context, dto domain.GenerateToke
 		"exp":     getTokenExpiration(dto.Audience),
 		"aud":     dto.Audience,
 		"payload": dto.Payload,
+	}
+	if dto.Role != "" {
+		claims["role"] = dto.Role
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -250,7 +260,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		return nil, err
 	}
 
-	tokens, err := s.issueTokens(ctx, authenticatedUser.UUID)
+	tokens, err := s.issueTokens(ctx, authenticatedUser.UUID, authenticatedUser.Role)
 	if err != nil {
 		return nil, domain.NewInternalServerError("auth.oauthLogin.tokenGenerationFailed", err)
 	}
@@ -275,7 +285,7 @@ func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAut
 
 	// Case 1: provider is already linked to a user.
 	if userOAuthProvider != nil {
-		return s.usersService.GetByUUID(ctx, userOAuthProvider.UserUUID)
+		return s.usersService.GetByUUID(ctx, domain.Actor{UUID: userOAuthProvider.UserUUID}, userOAuthProvider.UserUUID)
 	}
 
 	existingUser, err := s.usersService.GetByEmail(ctx, userInfo.Email)

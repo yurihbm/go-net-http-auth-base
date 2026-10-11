@@ -14,8 +14,8 @@ type UsersServiceMock struct {
 
 var _ domain.UsersService = (*UsersServiceMock)(nil)
 
-func (m *UsersServiceMock) GetByUUID(ctx context.Context, uuid string) (*domain.User, error) {
-	args := m.Called(uuid)
+func (m *UsersServiceMock) GetByUUID(ctx context.Context, actor domain.Actor, uuid string) (*domain.User, error) {
+	args := m.Called(actor, uuid)
 	if args.Get(0) != nil {
 		return args.Get(0).(*domain.User), args.Error(1)
 	}
@@ -46,12 +46,12 @@ func (m *UsersServiceMock) CreateOAuth(ctx context.Context, dto domain.CreateOAu
 	return nil, args.Error(1)
 }
 
-func (m *UsersServiceMock) Update(ctx context.Context, uuid string, dto domain.UserUpdateDTO) error {
-	args := m.Called(uuid, dto)
+func (m *UsersServiceMock) Update(ctx context.Context, actor domain.Actor, uuid string, dto domain.UserUpdateDTO) error {
+	args := m.Called(actor, uuid, dto)
 	return args.Error(0)
 }
 
-func (m *UsersServiceMock) Delete(ctx context.Context, uuid string) error {
-	args := m.Called(uuid)
+func (m *UsersServiceMock) Delete(ctx context.Context, actor domain.Actor, uuid string) error {
+	args := m.Called(actor, uuid)
 	return args.Error(0)
 }

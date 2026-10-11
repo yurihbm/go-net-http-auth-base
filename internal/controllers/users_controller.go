@@ -84,7 +84,7 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := c.userService.GetByUUID(r.Context(), reqContextData.UserUUID)
+	user, err := c.userService.GetByUUID(r.Context(), actorFromRequest(r), reqContextData.UserUUID)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
@@ -98,7 +98,7 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 
 func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
-	user, err := c.userService.GetByUUID(r.Context(), uuid)
+	user, err := c.userService.GetByUUID(r.Context(), actorFromRequest(r), uuid)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
@@ -119,7 +119,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.userService.Update(r.Context(), uuid, dto); err != nil {
+	if err := c.userService.Update(r.Context(), actorFromRequest(r), uuid, dto); err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 			ActorUUID:     actorUUID(r),
@@ -151,7 +151,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
-	if err := c.userService.Delete(r.Context(), uuid); err != nil {
+	if err := c.userService.Delete(r.Context(), actorFromRequest(r), uuid); err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 			ActorUUID:     actorUUID(r),

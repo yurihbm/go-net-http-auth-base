@@ -10,14 +10,13 @@ import (
 )
 
 type RoleMiddleware struct {
-	usersService domain.UsersService
-	roles        []domain.UserRole
+	roles []domain.UserRole
 }
 
 var _ HandlerMiddleware = (*RoleMiddleware)(nil)
 
-func NewRoleMiddleware(usersService domain.UsersService, roles []domain.UserRole) HandlerMiddleware {
-	return &RoleMiddleware{usersService, roles}
+func NewRoleMiddleware(roles []domain.UserRole) HandlerMiddleware {
+	return &RoleMiddleware{roles}
 }
 
 func (m *RoleMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
@@ -30,18 +29,7 @@ func (m *RoleMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// TODO: Use token payload instead of fetching user from database when
-		// required info is included in the token
-		user, err := m.usersService.GetByUUID(r.Context(), reqCtxData.UserUUID)
-		if err != nil {
-			var notFoundErr *domain.NotFoundError
-			if !errors.As(err, &notFoundErr) {
-				api.HandleError(r.Context(), w, err)
-				return
-			}
-		}
-
-		if err == nil && slices.Contains(m.roles, user.Role) {
+		if slices.Contains(m.roles, reqCtxData.UserRole) {
 			next.ServeHTTP(w, r)
 			return
 		}

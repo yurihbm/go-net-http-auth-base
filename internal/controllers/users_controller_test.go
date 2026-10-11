@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
@@ -23,6 +24,17 @@ func newTestUsersController() (*controllers.UsersController, *mocks.UsersService
 	controller := controllers.NewUsersController(serviceMock, auditMock, middlewareMock)
 
 	return controller, serviceMock, auditMock, middlewareMock
+}
+
+var actor = domain.Actor{UUID: "caller-uuid", Role: domain.RoleUser}
+
+func getActorControllerArgs(method string, endpoint string, body any) (*httptest.ResponseRecorder, *http.Request) {
+	w, req := getControllerArgs(method, endpoint, body)
+	ctx := context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{
+		UserUUID: actor.UUID,
+		UserRole: actor.Role,
+	})
+	return w, req.WithContext(ctx)
 }
 
 func TestUsersController_RegisterRoutes(t *testing.T) {
@@ -159,7 +171,7 @@ func TestUsersController_GetMe(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
-		serviceMock.On("GetByUUID", "test-uuid").Return(user, nil)
+		serviceMock.On("GetByUUID", domain.Actor{UUID: "test-uuid"}, "test-uuid").Return(user, nil)
 
 		w, req := getControllerArgs("GET", "/users/me", nil)
 		// Inject user UUID into context
@@ -177,7 +189,7 @@ func TestUsersController_GetMe(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, *user, response.Data)
 		assert.Equal(t, domain.RoleUser, response.Data.Role)
-		serviceMock.AssertCalled(t, "GetByUUID", "test-uuid")
+		serviceMock.AssertCalled(t, "GetByUUID", domain.Actor{UUID: "test-uuid"}, "test-uuid")
 	})
 
 	t.Run("unauthorized - missing context key", func(t *testing.T) {
@@ -201,7 +213,7 @@ func TestUsersController_GetMe(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
-		serviceMock.On("GetByUUID", "test-uuid").Return(nil,
+		serviceMock.On("GetByUUID", domain.Actor{UUID: "test-uuid"}, "test-uuid").Return(nil,
 			domain.NewNotFoundError(
 				"user.notFound",
 			),
@@ -223,7 +235,7 @@ func TestUsersController_GetMe(t *testing.T) {
 		assert.Empty(t, response.Message)
 		assert.Empty(t, response.Data)
 		assert.NotEmpty(t, response.Error)
-		serviceMock.AssertCalled(t, "GetByUUID", "test-uuid")
+		serviceMock.AssertCalled(t, "GetByUUID", domain.Actor{UUID: "test-uuid"}, "test-uuid")
 	})
 }
 
@@ -239,9 +251,9 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
 
-		serviceMock.On("GetByUUID", mock.Anything).Return(user, nil)
+		serviceMock.On("GetByUUID", actor, uuid).Return(user, nil)
 
-		w, req := getControllerArgs("GET", "/users/", nil)
+		w, req := getActorControllerArgs("GET", "/users/", nil)
 		req.SetPathValue("uuid", uuid)
 
 		controller.GetUserByUUID(w, req)
@@ -252,18 +264,18 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, *user, response.Data)
 		assert.Equal(t, domain.RoleUser, response.Data.Role)
-		serviceMock.AssertCalled(t, "GetByUUID", uuid)
+		serviceMock.AssertCalled(t, "GetByUUID", actor, uuid)
 	})
 
 	t.Run("not found", func(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
 
-		serviceMock.On("GetByUUID", mock.Anything).Return(
+		serviceMock.On("GetByUUID", actor, uuid).Return(
 			nil,
 			domain.NewNotFoundError("user.notFound"),
 		)
 
-		w, req := getControllerArgs("GET", "/users/", nil)
+		w, req := getActorControllerArgs("GET", "/users/", nil)
 		req.SetPathValue("uuid", uuid)
 
 		controller.GetUserByUUID(w, req)
@@ -275,7 +287,19 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 		assert.Empty(t, response.Message)
 		assert.Empty(t, response.Data)
 		assert.NotEmpty(t, response.Error)
-		serviceMock.AssertCalled(t, "GetByUUID", uuid)
+		serviceMock.AssertCalled(t, "GetByUUID", actor, uuid)
+	})
+
+	t.Run("forbidden", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("GetByUUID", actor, uuid).Return(nil, domain.NewForbiddenError("users.forbidden"))
+
+		w, req := getActorControllerArgs("GET", "/users/", nil)
+		req.SetPathValue("uuid", uuid)
+
+		controller.GetUserByUUID(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
 	})
 }
 
@@ -287,7 +311,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		serviceMock.On("Update", uuid, dto).Return(nil)
+		serviceMock.On("Update", actor, uuid, dto).Return(nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionUserUpdate &&
 				d.ResourceType == domain.AuditResourceUser &&
@@ -295,20 +319,20 @@ func TestUsersController_UpdateUser(t *testing.T) {
 				d.Status == domain.AuditStatusSuccess
 		})).Return(nil)
 
-		w, req := getControllerArgs("PUT", "/users/", dto)
+		w, req := getActorControllerArgs("PUT", "/users/", dto)
 		req.SetPathValue("uuid", uuid)
 
 		controller.UpdateUser(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		serviceMock.AssertCalled(t, "Update", uuid, dto)
+		serviceMock.AssertCalled(t, "Update", actor, uuid, dto)
 		auditMock.AssertExpectations(t)
 	})
 
 	t.Run("bad request", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		w, req := getControllerArgs("PUT", "/users/", struct {
+		w, req := getActorControllerArgs("PUT", "/users/", struct {
 			Test string
 		}{Test: "test"})
 		req.SetPathValue("uuid", uuid)
@@ -323,31 +347,45 @@ func TestUsersController_UpdateUser(t *testing.T) {
 	t.Run("service error", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		serviceMock.On("Update", uuid, dto).Return(assert.AnError)
+		serviceMock.On("Update", actor, uuid, dto).Return(assert.AnError)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionUserUpdate &&
 				d.Status == domain.AuditStatusFailure &&
 				d.FailureReason != nil
 		})).Return(nil)
 
-		w, req := getControllerArgs("PUT", "/users/", dto)
+		w, req := getActorControllerArgs("PUT", "/users/", dto)
 		req.SetPathValue("uuid", uuid)
 
 		controller.UpdateUser(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		serviceMock.AssertCalled(t, "Update", uuid, dto)
+		serviceMock.AssertCalled(t, "Update", actor, uuid, dto)
 		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("forbidden", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("Update", actor, uuid, dto).Return(domain.NewForbiddenError("users.forbidden"))
+		auditMock.On("Log", mock.Anything).Return(nil)
+
+		w, req := getActorControllerArgs("PUT", "/users/", dto)
+		req.SetPathValue("uuid", uuid)
+
+		controller.UpdateUser(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
 	})
 }
 
 func TestUsersController_DeleteUser(t *testing.T) {
 	uuid := "test-uuid"
+	forbidden := domain.NewForbiddenError("users.forbidden")
 
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		serviceMock.On("Delete", "test-uuid").Return(nil)
+		serviceMock.On("Delete", actor, "test-uuid").Return(nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionUserDelete &&
 				d.ResourceType == domain.AuditResourceUser &&
@@ -355,33 +393,46 @@ func TestUsersController_DeleteUser(t *testing.T) {
 				d.Status == domain.AuditStatusSuccess
 		})).Return(nil)
 
-		w, req := getControllerArgs("DELETE", "/users/", nil)
+		w, req := getActorControllerArgs("DELETE", "/users/", nil)
 		req.SetPathValue("uuid", uuid)
 
 		controller.DeleteUser(w, req)
 
 		assert.Equal(t, http.StatusNoContent, w.Code)
-		serviceMock.AssertCalled(t, "Delete", "test-uuid")
+		serviceMock.AssertCalled(t, "Delete", actor, "test-uuid")
 		auditMock.AssertExpectations(t)
 	})
 
 	t.Run("service error", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		serviceMock.On("Delete", "test-uuid").Return(assert.AnError)
+		serviceMock.On("Delete", actor, "test-uuid").Return(assert.AnError)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionUserDelete &&
 				d.Status == domain.AuditStatusFailure &&
 				d.FailureReason != nil
 		})).Return(nil)
 
-		w, req := getControllerArgs("DELETE", "/users/", nil)
+		w, req := getActorControllerArgs("DELETE", "/users/", nil)
 		req.SetPathValue("uuid", uuid)
 
 		controller.DeleteUser(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		serviceMock.AssertCalled(t, "Delete", "test-uuid")
+		serviceMock.AssertCalled(t, "Delete", actor, "test-uuid")
 		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("forbidden", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("Delete", actor, uuid).Return(forbidden)
+		auditMock.On("Log", mock.Anything).Return(nil)
+
+		w, req := getActorControllerArgs("DELETE", "/users/", nil)
+		req.SetPathValue("uuid", uuid)
+
+		controller.DeleteUser(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
 	})
 }

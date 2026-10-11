@@ -81,12 +81,14 @@ type VerifiedTokenData struct {
 	Subject    string        `json:"subject"`
 	Audience   TokenAudience `json:"audience"`
 	Expiration int64         `json:"expiration"`
+	Role       UserRole      `json:"role,omitempty"`
 	Payload    any           `json:"payload,omitempty"`
 }
 
 type GenerateTokenDTO struct {
 	Subject  string        `json:"subject"`
 	Audience TokenAudience `json:"token_audience"`
+	Role     UserRole      `json:"role,omitempty"`
 	Payload  any           `json:"payload,omitempty"`
 }
 

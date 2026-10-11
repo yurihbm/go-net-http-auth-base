@@ -13,6 +13,12 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+var (
+	selfActor  = domain.Actor{UUID: "some-uuid", Role: domain.RoleUser}
+	adminActor = domain.Actor{UUID: "admin-uuid", Role: domain.RoleAdmin}
+	otherActor = domain.Actor{UUID: "other-uuid", Role: domain.RoleUser}
+)
+
 func TestNewUserService(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
 	service := services.NewUserService(repo)
@@ -23,21 +29,44 @@ func TestUsersService_GetByUUID(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
 	service := services.NewUserService(repo)
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("self is allowed", func(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User"}
 		repo.On("FindByUUID", "some-uuid").Return(user, nil).Once()
 
-		result, err := service.GetByUUID(context.Background(), "some-uuid")
+		result, err := service.GetByUUID(context.Background(), selfActor, "some-uuid")
 
 		assert.NoError(t, err)
 		assert.Equal(t, user, result)
 		repo.AssertExpectations(t)
 	})
 
+	t.Run("admin is allowed", func(t *testing.T) {
+		user := &domain.User{UUID: "some-uuid", Name: "Test User"}
+		repo.On("FindByUUID", "some-uuid").Return(user, nil).Once()
+
+		result, err := service.GetByUUID(context.Background(), adminActor, "some-uuid")
+
+		assert.NoError(t, err)
+		assert.Equal(t, user, result)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("other user is forbidden", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo)
+
+		result, err := service.GetByUUID(context.Background(), otherActor, "some-uuid")
+
+		var forbiddenErr *domain.ForbiddenError
+		assert.True(t, errors.As(err, &forbiddenErr))
+		assert.Nil(t, result)
+		repo.AssertNotCalled(t, "FindByUUID", "some-uuid")
+	})
+
 	t.Run("not found", func(t *testing.T) {
 		repo.On("FindByUUID", "not-found-uuid").Return(nil, errors.New("not found")).Once()
 
-		result, err := service.GetByUUID(context.Background(), "not-found-uuid")
+		result, err := service.GetByUUID(context.Background(), adminActor, "not-found-uuid")
 
 		assert.Error(t, err)
 		assert.Nil(t, result)
@@ -179,7 +208,7 @@ func TestUsersService_Update(t *testing.T) {
 			return u.Name == newName && u.Email == newEmail
 		})).Return(nil).Once()
 
-		err := service.Update(context.Background(), uuid, dto)
+		err := service.Update(context.Background(), selfActor, uuid, dto)
 
 		assert.NoError(t, err)
 		repo.AssertExpectations(t)
@@ -189,7 +218,7 @@ func TestUsersService_Update(t *testing.T) {
 		dto := domain.UserUpdateDTO{}
 		repo.On("FindByUUID", "not-found").Return(nil, errors.New("not found")).Once()
 
-		err := service.Update(context.Background(), "not-found", dto)
+		err := service.Update(context.Background(), adminActor, "not-found", dto)
 
 		assert.Error(t, err)
 		repo.AssertExpectations(t)
@@ -202,11 +231,37 @@ func TestUsersService_Update(t *testing.T) {
 		repo.On("FindByUUID", uuid).Return(originalUser, nil).Once()
 		repo.On("Update", mock.AnythingOfType("domain.User")).Return(errors.New("db error")).Once()
 
-		err := service.Update(context.Background(), uuid, dto)
+		err := service.Update(context.Background(), selfActor, uuid, dto)
 
 		assert.Error(t, err)
 		assert.Equal(t, "db error", err.Error())
 		repo.AssertExpectations(t)
+	})
+
+	t.Run("admin is allowed", func(t *testing.T) {
+		name := "New Name"
+		dto := domain.UserUpdateDTO{Name: &name}
+		repo.On("FindByUUID", uuid).Return(&domain.User{UUID: uuid}, nil).Once()
+		repo.On("Update", mock.AnythingOfType("domain.User")).Return(nil).Once()
+
+		err := service.Update(context.Background(), adminActor, uuid, dto)
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("other user is forbidden", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo)
+		name := "New Name"
+		dto := domain.UserUpdateDTO{Name: &name}
+
+		err := service.Update(context.Background(), otherActor, uuid, dto)
+
+		var forbiddenErr *domain.ForbiddenError
+		assert.True(t, errors.As(err, &forbiddenErr))
+		repo.AssertNotCalled(t, "FindByUUID", uuid)
+		repo.AssertNotCalled(t, "Update", mock.Anything)
 	})
 }
 
@@ -218,7 +273,7 @@ func TestUsersService_Delete(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		repo.On("Delete", uuid).Return(nil).Once()
 
-		err := service.Delete(context.Background(), uuid)
+		err := service.Delete(context.Background(), selfActor, uuid)
 
 		assert.NoError(t, err)
 		repo.AssertExpectations(t)
@@ -227,10 +282,30 @@ func TestUsersService_Delete(t *testing.T) {
 	t.Run("delete fails", func(t *testing.T) {
 		repo.On("Delete", uuid).Return(errors.New("db error")).Once()
 
-		err := service.Delete(context.Background(), uuid)
+		err := service.Delete(context.Background(), selfActor, uuid)
 
 		assert.Error(t, err)
 		assert.Equal(t, "db error", err.Error())
 		repo.AssertExpectations(t)
+	})
+
+	t.Run("admin is allowed", func(t *testing.T) {
+		repo.On("Delete", uuid).Return(nil).Once()
+
+		err := service.Delete(context.Background(), adminActor, uuid)
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("other user is forbidden", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo)
+
+		err := service.Delete(context.Background(), otherActor, uuid)
+
+		var forbiddenErr *domain.ForbiddenError
+		assert.True(t, errors.As(err, &forbiddenErr))
+		repo.AssertNotCalled(t, "Delete", uuid)
 	})
 }

@@ -62,6 +62,6 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		AuthService:         authService,
 		AuditService:        auditService,
 		AuthMiddleware:      middlewares.NewAuthMiddleware(authService),
-		AdminRoleMiddleware: middlewares.NewRoleMiddleware(usersService, []domain.UserRole{domain.RoleAdmin}),
+		AdminRoleMiddleware: middlewares.NewRoleMiddleware([]domain.UserRole{domain.RoleAdmin}),
 	}, nil
 }

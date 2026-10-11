@@ -64,6 +64,20 @@ func (e *UnauthorizedError) Error() string {
 
 var _ error = (*UnauthorizedError)(nil)
 
+type ForbiddenError struct {
+	message string
+}
+
+func NewForbiddenError(message string) *ForbiddenError {
+	return &ForbiddenError{message: message}
+}
+
+func (e *ForbiddenError) Error() string {
+	return e.message
+}
+
+var _ error = (*ForbiddenError)(nil)
+
 type InternalServerError struct {
 	message string
 	cause   error

@@ -66,6 +66,14 @@ func TestHandleError(t *testing.T) {
 			},
 		},
 		{
+			name:           "ForbiddenError",
+			err:            domain.NewForbiddenError("auth.forbidden"),
+			expectedStatus: http.StatusForbidden,
+			expectedBody: api.ResponseBody[any]{
+				Error: "auth.forbidden",
+			},
+		},
+		{
 			name:           "InternalServerError",
 			err:            domain.NewInternalServerError("internal.error", errors.New("db failure")),
 			expectedStatus: http.StatusInternalServerError,

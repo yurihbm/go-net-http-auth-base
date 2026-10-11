@@ -25,14 +25,3 @@ func auditLog(r *http.Request, auditService domain.AuditService, dto domain.Crea
 		slog.Error("audit log failed", "error", err, "action", dto.Action)
 	}
 }
-
-// actorUUID returns a pointer to the authenticated user UUID from context, or
-// nil when the request is unauthenticated.
-func actorUUID(r *http.Request) *string {
-	reqCtxData, _ := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData)
-	if reqCtxData != nil && reqCtxData.UserUUID != "" {
-		u := reqCtxData.UserUUID
-		return &u
-	}
-	return nil
-}

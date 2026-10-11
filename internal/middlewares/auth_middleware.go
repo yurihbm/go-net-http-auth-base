@@ -45,6 +45,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			shared.RequestContextDataKey,
 		).(*shared.RequestContextData); ok {
 			reqContextData.UserUUID = tokenData.Subject
+			reqContextData.UserRole = tokenData.Role
 		}
 
 		next.ServeHTTP(w, r)

@@ -44,13 +44,22 @@ type UserUpdateDTO struct {
 	Email *string `json:"email,omitempty" validate:"omitempty,email"`
 }
 
+type Actor struct {
+	UUID string
+	Role UserRole
+}
+
+func (a Actor) CanAccess(userUUID string) bool {
+	return a.Role == RoleAdmin || (a.UUID != "" && a.UUID == userUUID)
+}
+
 type UsersService interface {
-	GetByUUID(context.Context, string) (*User, error)
+	GetByUUID(context.Context, Actor, string) (*User, error)
 	GetByEmail(context.Context, string) (*User, error)
 	Create(context.Context, CreateUserDTO) (*User, error)
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
-	Update(context.Context, string, UserUpdateDTO) error
-	Delete(context.Context, string) error
+	Update(context.Context, Actor, string, UserUpdateDTO) error
+	Delete(context.Context, Actor, string) error
 }
 
 type UsersRepository interface {

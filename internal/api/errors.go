@@ -30,6 +30,7 @@ func HandleError(ctx context.Context, w http.ResponseWriter, err error) {
 	var validationErr *domain.ValidationError
 	var conflictErr *domain.ConflictError
 	var unauthorizedErr *domain.UnauthorizedError
+	var forbiddenErr *domain.ForbiddenError
 	var internalServerErr *domain.InternalServerError
 
 	if errors.As(err, &notFoundErr) {
@@ -45,6 +46,9 @@ func HandleError(ctx context.Context, w http.ResponseWriter, err error) {
 	} else if errors.As(err, &unauthorizedErr) {
 		statusCode = http.StatusUnauthorized
 		message = unauthorizedErr.Error()
+	} else if errors.As(err, &forbiddenErr) {
+		statusCode = http.StatusForbidden
+		message = forbiddenErr.Error()
 	} else if errors.As(err, &internalServerErr) {
 		statusCode = http.StatusInternalServerError
 		message = internalServerErr.Error()

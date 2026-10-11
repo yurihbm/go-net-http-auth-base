@@ -8,6 +8,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var errForbiddenUserAccess = domain.NewForbiddenError("users.forbidden")
+
 type usersService struct {
 	repo domain.UsersRepository
 }
@@ -16,7 +18,10 @@ func NewUserService(repo domain.UsersRepository) domain.UsersService {
 	return &usersService{repo: repo}
 }
 
-func (s *usersService) GetByUUID(ctx context.Context, uuid string) (*domain.User, error) {
+func (s *usersService) GetByUUID(ctx context.Context, actor domain.Actor, uuid string) (*domain.User, error) {
+	if !actor.CanAccess(uuid) {
+		return nil, errForbiddenUserAccess
+	}
 	return s.repo.FindByUUID(ctx, uuid)
 }
 
@@ -47,7 +52,11 @@ func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUs
 	return s.repo.Create(ctx, user)
 }
 
-func (s *usersService) Update(ctx context.Context, uuid string, dto domain.UserUpdateDTO) error {
+func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid string, dto domain.UserUpdateDTO) error {
+	if !actor.CanAccess(uuid) {
+		return errForbiddenUserAccess
+	}
+
 	user, err := s.repo.FindByUUID(ctx, uuid)
 	if err != nil {
 		return err
@@ -63,7 +72,9 @@ func (s *usersService) Update(ctx context.Context, uuid string, dto domain.UserU
 	return s.repo.Update(ctx, *user)
 }
 
-func (s *usersService) Delete(ctx context.Context, uuid string) error {
-	// TODO: Check if users is deleting itself or if this is a admin action
+func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid string) error {
+	if !actor.CanAccess(uuid) {
+		return errForbiddenUserAccess
+	}
 	return s.repo.Delete(ctx, uuid)
 }

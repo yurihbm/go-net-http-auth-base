@@ -45,6 +45,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 			Name:         "Test User",
 			Email:        "test@example.com",
 			PasswordHash: string(hashedPassword),
+			Role:         domain.RoleAdmin,
 		}
 
 		dto := domain.CredentialsLoginDTO{
@@ -59,6 +60,12 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, tokens.AccessToken)
 		assert.NotEmpty(t, tokens.RefreshToken)
+		verified, err := service.VerifyToken(context.Background(), domain.VerifyTokenDTO{
+			Token:    tokens.AccessToken,
+			Audience: domain.TokenAudienceAccess,
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, domain.RoleAdmin, verified.Role)
 		usersService.AssertExpectations(t)
 	})
 
@@ -295,11 +302,13 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		dto := domain.RefreshTokenDTO{
 			RefreshToken: refreshTokenString,
 		}
+		usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(&domain.User{UUID: userUUID, Role: domain.RoleAdmin}, nil).Once()
 		tokens, err := service.RefreshToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, tokens.AccessToken)
 		assert.NotEmpty(t, tokens.RefreshToken)
+		usersService.AssertExpectations(t)
 
 		// Verify the new access token contains the correct user UUID
 		verifyDTO := domain.VerifyTokenDTO{
@@ -310,6 +319,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, verifiedToken)
 		assert.Equal(t, userUUID, verifiedToken.Subject)
+		assert.Equal(t, domain.RoleAdmin, verifiedToken.Role)
 
 		// Verify the new refresh token contains the correct user UUID
 		verifyDTO = domain.VerifyTokenDTO{
@@ -320,6 +330,21 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, verifiedToken)
 		assert.Equal(t, userUUID, verifiedToken.Subject)
+	})
+
+	t.Run("user lookup fails", func(t *testing.T) {
+		claims := jwt.MapClaims{
+			"sub": "user-uuid-123",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"aud": domain.TokenAudienceRefresh,
+		}
+		refreshTokenString, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte("test-secret-key"))
+		usersService.On("GetByUUID", domain.Actor{UUID: "user-uuid-123"}, "user-uuid-123").Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+
+		tokens, err := service.RefreshToken(context.Background(), domain.RefreshTokenDTO{RefreshToken: refreshTokenString})
+
+		assert.Error(t, err)
+		assert.Empty(t, tokens.AccessToken)
 	})
 
 	t.Run("invalid refresh token", func(t *testing.T) {
@@ -380,6 +405,22 @@ func TestAuthService_GenerateToken(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, verifiedToken)
 		assert.Equal(t, "user-uuid-123", verifiedToken.Subject)
+	})
+
+	t.Run("role is carried in the token", func(t *testing.T) {
+		token, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+			Subject:  "user-uuid-123",
+			Audience: domain.TokenAudienceAccess,
+			Role:     domain.RoleAdmin,
+		})
+		assert.NoError(t, err)
+
+		verifiedToken, err := service.VerifyToken(context.Background(), domain.VerifyTokenDTO{
+			Token:    token,
+			Audience: domain.TokenAudienceAccess,
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, domain.RoleAdmin, verifiedToken.Role)
 	})
 
 	t.Run("success with refresh token audience", func(t *testing.T) {
@@ -745,7 +786,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(userOAuthProvider, nil).Once()
-		usersService.On("GetByUUID", userUUID).Return(user, nil).Once()
+		usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(user, nil).Once()
 
 		state := newState(t, service, string(provider))
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
@@ -929,7 +970,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(userOAuthProvider, nil).Once()
-		usersService.On("GetByUUID", userUUID).Return(nil, errors.New("db error")).Once()
+		usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(nil, errors.New("db error")).Once()
 
 		state := newState(t, service, string(provider))
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})

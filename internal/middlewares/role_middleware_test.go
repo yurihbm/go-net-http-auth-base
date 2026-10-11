@@ -2,168 +2,78 @@ package middlewares_test
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
-	"go-net-http-auth-base/internal/mocks"
 	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func getTestRoleMiddleware() (middlewares.HandlerMiddleware, *mocks.UsersServiceMock) {
-	serviceMock := new(mocks.UsersServiceMock)
-	middleware := middlewares.NewRoleMiddleware(
-		serviceMock,
-		[]domain.UserRole{domain.RoleAdmin},
-	)
-
-	return middleware, serviceMock
+func getTestRoleMiddleware() middlewares.HandlerMiddleware {
+	return middlewares.NewRoleMiddleware([]domain.UserRole{domain.RoleAdmin})
 }
 
 func TestNewRoleMiddleware(t *testing.T) {
 	t.Run("should create new role  middleware", func(t *testing.T) {
-		middleware := middlewares.NewRoleMiddleware(
-			new(mocks.UsersServiceMock),
-			[]domain.UserRole{},
-		)
+		middleware := middlewares.NewRoleMiddleware([]domain.UserRole{})
 		assert.NotNil(t, middleware)
 	})
 }
 
 func TestRoleMiddleware_Use(t *testing.T) {
-	t.Run("should allow access to users with the required role", func(t *testing.T) {
-		middleware, serviceMock := getTestRoleMiddleware()
-
+	serve := func(role domain.UserRole) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("GET", "/", nil)
-		ctx := req.Context()
-		ctx = context.WithValue(ctx,
+		ctx := context.WithValue(req.Context(),
 			shared.RequestContextDataKey,
 			&shared.RequestContextData{
 				UserUUID: "test-uuid",
+				UserRole: role,
 			},
 		)
-		req = req.WithContext(ctx)
-
-		serviceMock.On("GetByUUID", "test-uuid").Return(&domain.User{
-			UUID: "test-uuid",
-			Role: domain.RoleAdmin,
-		}, nil)
-
 		rr := httptest.NewRecorder()
-		handler := middleware.Use(
+		getTestRoleMiddleware().Use(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}),
-		)
-		handler.ServeHTTP(rr, req)
+		).ServeHTTP(rr, req.WithContext(ctx))
+		return rr
+	}
+
+	t.Run("should allow access to users with the required role", func(t *testing.T) {
+		rr := serve(domain.RoleAdmin)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		assert.NotContains(t, rr.Body.String(), "auth.forbidden")
 	})
 
 	t.Run("should deny access to users without the required role", func(t *testing.T) {
-		middleware, serviceMock := getTestRoleMiddleware()
-
-		req := httptest.NewRequest("GET", "/", nil)
-		ctx := req.Context()
-		ctx = context.WithValue(ctx,
-			shared.RequestContextDataKey,
-			&shared.RequestContextData{
-				UserUUID: "test-uuid",
-			},
-		)
-		req = req.WithContext(ctx)
-
-		serviceMock.On("GetByUUID", "test-uuid").Return(&domain.User{
-			UUID: "test-uuid",
-			Role: domain.RoleUser,
-		}, nil)
-
-		rr := httptest.NewRecorder()
-		handler := middleware.Use(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			}),
-		)
-		handler.ServeHTTP(rr, req)
+		rr := serve(domain.RoleUser)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.Contains(t, rr.Body.String(), "auth.forbidden")
 	})
 
-	t.Run("should deny access when the user is not found", func(t *testing.T) {
-		middleware, serviceMock := getTestRoleMiddleware()
-
-		req := httptest.NewRequest("GET", "/", nil)
-		ctx := req.Context()
-		ctx = context.WithValue(ctx,
-			shared.RequestContextDataKey,
-			&shared.RequestContextData{
-				UserUUID: "test-uuid",
-			},
-		)
-		req = req.WithContext(ctx)
-
-		serviceMock.On("GetByUUID", "test-uuid").Return(nil, domain.NewNotFoundError("user.not_found"))
-
-		rr := httptest.NewRecorder()
-		handler := middleware.Use(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			}),
-		)
-		handler.ServeHTTP(rr, req)
+	t.Run("should deny access when the token carries no role", func(t *testing.T) {
+		rr := serve("")
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.Contains(t, rr.Body.String(), "auth.forbidden")
-	})
-
-	t.Run("should return internal server error when the user lookup fails", func(t *testing.T) {
-		middleware, serviceMock := getTestRoleMiddleware()
-
-		req := httptest.NewRequest("GET", "/", nil)
-		ctx := req.Context()
-		ctx = context.WithValue(ctx,
-			shared.RequestContextDataKey,
-			&shared.RequestContextData{
-				UserUUID: "test-uuid",
-			},
-		)
-		req = req.WithContext(ctx)
-
-		serviceMock.On("GetByUUID", "test-uuid").Return(nil, errors.New("db down"))
-
-		rr := httptest.NewRecorder()
-		handler := middleware.Use(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			}),
-		)
-		handler.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-		assert.NotContains(t, rr.Body.String(), "auth.forbidden")
 	})
 
 	t.Run("should return internal server error when request context data is missing", func(t *testing.T) {
-		middleware, serviceMock := getTestRoleMiddleware()
-
 		req := httptest.NewRequest("GET", "/", nil)
 
 		rr := httptest.NewRecorder()
-		handler := middleware.Use(
+		getTestRoleMiddleware().Use(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}),
-		)
-		handler.ServeHTTP(rr, req)
+		).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-		serviceMock.AssertNotCalled(t, "GetByUUID")
 	})
 }
