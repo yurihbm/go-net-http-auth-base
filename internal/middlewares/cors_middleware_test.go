@@ -3,6 +3,7 @@ package middlewares_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"go-net-http-auth-base/internal/middlewares"
@@ -133,7 +134,7 @@ func TestCORSMiddleware_Use(t *testing.T) {
 		assert.True(t, handlerCalled)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Origin"))
-		assert.Equal(t, "", w.Header().Get("Vary"))
+		assert.Equal(t, "Origin", w.Header().Get("Vary"))
 	})
 
 	t.Run("success - missing origin header", func(t *testing.T) {
@@ -163,7 +164,7 @@ func TestCORSMiddleware_Use(t *testing.T) {
 		assert.True(t, handlerCalled)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Origin"))
-		assert.Equal(t, "", w.Header().Get("Vary"))
+		assert.Equal(t, "Origin", w.Header().Get("Vary"))
 	})
 
 	t.Run("success - OPTIONS preflight request", func(t *testing.T) {
@@ -418,7 +419,7 @@ func TestCORSMiddleware_Use(t *testing.T) {
 		assert.Equal(t, "Origin", w.Header().Get("Vary"), "Vary header should be set for allowed origins")
 	})
 
-	t.Run("success - vary header not set for disallowed origins", func(t *testing.T) {
+	t.Run("success - vary header set for disallowed origins", func(t *testing.T) {
 		middleware := getTestCORSMiddleware(
 			[]string{"http://localhost:3000"},
 			[]string{"GET"},
@@ -440,7 +441,101 @@ func TestCORSMiddleware_Use(t *testing.T) {
 
 		wrappedHandler.ServeHTTP(w, req)
 
-		assert.Equal(t, "", w.Header().Get("Vary"), "Vary header should not be set for disallowed origins")
+		assert.Equal(t, "Origin", w.Header().Get("Vary"), "Vary header should be set for disallowed origins")
+	})
+
+	t.Run("disallowed origin preflight is rejected", func(t *testing.T) {
+		middleware := getTestCORSMiddleware(
+			[]string{"http://localhost:3000"},
+			[]string{"GET", "POST"},
+			[]string{"Content-Type"},
+			[]string{"X-Request-ID"},
+			true,
+			"3600",
+		)
+
+		handlerCalled := false
+		wrappedHandler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handlerCalled = true
+		}))
+
+		req := httptest.NewRequest("OPTIONS", "/test", nil)
+		req.Header.Set("Origin", "http://disallowed.com")
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.False(t, handlerCalled)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Equal(t, "Origin", w.Header().Get("Vary"))
+		for name := range w.Header() {
+			assert.NotContains(t, name, "Access-Control-")
+		}
+	})
+
+	t.Run("OPTIONS without origin is not rejected", func(t *testing.T) {
+		middleware := getTestCORSMiddleware(
+			[]string{"http://localhost:3000"},
+			[]string{"GET"},
+			[]string{"Content-Type"},
+			[]string{},
+			false,
+			"3600",
+		)
+		wrappedHandler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+		req := httptest.NewRequest("OPTIONS", "/test", nil)
+		w := httptest.NewRecorder()
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "Origin", w.Header().Get("Vary"))
+	})
+
+	t.Run("empty max age is resolved in the constructor", func(t *testing.T) {
+		middleware := getTestCORSMiddleware(
+			[]string{"http://localhost:3000"},
+			[]string{"GET"},
+			[]string{"Content-Type"},
+			[]string{},
+			false,
+			"",
+		)
+
+		wrappedHandler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Origin", "http://localhost:3000")
+		w := httptest.NewRecorder()
+		wrappedHandler.ServeHTTP(w, req)
+
+		assert.Equal(t, "86400", w.Header().Get("Access-Control-Max-Age"))
+	})
+
+	t.Run("concurrent requests are race free", func(t *testing.T) {
+		middleware := getTestCORSMiddleware(
+			[]string{"http://localhost:3000"},
+			[]string{"GET"},
+			[]string{"Content-Type"},
+			[]string{},
+			false,
+			"",
+		)
+		wrappedHandler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+		var wg sync.WaitGroup
+		for i := 0; i < 50; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				req := httptest.NewRequest("GET", "/test", nil)
+				req.Header.Set("Origin", "http://localhost:3000")
+				w := httptest.NewRecorder()
+				wrappedHandler.ServeHTTP(w, req)
+				assert.Equal(t, "86400", w.Header().Get("Access-Control-Max-Age"))
+			}()
+		}
+		wg.Wait()
 	})
 
 	t.Run("success - wildcard origin does not set credentials even if configured", func(t *testing.T) {

@@ -25,6 +25,10 @@ func NewCORSMiddleware(
 	allowCredentials bool,
 	maxAge string,
 ) GlobalMiddleware {
+	if maxAge == "" {
+		maxAge = "86400"
+	}
+
 	return &CORSMiddleware{
 		allowedOrigins:   allowedOrigins,
 		allowedMethods:   allowedMethods,
@@ -38,10 +42,15 @@ func NewCORSMiddleware(
 func (m *CORSMiddleware) Use(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
+		w.Header().Set("Vary", "Origin")
+
 		allowedOrigin := m.getAllowedOrigin(origin)
+		if origin != "" && allowedOrigin == nil && r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
 		if allowedOrigin != nil {
 			w.Header().Set("Access-Control-Allow-Origin", *allowedOrigin)
-			w.Header().Set("Vary", "Origin")
 		}
 
 		if len(m.allowedMethods) > 0 {
@@ -64,9 +73,6 @@ func (m *CORSMiddleware) Use(next http.Handler) http.Handler {
 		}
 		if m.allowCredentials && allowedOrigin != nil && *allowedOrigin != "*" {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
-		}
-		if m.maxAge == "" {
-			m.maxAge = "86400"
 		}
 		w.Header().Set("Access-Control-Max-Age", m.maxAge)
 
