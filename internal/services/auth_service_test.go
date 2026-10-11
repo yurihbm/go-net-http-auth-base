@@ -240,6 +240,34 @@ func TestAuthService_VerifyToken(t *testing.T) {
 		assert.Nil(t, result)
 	})
 
+	t.Run("token with missing or malformed claims", func(t *testing.T) {
+		exp := time.Now().Add(time.Hour).Unix()
+		cases := map[string]jwt.MapClaims{
+			"missing sub": {"aud": domain.TokenAudienceAccess, "exp": exp},
+			"missing aud": {"sub": "user-uuid-123", "exp": exp},
+			"missing exp": {"sub": "user-uuid-123", "aud": domain.TokenAudienceAccess},
+			"wrong exp type": {
+				"sub": "user-uuid-123",
+				"aud": domain.TokenAudienceAccess,
+				"exp": "tomorrow",
+			},
+		}
+
+		for name, claims := range cases {
+			t.Run(name, func(t *testing.T) {
+				tokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte("test-secret-key"))
+				require.NoError(t, err)
+
+				result, err := service.VerifyToken(context.Background(), domain.VerifyTokenDTO{
+					Token:    tokenString,
+					Audience: domain.TokenAudienceAccess,
+				})
+
+				assert.Equal(t, services.ErrInvalidToken, err)
+				assert.Nil(t, result)
+			})
+		}
+	})
 }
 
 func TestAuthService_RefreshToken(t *testing.T) {

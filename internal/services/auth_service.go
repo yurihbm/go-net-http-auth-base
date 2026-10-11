@@ -84,20 +84,24 @@ func (s *authService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
-	sub := claims["sub"].(string)
-	aud := domain.TokenAudience(claims["aud"].(string))
-	exp := int64(claims["exp"].(float64))
-	payload := claims["payload"]
-	if ok && token.Valid && aud == dto.Audience {
-		return &domain.VerifiedTokenData{
-			Subject:    sub,
-			Audience:   aud,
-			Expiration: exp,
-			Payload:    payload,
-		}, nil
+	if !ok || !token.Valid {
+		return nil, ErrInvalidToken
 	}
 
-	return nil, ErrInvalidToken
+	sub, subOk := claims["sub"].(string)
+	audClaim, audOk := claims["aud"].(string)
+	exp, expOk := claims["exp"].(float64)
+	aud := domain.TokenAudience(audClaim)
+	if !subOk || !audOk || !expOk || aud != dto.Audience {
+		return nil, ErrInvalidToken
+	}
+
+	return &domain.VerifiedTokenData{
+		Subject:    sub,
+		Audience:   aud,
+		Expiration: int64(exp),
+		Payload:    claims["payload"],
+	}, nil
 }
 
 func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenDTO) (domain.AuthTokens, error) {
