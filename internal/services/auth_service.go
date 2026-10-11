@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"time"
 
 	"go-net-http-auth-base/internal/domain"
@@ -18,6 +17,7 @@ type authService struct {
 	usersService          domain.UsersService
 	authRepository        domain.AuthRepository
 	oauthProviderRegistry domain.OAuthProviderRegistry
+	transactor            domain.Transactor
 	jwtSecret             string
 }
 
@@ -25,12 +25,14 @@ func NewAuthService(
 	usersService domain.UsersService,
 	authRepository domain.AuthRepository,
 	oauthProviderRegistry domain.OAuthProviderRegistry,
+	transactor domain.Transactor,
 	jwtSecret string,
 ) domain.AuthService {
 	return &authService{
 		usersService,
 		authRepository,
 		oauthProviderRegistry,
+		transactor,
 		jwtSecret,
 	}
 }
@@ -306,25 +308,26 @@ func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAut
 	}
 
 	// Case 3: provider is not used and there is no user with this email (create user and link).
-	newUser, err := s.usersService.CreateOAuth(ctx, domain.CreateOAuthUserDTO{
-		Name:  userInfo.Name,
-		Email: userInfo.Email,
+	var newUser *domain.User
+	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		newUser, err = s.usersService.CreateOAuth(ctx, domain.CreateOAuthUserDTO{
+			Name:  userInfo.Name,
+			Email: userInfo.Email,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
+			UserUUID:       newUser.UUID,
+			Provider:       provider,
+			ProviderUserID: userInfo.ID,
+			ProviderEmail:  userInfo.Email,
+		})
+		return err
 	})
 	if err != nil {
-		return nil, err
-	}
-
-	if _, err := s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
-		UserUUID:       newUser.UUID,
-		Provider:       provider,
-		ProviderUserID: userInfo.ID,
-		ProviderEmail:  userInfo.Email,
-	}); err != nil {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if delErr := s.usersService.Delete(cleanupCtx, newUser.UUID); delErr != nil {
-			slog.Error("oauthLogin.rollback.userDeletionFailed", "user_uuid", newUser.UUID, "error", delErr)
-		}
 		return nil, err
 	}
 

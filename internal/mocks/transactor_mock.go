@@ -15,6 +15,6 @@ type TransactorMock struct {
 var _ domain.Transactor = (*TransactorMock)(nil)
 
 func (m *TransactorMock) WithinTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	args := m.Called(fn)
-	return args.Error(0)
+	m.Called()
+	return fn(ctx)
 }

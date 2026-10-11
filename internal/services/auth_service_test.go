@@ -17,11 +17,17 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func newTransactorMock() *mocks.TransactorMock {
+	transactor := new(mocks.TransactorMock)
+	transactor.On("WithinTx").Return()
+	return transactor
+}
+
 func TestNewAuthService(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 	assert.NotNil(t, service)
 }
 
@@ -29,7 +35,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		password := "password123"
@@ -126,7 +132,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		userUUID := "user-uuid-123"
@@ -274,7 +280,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		userUUID := "user-uuid-123"
@@ -352,7 +358,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success with access token audience", func(t *testing.T) {
 		dto := domain.GenerateTokenDTO{
@@ -425,7 +431,7 @@ func TestAuthService_AddUserOAuthProvider(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		provider := domain.UserOAuthProvider{
@@ -478,7 +484,7 @@ func TestAuthService_GetUserOAuthProvider(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		provider := domain.UserOAuthProvider{
@@ -525,7 +531,7 @@ func TestAuthService_RemoveUserOAuthProvider(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		dto := domain.RemoveUserOAuthProviderDTO{
@@ -560,7 +566,7 @@ func TestAuthService_GetUserOAuthProvidersByUserUUID(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		providers := []domain.UserOAuthProvider{
@@ -613,7 +619,7 @@ func TestAuthService_GetOAuthProviderAuthURL(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
@@ -647,7 +653,7 @@ func TestAuthService_GetOAuthProviderUserInfo(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, "test-secret-key")
+	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
 
 	t.Run("success", func(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
@@ -728,7 +734,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -758,7 +764,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -788,7 +794,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		email := "test@example.com"
@@ -816,7 +822,8 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		transactor := newTransactorMock()
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, transactor, jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		newUserUUID := "new-user-uuid"
@@ -842,13 +849,15 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		assert.Equal(t, newUserUUID, result.User.UUID)
 		usersService.AssertExpectations(t)
 		authRepo.AssertExpectations(t)
+		transactor.AssertNumberOfCalls(t, "WithinTx", 1)
 	})
 
 	t.Run("error - create user fails (Case 3)", func(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		transactor := newTransactorMock()
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, transactor, jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		email := "new@example.com"
@@ -868,13 +877,15 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		assert.Nil(t, result)
 		usersService.AssertExpectations(t)
 		authRepo.AssertNotCalled(t, "CreateUserOAuthProvider", mock.Anything)
+		transactor.AssertNumberOfCalls(t, "WithinTx", 1)
 	})
 
-	t.Run("error - link fails after create, rollback runs (Case 3)", func(t *testing.T) {
+	t.Run("error - link fails after create, error returned (Case 3)", func(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		transactor := newTransactorMock()
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, transactor, jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		newUserUUID := "new-user-uuid"
@@ -892,7 +903,6 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		authRepo.On("CreateUserOAuthProvider", mock.MatchedBy(func(p domain.UserOAuthProvider) bool {
 			return p.UserUUID == newUserUUID
 		})).Return(nil, linkErr).Once()
-		usersService.On("Delete", newUserUUID).Return(nil).Once()
 
 		state := newState(t, service, string(provider))
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
@@ -902,13 +912,14 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		assert.Nil(t, result)
 		usersService.AssertExpectations(t)
 		authRepo.AssertExpectations(t)
+		transactor.AssertNumberOfCalls(t, "WithinTx", 1)
 	})
 
 	t.Run("error - fetch user fails (Case 1)", func(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -932,7 +943,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -953,14 +964,13 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Nil(t, result)
-		usersService.AssertNotCalled(t, "Delete", mock.Anything)
 	})
 
 	t.Run("error - invalid state token", func(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{
 			Provider: provider,
@@ -976,7 +986,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 
 		state := newState(t, service, string(domain.OAuthProviderGitHub))
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{
@@ -996,7 +1006,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 
 		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  string(provider),
@@ -1020,7 +1030,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 				usersService := new(mocks.UsersServiceMock)
 				authRepo := new(mocks.AuthRepositoryMock)
 				oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-				service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+				service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 
 				state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
 					Subject:  string(provider),
@@ -1043,7 +1053,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
@@ -1060,7 +1070,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userInfo := &domain.OAuthProviderUserInfo{ID: "", Name: "Test User", Email: "test@example.com"}
@@ -1082,7 +1092,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: "test@example.com"}
@@ -1103,7 +1113,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, jwtSecret)
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		email := "test@example.com"

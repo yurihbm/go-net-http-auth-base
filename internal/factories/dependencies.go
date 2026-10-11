@@ -49,6 +49,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		usersService,
 		authRepository,
 		oauthProviderRegistry,
+		repositories.NewPostgresTransactor(pool),
 		cfg.JWTSecret,
 	)
 
