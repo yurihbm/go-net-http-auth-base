@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"go-net-http-auth-base/internal/domain"
 	"net/http"
-	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -33,7 +32,7 @@ func (p *googleOAuthProvider) GetAuthURL(_ context.Context, state string) string
 }
 
 func (p *googleOAuthProvider) GetUserInfo(ctx context.Context, code string) (*domain.OAuthProviderUserInfo, error) {
-	tokens, err := p.config.Exchange(ctx, code)
+	tokens, err := p.config.Exchange(withOAuthHTTPClient(ctx), code)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +44,7 @@ func (p *googleOAuthProvider) GetUserInfo(ctx context.Context, code string) (*do
 
 	req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: oauthHTTPTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

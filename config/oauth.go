@@ -28,6 +28,7 @@ func NewGitHubOAuthConfig(creds OAuthProviderCredentials, apiURL string) oauth2.
 		Endpoint:     github.Endpoint,
 		Scopes: []string{
 			"read:user",
+			"user:email",
 		},
 	}
 }

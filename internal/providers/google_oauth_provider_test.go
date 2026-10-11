@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/providers"
@@ -243,5 +244,16 @@ func TestGoogleOAuthProvider_GetUserInfo(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
+	})
+
+	t.Run("exchange times out", func(t *testing.T) {
+		provider := providers.NewGoogleOAuthProvider(newHangingTokenConfig(t), "http://example.com/user")
+
+		start := time.Now()
+		userInfo, err := provider.GetUserInfo(context.Background(), "test-auth-code")
+
+		assert.Error(t, err)
+		assert.Nil(t, userInfo)
+		assert.Less(t, time.Since(start), 2*time.Second)
 	})
 }
