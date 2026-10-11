@@ -17,11 +17,17 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+const allowedRedirectURI = "http://localhost:3000/callback"
+
 func newTestAuthController() (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.AuditServiceMock) {
+	return newTestAuthControllerWithAllowList([]string{allowedRedirectURI})
+}
+
+func newTestAuthControllerWithAllowList(allowList []string) (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.AuditServiceMock) {
 	authServiceMock := new(mocks.AuthServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, auditMock, true)
+	controller := controllers.NewAuthController(authServiceMock, auditMock, true, allowList)
 	return controller, authServiceMock, auditMock
 }
 
@@ -330,6 +336,41 @@ func TestAuthController_LoginWithOAuthProvider(t *testing.T) {
 		assert.Empty(t, response.Data)
 		assert.Empty(t, response.Message)
 		assert.NotEmpty(t, response.Error)
+	})
+
+	t.Run("bad request - redirect_uri validation", func(t *testing.T) {
+		cases := []struct {
+			name      string
+			allowList []string
+			query     string
+		}{
+			{"not in allow list", []string{allowedRedirectURI}, "?redirect_uri=https://evil.example/callback"},
+			{"prefix of allowed uri", []string{allowedRedirectURI}, "?redirect_uri=http://localhost:3000/callback/extra"},
+			{"missing redirect_uri", []string{allowedRedirectURI}, ""},
+			{"empty redirect_uri", []string{allowedRedirectURI}, "?redirect_uri="},
+			{"empty allow list", []string{}, "?redirect_uri=" + allowedRedirectURI},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				controller, serviceMock, _ := newTestAuthControllerWithAllowList(tc.allowList)
+
+				w, req := getControllerArgs("GET", "/auth/google/login"+tc.query, nil)
+				req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+
+				controller.LoginWithOAuthProvider(w, req)
+
+				var response api.ResponseBody[any]
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+
+				assert.Nil(t, err)
+				assert.Equal(t, http.StatusBadRequest, w.Code)
+				assert.NotEmpty(t, response.Error)
+				assert.Empty(t, w.Header().Get("Location"))
+				serviceMock.AssertNotCalled(t, "GenerateToken", mock.Anything)
+				serviceMock.AssertNotCalled(t, "GetOAuthProviderAuthURL", mock.Anything, mock.Anything)
+			})
+		}
 	})
 
 	t.Run("internal server error - token generation fails", func(t *testing.T) {

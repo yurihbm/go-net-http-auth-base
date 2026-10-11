@@ -65,6 +65,8 @@ type OAuthConfig struct {
 	Google    OAuthProviderCredentials
 	GitHub    OAuthProviderCredentials
 	Microsoft OAuthProviderCredentials
+
+	CallbackAllowList []string
 }
 
 type CORSConfig struct {
@@ -99,7 +101,7 @@ func Load() (*Config, error) {
 		port = defaultPort
 	}
 
-	return &Config{
+	cfg := &Config{
 		Env:    os.Getenv("API_ENV"),
 		Port:   port,
 		APIURL: os.Getenv("API_URL"),
@@ -121,6 +123,7 @@ func Load() (*Config, error) {
 				ClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
 				ClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
 			},
+			CallbackAllowList: parseCommaSeparated(os.Getenv("OAUTH_CALLBACK_ALLOW_LIST")),
 		},
 
 		CORS: CORSConfig{
@@ -134,7 +137,13 @@ func Load() (*Config, error) {
 		},
 
 		DBStatsLogInterval: env.GetEnvAsDuration("DB_STATS_LOG_INTERVAL", defaultDBStatsLogInterval),
-	}, nil
+	}
+
+	if cfg.IsProduction() && len(cfg.OAuth.CallbackAllowList) == 0 {
+		return nil, errors.New("OAUTH_CALLBACK_ALLOW_LIST must not be empty in production")
+	}
+
+	return cfg, nil
 }
 
 // LoadDatabaseConfig reads the database pool settings from environment

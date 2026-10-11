@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"slices"
 	"time"
 
 	"go-net-http-auth-base/internal/api"
@@ -15,10 +16,18 @@ var ErrInvalidOAuthProvider = domain.NewValidationError(
 	},
 )
 
+var ErrInvalidRedirectURI = domain.NewValidationError(
+	"auth.login.invalidRedirectUri",
+	map[string]string{
+		"redirect_uri": "redirect_uri is not allowed",
+	},
+)
+
 type AuthController struct {
-	authService    domain.AuthService
-	auditService   domain.AuditService
-	isSecureCookie bool
+	authService       domain.AuthService
+	auditService      domain.AuditService
+	isSecureCookie    bool
+	callbackAllowList []string
 }
 
 var _ Controller = (*AuthController)(nil)
@@ -27,11 +36,13 @@ func NewAuthController(
 	authService domain.AuthService,
 	auditService domain.AuditService,
 	isSecureCookie bool,
+	callbackAllowList []string,
 ) *AuthController {
 	return &AuthController{
 		authService,
 		auditService,
 		isSecureCookie,
+		callbackAllowList,
 	}
 }
 
@@ -128,11 +139,17 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	redirectURI := r.URL.Query().Get("redirect_uri")
+	if !slices.Contains(c.callbackAllowList, redirectURI) || redirectURI == "" {
+		api.HandleError(r.Context(), w, ErrInvalidRedirectURI)
+		return
+	}
+
 	state, err := c.authService.GenerateToken(r.Context(), domain.GenerateTokenDTO{
 		Audience: domain.TokenAudienceOAuthState,
 		Subject:  string(providerName),
 		Payload: map[string]string{
-			"redirect_uri": r.URL.Query().Get("redirect_uri"),
+			"redirect_uri": redirectURI,
 		},
 	})
 

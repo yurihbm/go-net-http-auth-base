@@ -47,12 +47,38 @@ func TestLoad(t *testing.T) {
 		assert.Nil(t, cfg)
 	})
 
+	t.Run("returns error in production when OAUTH_CALLBACK_ALLOW_LIST is empty", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "production")
+		t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "")
+
+		cfg, err := config.Load()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "OAUTH_CALLBACK_ALLOW_LIST")
+		assert.Nil(t, cfg)
+	})
+
+	t.Run("allows empty OAUTH_CALLBACK_ALLOW_LIST outside production", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Empty(t, cfg.OAuth.CallbackAllowList)
+	})
+
 	t.Run("applies defaults for optional vars", func(t *testing.T) {
 		t.Setenv("JWT_SECRET", validJWTSecret)
 		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
 		t.Setenv("API_PORT", "")
 		t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "")
 		t.Setenv("RATE_LIMIT_BURST", "")
+		t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "")
 		t.Setenv("CORS_ALLOWED_ORIGINS", "")
 		t.Setenv("CORS_ALLOWED_METHODS", "")
 
@@ -62,6 +88,7 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, "8080", cfg.Port)
 		assert.Equal(t, 20.0, cfg.RateLimit.RequestsPerSecond)
 		assert.Equal(t, 50, cfg.RateLimit.Burst)
+		assert.Equal(t, []string{}, cfg.OAuth.CallbackAllowList)
 		assert.Equal(t, []string{}, cfg.CORS.AllowedOrigins)
 		assert.Equal(t, []string{}, cfg.CORS.AllowedMethods)
 	})
@@ -78,6 +105,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("GITHUB_CLIENT_SECRET", "github-secret")
 		t.Setenv("MICROSOFT_CLIENT_ID", "microsoft-id")
 		t.Setenv("MICROSOFT_CLIENT_SECRET", "microsoft-secret")
+		t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "http://a.com/cb, http://b.com/cb")
 		t.Setenv("CORS_ALLOWED_ORIGINS", "http://a.com, http://b.com")
 		t.Setenv("CORS_ALLOWED_METHODS", "GET, POST")
 		t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "5.5")
@@ -96,6 +124,7 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "google-id", ClientSecret: "google-secret"}, cfg.OAuth.Google)
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "github-id", ClientSecret: "github-secret"}, cfg.OAuth.GitHub)
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "microsoft-id", ClientSecret: "microsoft-secret"}, cfg.OAuth.Microsoft)
+		assert.Equal(t, []string{"http://a.com/cb", "http://b.com/cb"}, cfg.OAuth.CallbackAllowList)
 		assert.Equal(t, []string{"http://a.com", "http://b.com"}, cfg.CORS.AllowedOrigins)
 		assert.Equal(t, []string{"GET", "POST"}, cfg.CORS.AllowedMethods)
 		assert.Equal(t, 5.5, cfg.RateLimit.RequestsPerSecond)

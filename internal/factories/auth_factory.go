@@ -10,5 +10,6 @@ func AuthFactory(deps *Dependencies, cfg *config.Config) controllers.Controller 
 		deps.AuthService,
 		deps.AuditService,
 		!cfg.IsDevelopment(),
+		cfg.OAuth.CallbackAllowList,
 	)
 }
