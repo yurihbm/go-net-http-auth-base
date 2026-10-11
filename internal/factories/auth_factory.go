@@ -8,7 +8,6 @@ import (
 func AuthFactory(deps *Dependencies, cfg *config.Config) controllers.Controller {
 	return controllers.NewAuthController(
 		deps.AuthService,
-		deps.UsersService,
 		deps.AuditService,
 		!cfg.IsDevelopment(),
 	)

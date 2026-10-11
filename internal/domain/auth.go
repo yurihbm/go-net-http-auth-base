@@ -107,6 +107,18 @@ type RemoveUserOAuthProviderDTO struct {
 	ProviderUUID string `json:"provider_uuid"`
 }
 
+type OAuthLoginDTO struct {
+	Provider OAuthProviderName
+	State    string
+	Code     string
+}
+
+type OAuthLoginResult struct {
+	User        *User
+	Tokens      AuthTokens
+	RedirectURI string
+}
+
 type OAuthProvider interface {
 	GetAuthURL(context.Context, string) string
 	GetUserInfo(context.Context, string) (*OAuthProviderUserInfo, error)
@@ -129,6 +141,7 @@ type AuthService interface {
 	GetUserOAuthProvidersByUserUUID(context.Context, string) ([]UserOAuthProvider, error)
 	GetOAuthProviderAuthURL(context.Context, OAuthProviderName, string) (string, error)
 	GetOAuthProviderUserInfo(context.Context, OAuthProviderName, string) (*OAuthProviderUserInfo, error)
+	OAuthLogin(context.Context, OAuthLoginDTO) (*OAuthLoginResult, error)
 }
 
 type AuthRepository interface {

@@ -93,3 +93,11 @@ func (m *AuthServiceMock) GetOAuthProviderUserInfo(ctx context.Context, provider
 	}
 	return nil, args.Error(1)
 }
+
+func (m *AuthServiceMock) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) (*domain.OAuthLoginResult, error) {
+	args := m.Called(dto)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.OAuthLoginResult), args.Error(1)
+	}
+	return nil, args.Error(1)
+}

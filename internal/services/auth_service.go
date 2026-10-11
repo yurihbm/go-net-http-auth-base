@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"go-net-http-auth-base/internal/domain"
@@ -201,6 +202,147 @@ func (s *authService) GetOAuthProviderUserInfo(ctx context.Context, providerName
 	}
 
 	return userInfo, nil
+}
+
+func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) (*domain.OAuthLoginResult, error) {
+	tokenData, err := s.VerifyToken(ctx, domain.VerifyTokenDTO{
+		Token:    dto.State,
+		Audience: domain.TokenAudienceOAuthState,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if tokenData.Subject != string(dto.Provider) {
+		return nil, domain.NewUnauthorizedError("auth.oauthLogin.providerMismatch")
+	}
+
+	redirectURI, ok := tokenData.Payload.(map[string]any)["redirect_uri"].(string)
+	if !ok {
+		return nil, domain.NewValidationError(
+			"auth.providerCallback.invalidStatePayload",
+			map[string]string{
+				"redirect_uri": "invalid redirect_uri in state payload",
+			},
+		)
+	}
+
+	userInfo, err := s.GetOAuthProviderUserInfo(ctx, dto.Provider, dto.Code)
+	if err != nil {
+		return nil, err
+	}
+
+	if userInfo.ID == "" || userInfo.Email == "" {
+		details := map[string]string{}
+		if userInfo.ID == "" {
+			details["id"] = "user ID is required"
+		}
+		if userInfo.Email == "" {
+			details["email"] = "user email is required"
+		}
+		return nil, domain.NewValidationError("auth.providerCallback.invalidUserInfo", details)
+	}
+
+	authenticatedUser, err := s.resolveOAuthUser(ctx, dto.Provider, userInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
+		Subject:  authenticatedUser.UUID,
+		Audience: domain.TokenAudienceAccess,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	refreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
+		Subject:  authenticatedUser.UUID,
+		Audience: domain.TokenAudienceRefresh,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.OAuthLoginResult{
+		User: authenticatedUser,
+		Tokens: domain.AuthTokens{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+		},
+		RedirectURI: redirectURI,
+	}, nil
+}
+
+func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, error) {
+	var notFoundErr *domain.NotFoundError
+
+	userOAuthProvider, err := s.GetUserOAuthProvider(ctx, domain.GetUserOAuthProviderDTO{
+		Provider:       provider,
+		ProviderUserID: userInfo.ID,
+	})
+	if err != nil && !errors.As(err, &notFoundErr) {
+		return nil, err
+	}
+
+	// Case 1: provider is already linked to a user.
+	if userOAuthProvider != nil {
+		return s.usersService.GetByUUID(ctx, userOAuthProvider.UserUUID)
+	}
+
+	existingUser, err := s.usersService.GetByEmail(ctx, userInfo.Email)
+	if err != nil && !errors.As(err, &notFoundErr) {
+		return nil, err
+	}
+
+	// Case 2: provider email matches an existing user account (link provider).
+	// Require the provider to have verified this email to prevent account takeover.
+	if existingUser != nil {
+		if !userInfo.EmailVerified {
+			return nil, domain.NewValidationError(
+				"auth.providerCallback.emailNotVerified",
+				map[string]string{
+					"email": "provider email is not verified",
+				},
+			)
+		}
+
+		if _, err := s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
+			UserUUID:       existingUser.UUID,
+			Provider:       provider,
+			ProviderUserID: userInfo.ID,
+			ProviderEmail:  userInfo.Email,
+		}); err != nil {
+			return nil, err
+		}
+
+		return existingUser, nil
+	}
+
+	// Case 3: provider is not used and there is no user with this email (create user and link).
+	newUser, err := s.usersService.CreateOAuth(ctx, domain.CreateOAuthUserDTO{
+		Name:  userInfo.Name,
+		Email: userInfo.Email,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
+		UserUUID:       newUser.UUID,
+		Provider:       provider,
+		ProviderUserID: userInfo.ID,
+		ProviderEmail:  userInfo.Email,
+	}); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if delErr := s.usersService.Delete(cleanupCtx, newUser.UUID); delErr != nil {
+			slog.Error("oauthLogin.rollback.userDeletionFailed", "user_uuid", newUser.UUID, "error", delErr)
+		}
+		return nil, err
+	}
+
+	return newUser, nil
 }
 
 func getTokenExpiration(audience domain.TokenAudience) int64 {

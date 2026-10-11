@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,7 +17,6 @@ var ErrInvalidOAuthProvider = domain.NewValidationError(
 
 type AuthController struct {
 	authService    domain.AuthService
-	usersService   domain.UsersService
 	auditService   domain.AuditService
 	isSecureCookie bool
 }
@@ -27,13 +25,11 @@ var _ Controller = (*AuthController)(nil)
 
 func NewAuthController(
 	authService domain.AuthService,
-	usersService domain.UsersService,
 	auditService domain.AuditService,
 	isSecureCookie bool,
 ) *AuthController {
 	return &AuthController{
 		authService,
-		usersService,
 		auditService,
 		isSecureCookie,
 	}
@@ -182,163 +178,36 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	tokenData, err := c.authService.VerifyToken(r.Context(), domain.VerifyTokenDTO{
-		Token:    state,
-		Audience: domain.TokenAudienceOAuthState,
+	result, err := c.authService.OAuthLogin(r.Context(), domain.OAuthLoginDTO{
+		Provider: providerName,
+		State:    state,
+		Code:     code,
 	})
 	if err != nil {
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	redirectURI, ok := tokenData.Payload.(map[string]any)["redirect_uri"].(string)
-	if !ok {
-		api.HandleError(r.Context(), w,
-			domain.NewValidationError(
-				"auth.providerCallback.invalidStatePayload",
-				map[string]string{
-					"redirect_uri": "invalid redirect_uri in state payload",
-				},
-			),
-		)
-		return
-	}
-
-	userInfo, err := c.authService.GetOAuthProviderUserInfo(
-		r.Context(),
-		providerName,
-		code,
-	)
-	if err != nil {
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	if userInfo.ID == "" || userInfo.Email == "" {
-		details := map[string]string{}
-		if userInfo.ID == "" {
-			details["id"] = "user ID is required"
-		}
-		if userInfo.Email == "" {
-			details["email"] = "user email is required"
-		}
-		api.HandleError(r.Context(), w,
-			domain.NewValidationError(
-				"auth.providerCallback.invalidUserInfo",
-				details,
-			),
-		)
-		return
-	}
-
-	userOAuthProvider, _ := c.authService.GetUserOAuthProvider(r.Context(), domain.GetUserOAuthProviderDTO{
-		Provider:       providerName,
-		ProviderUserID: userInfo.ID,
-	})
-
-	var authenticatedUser *domain.User
-
-	// Case 1: Provider account is already used
-	if userOAuthProvider != nil {
-		authenticatedUser, err = c.usersService.GetByUUID(r.Context(), userOAuthProvider.UserUUID)
-		if err != nil {
-			api.HandleError(r.Context(), w, err)
-			return
-		}
-	} else {
-		// Case 2 & 3: Provider is not used, check if user exists by email
-		existingUser, _ := c.usersService.GetByEmail(r.Context(), userInfo.Email)
-
-		if existingUser != nil {
-			// Case 2: Provider email matches existing user account (link provider)
-			// Require the provider to have verified this email to prevent account takeover.
-			if !userInfo.EmailVerified {
-				api.HandleError(r.Context(), w,
-					domain.NewValidationError(
-						"auth.providerCallback.emailNotVerified",
-						map[string]string{
-							"email": "provider email is not verified",
-						},
-					),
-				)
-				return
-			}
-			authenticatedUser = existingUser
-			_, err := c.authService.AddUserOAuthProvider(r.Context(), domain.AddUserOAuthProviderDTO{
-				UserUUID:       existingUser.UUID,
-				Provider:       providerName,
-				ProviderUserID: userInfo.ID,
-				ProviderEmail:  userInfo.Email,
-			})
-			if err != nil {
-				api.HandleError(r.Context(), w, err)
-				return
-			}
-		} else {
-			// Case 3: Provider is not used and there is no user with email (create user and link)
-			// TODO: Use transaction here to avoid orphaned OAuthProvider records
-			newUser, err := c.usersService.CreateOAuth(r.Context(), domain.CreateOAuthUserDTO{
-				Name:  userInfo.Name,
-				Email: userInfo.Email,
-			})
-			if err != nil {
-				api.HandleError(r.Context(), w, err)
-				return
-			}
-
-			_, err = c.authService.AddUserOAuthProvider(r.Context(), domain.AddUserOAuthProviderDTO{
-				UserUUID:       newUser.UUID,
-				Provider:       providerName,
-				ProviderUserID: userInfo.ID,
-				ProviderEmail:  userInfo.Email,
-			})
-			if err != nil {
-				// TODO: Remove this when transaction is implemented
-				api.HandleError(r.Context(), w, err)
-				// Rollback user creation
-				if err := c.usersService.Delete(r.Context(), newUser.UUID); err != nil {
-					slog.Error("oauthProviderCallback.rollback.userDeletionFailed", "user_uuid", newUser.UUID, "error", err)
-				}
-				return
-			}
-
-			authenticatedUser = newUser
-		}
-	}
-
-	accessToken, err := c.authService.GenerateToken(r.Context(), domain.GenerateTokenDTO{
-		Subject:  authenticatedUser.UUID,
-		Audience: domain.TokenAudienceAccess,
-	})
-	if err != nil {
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	refreshToken, err := c.authService.GenerateToken(r.Context(), domain.GenerateTokenDTO{
-		Subject:  authenticatedUser.UUID,
-		Audience: domain.TokenAudienceRefresh,
-	})
-	if err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			Action:        domain.AuditActionOAuthLogin,
+			ResourceType:  domain.AuditResourceAuth,
+			ResourceUUID:  "",
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
 		api.HandleError(r.Context(), w, err)
 		return
 	}
 
 	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
-		ActorUUID:    &authenticatedUser.UUID,
+		ActorUUID:    &result.User.UUID,
 		Action:       domain.AuditActionOAuthLogin,
 		ResourceType: domain.AuditResourceAuth,
-		ResourceUUID: authenticatedUser.UUID,
+		ResourceUUID: result.User.UUID,
 		Changes:      map[string]string{"provider": string(providerName)},
 		Status:       domain.AuditStatusSuccess,
 	})
 
-	c.setAuthCookies(w, domain.AuthTokens{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	})
+	c.setAuthCookies(w, result.Tokens)
 
-	http.Redirect(w, r, redirectURI, http.StatusFound)
+	http.Redirect(w, r, result.RedirectURI, http.StatusFound)
 }
 
 func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.AuthTokens) {
