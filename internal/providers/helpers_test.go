@@ -1,6 +1,7 @@
 package providers_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,13 @@ import (
 
 	"golang.org/x/oauth2"
 )
+
+func encodeJSON(t *testing.T, w http.ResponseWriter, v any) {
+	err := json.NewEncoder(w).Encode(v)
+	if err != nil {
+		t.Fatalf("failed to encode JSON: %v", err)
+	}
+}
 
 func newHangingTokenConfig(t *testing.T) oauth2.Config {
 	t.Helper()

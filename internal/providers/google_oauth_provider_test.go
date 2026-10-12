@@ -2,7 +2,6 @@ package providers_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,13 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 )
-
-func encodeJSON(t *testing.T, w http.ResponseWriter, v any) {
-	err := json.NewEncoder(w).Encode(v)
-	if err != nil {
-		t.Fatalf("failed to encode JSON: %v", err)
-	}
-}
 
 var config = oauth2.Config{
 	ClientID:     "test-client-id",
