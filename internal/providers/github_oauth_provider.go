@@ -27,12 +27,12 @@ func NewGitHubOAuthProvider(config oauth2.Config, infoURL ...string) domain.OAut
 	}
 }
 
-func (p *githubOAuthProvider) GetAuthURL(_ context.Context, state string) string {
-	return p.config.AuthCodeURL(state)
+func (p *githubOAuthProvider) GetAuthURL(_ context.Context, state string, codeVerifier string) string {
+	return p.config.AuthCodeURL(state, oauth2.S256ChallengeOption(codeVerifier))
 }
 
-func (p *githubOAuthProvider) GetUserInfo(ctx context.Context, code string) (*domain.OAuthProviderUserInfo, error) {
-	tokens, err := p.config.Exchange(withOAuthHTTPClient(ctx), code)
+func (p *githubOAuthProvider) GetUserInfo(ctx context.Context, code string, codeVerifier string) (*domain.OAuthProviderUserInfo, error) {
+	tokens, err := p.config.Exchange(withOAuthHTTPClient(ctx), code, oauth2.VerifierOption(codeVerifier))
 	if err != nil {
 		return nil, err
 	}

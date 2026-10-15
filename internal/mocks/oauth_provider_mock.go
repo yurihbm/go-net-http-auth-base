@@ -14,13 +14,13 @@ type OAuthProviderMock struct {
 
 var _ domain.OAuthProvider = (*OAuthProviderMock)(nil)
 
-func (m *OAuthProviderMock) GetAuthURL(_ context.Context, state string) string {
-	args := m.Called(state)
+func (m *OAuthProviderMock) GetAuthURL(_ context.Context, state string, codeVerifier string) string {
+	args := m.Called(state, codeVerifier)
 	return args.String(0)
 }
 
-func (m *OAuthProviderMock) GetUserInfo(ctx context.Context, code string) (*domain.OAuthProviderUserInfo, error) {
-	args := m.Called(ctx, code)
+func (m *OAuthProviderMock) GetUserInfo(ctx context.Context, code string, codeVerifier string) (*domain.OAuthProviderUserInfo, error) {
+	args := m.Called(ctx, code, codeVerifier)
 	if args.Get(0) != nil {
 		return args.Get(0).(*domain.OAuthProviderUserInfo), args.Error(1)
 	}

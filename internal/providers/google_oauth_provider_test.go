@@ -32,9 +32,19 @@ func TestGoogleOAuthProvider_GetAuthURL(t *testing.T) {
 	provider := providers.NewGoogleOAuthProvider(config)
 	state := "test-state"
 
-	authURL := provider.GetAuthURL(context.Background(), state)
+	authURL := provider.GetAuthURL(context.Background(), state, testCodeVerifier)
 
 	assert.Contains(t, authURL, "state="+state)
+	assertPKCEChallenge(t, authURL)
+}
+
+func TestGoogleOAuthProvider_GetUserInfo_SendsCodeVerifier(t *testing.T) {
+	cfg, receivedVerifier := newVerifierCapturingTokenConfig(t)
+	provider := providers.NewGoogleOAuthProvider(cfg)
+
+	_, _ = provider.GetUserInfo(context.Background(), "test-auth-code", testCodeVerifier)
+
+	assert.Equal(t, testCodeVerifier, *receivedVerifier)
 }
 
 func TestGoogleOAuthProvider_GetUserInfo(t *testing.T) {
@@ -80,7 +90,7 @@ func TestGoogleOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGoogleOAuthProvider(testConfig, userInfoServer.URL)
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code")
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, userInfo)
@@ -113,7 +123,7 @@ func TestGoogleOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGoogleOAuthProvider(testConfig, "http://example.com/userinfo")
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "invalid-code")
+		userInfo, err := provider.GetUserInfo(ctx, "invalid-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
@@ -152,7 +162,7 @@ func TestGoogleOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGoogleOAuthProvider(testConfig, userInfoServer.URL)
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code")
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
@@ -197,7 +207,7 @@ func TestGoogleOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGoogleOAuthProvider(testConfig, userInfoServer.URL)
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code")
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
@@ -232,7 +242,7 @@ func TestGoogleOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGoogleOAuthProvider(testConfig, "http://invalid-unreachable-host:9999/userinfo")
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code")
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
@@ -242,7 +252,7 @@ func TestGoogleOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGoogleOAuthProvider(newHangingTokenConfig(t), "http://example.com/user")
 
 		start := time.Now()
-		userInfo, err := provider.GetUserInfo(context.Background(), "test-auth-code")
+		userInfo, err := provider.GetUserInfo(context.Background(), "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)

@@ -396,7 +396,8 @@ half-finished behavior.
 - [x] **Invalid-JSON error handling is weak** — `internal/controllers/auth_controller.go:52` (and similar decode sites). Decode failures return a bare error string; return a `domain.ValidationError` with field details. Fold into the 2.6.2 validation entry point.
 - [x] **Role check hits the DB every request** — `internal/middlewares/role_middleware.go:25`. `RoleMiddleware` fetches the user from the database to read its role; carry the role in the JWT payload and read it from the token instead.
 - [x] **No self-or-admin authorization on user read/update/delete** (security review, high) — `internal/controllers/users_controller.go:34-36`, `internal/services/users_service.go:50,66`. Any authenticated user can `GET`, `PUT`, or `DELETE` `/users/{uuid}` for **any** user. Update is takeover-class: change a victim's email to one the attacker controls at an OAuth provider, then OAuth-login — the attacker's provider account gets linked to the victim's user. Read is an IDOR leaking name/email/role (password hash is already excluded via `json:"-"`). Add one self-or-admin rule covering all three endpoints.
-- [ ] **OAuth flow has no browser-session binding (login CSRF) and no PKCE** (security review, medium-high) — `internal/controllers/auth_controller.go:125,155`. The state JWT proves the server minted it but nothing ties it to the browser that started the flow: an attacker can start the flow themselves, take the resulting callback URL (valid state + their code), and make a victim's browser visit it — silently logging the victim into the attacker's account. The open-redirect fix does not cover this. Set a random nonce in a short-lived cookie at login, embed it in the state payload, compare on callback. Also add PKCE via `oauth2.S256ChallengeOption`.
+- [x] **OAuth flow has no browser-session binding (login CSRF) and no PKCE** (security review, medium-high) — `internal/controllers/auth_controller.go:125,155`. The state JWT proves the server minted it but nothing ties it to the browser that started the flow: an attacker can start the flow themselves, take the resulting callback URL (valid state + their code), and make a victim's browser visit it — silently logging the victim into the attacker's account. The open-redirect fix does not cover this. Set a random nonce in a short-lived cookie at login, embed it in the state payload, compare on callback. Also add PKCE via `oauth2.S256ChallengeOption`.
+  > **Resolved:** `AuthService.StartOAuthLogin` generates a random nonce and a PKCE `code_verifier`, embeds the nonce in the state JWT and returns both to the controller, which stores them in short-lived (`MaxAge` 5 min) `HttpOnly`, `SameSite=Lax` cookies. `OAuthLogin` rejects (401) a missing/different nonce (constant-time compare) or a missing verifier; providers send `S256ChallengeOption`/`VerifierOption`. In non-development environments the cookies use the `__Host-` prefix with `Path=/`; in development they drop the prefix and are scoped to `/auth/{provider}/callback`. The cookies are cleared after a successful callback (on failures they expire on their own, so a forged callback cannot wipe a victim's in-progress flow). Residual: one OAuth login at a time per browser; the state JWT is not single-use.
 - [x] **Rate limiter keys on `r.RemoteAddr` including the port** (security review) — `internal/middlewares/rate_limit_middleware.go:38`. The raw `ip:port` string means every new TCP connection gets a fresh bucket, defeating per-IP limiting (and behind a proxy it keys on the proxy anyway). Use `net.SplitHostPort` and decide on a trusted-proxy header policy.
 - [ ] ~~**No per-account login throttling + timing-based user enumeration** (security review) — `internal/services/auth_service.go:37-49`. Only the (currently broken) global IP limiter protects `/auth/login` from password guessing; add per-account throttling or lockout. Also `bcrypt.CompareHashAndPassword` only runs when the email exists — compare against a dummy hash on the miss path to equalize timing.~~ **Deferred:** timing equalization only matters once `POST /users` stops answering `409` for taken emails (it is already an enumeration oracle); per-account throttling needs a decision on lockout abuse and multi-instance state.
 - [x] **Refresh cookie scoped to `/`** (security review) — `internal/controllers/auth_controller.go:355`. The refresh token is sent on every request instead of only the refresh endpoint. Set `Path: "/auth/refresh"`.
@@ -406,10 +407,14 @@ half-finished behavior.
 - [x] **Unchecked claim type assertions in `VerifyToken` panic on malformed tokens** — `internal/services/auth_service.go:86-88`. `claims["sub"].(string)`, `claims["aud"].(string)`, `int64(claims["exp"].(float64))` run before the `ok`/`token.Valid` check on line 90; a token with a missing/wrong-typed claim panics instead of returning an error — a DoS surface since this path is reachable via attacker-controlled OAuth state and refresh tokens. Use two-value assertions (`v, ok := claims["sub"].(string)`) and return `ErrInvalidToken` on failure.
 - [x] **GitHub `EmailVerified` is hardcoded `true`** (security review) — `internal/providers/github_oauth_provider.go:76`. Sourced from `GET /user`, whose public `email` field isn't attested as verified by GitHub. The controller's Case-2 account-linking logic relies on `EmailVerified` specifically to prevent account-takeover-by-email-match — for GitHub that gate is currently a no-op. Call `GET /user/emails` instead and check the `verified`+`primary` flags for the matching address.
 - [x] **OAuth token exchange has no timeout** — `internal/providers/{google,github,microsoft}_oauth_provider.go:36`. `p.config.Exchange(ctx, code)` falls back to `http.DefaultClient` (no timeout) unless the context carries `oauth2.HTTPClient`, unlike the userinfo fetch which already sets one. A slow/unresponsive provider token endpoint can hang the request indefinitely. Set an `oauth2.HTTPClient` with a timeout (e.g. 10s, matching the userinfo client) on the context passed to `Exchange`.
+- [ ] **OAuth Case 3 creates a user without checking `EmailVerified`** (security review, nOAuth-class) — `internal/services/auth_service.go` (`resolveOAuthUser`, Case 3). Case 2 refuses to link when the provider email is unverified, but Case 3 (no linked provider, no user with that email) creates the account anyway. Microsoft's userinfo carries no `email_verified`, so an attacker can set an unverified email equal to a victim's address on their own Microsoft account, log in first, and own the account for that email — a later sign-up or OAuth login by the victim is then blocked or linked to the attacker's user. Require `userInfo.EmailVerified` before `CreateOAuth` (reuse the `auth.providerCallback.emailNotVerified` error), and decide how Microsoft verification is attested (e.g. `xms_edov` claim or restricting to verified tenants), since it currently always reports `false`.
 
 **Files to modify**:
 
 - `internal/controllers/auth_controller.go`
+- `internal/api/cookies.go`
+- `internal/domain/auth.go`
+- `internal/mocks/*`
 - `internal/controllers/users_controller.go`
 - `internal/middlewares/role_middleware.go`
 - `internal/middlewares/rate_limit_middleware.go`
@@ -525,8 +530,8 @@ The following previously-separate fixes are **folded in here** (moved from
 
 `domain.AuthService` has 10 methods. `AuthMiddleware` depends on the whole
 interface but calls only `VerifyToken`; `GenerateToken` is only public on the
-interface because the controller currently mints tokens itself (resolved by
-2.6.9). `RoleMiddleware` similarly takes the full `UsersService` for one
+interface because the controller used to mint tokens itself (resolved by
+2.6.9 and 2.6.6: no controller calls it anymore). `RoleMiddleware` similarly takes the full `UsersService` for one
 `GetByUUID` — which the role-in-JWT fix in 2.6.6 removes anyway.
 
 **Tasks**:
@@ -541,6 +546,23 @@ interface because the controller currently mints tokens itself (resolved by
 - `internal/middlewares/auth_middleware.go`
 - `internal/services/auth_service.go`
 - `internal/mocks/*`
+
+#### 2.6.11 Cookie `MaxAge` instead of `Expires`
+
+`Expires` is an absolute date interpreted against the client clock, so a skewed
+client clock shortens or stretches the cookie lifetime (critical for short-lived
+cookies). `MaxAge` is relative and clock-independent. The OAuth flow cookies
+(2.6.6) already use `MaxAge`; align the auth cookies with them.
+
+**Tasks**:
+
+- [ ] Replace `Expires` with `MaxAge` in `setAuthCookies` (access + refresh) and use `MaxAge: -1` in `deleteAuthCookies`
+- [ ] Update controller tests to assert `MaxAge`
+
+**Files to modify**:
+
+- `internal/controllers/auth_controller.go`
+- `internal/controllers/auth_controller_test.go`
 
 ---
 

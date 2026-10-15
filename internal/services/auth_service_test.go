@@ -656,36 +656,82 @@ func TestAuthService_GetUserOAuthProvidersByUserUUID(t *testing.T) {
 	})
 }
 
-func TestAuthService_GetOAuthProviderAuthURL(t *testing.T) {
-	usersService := new(mocks.UsersServiceMock)
-	authRepo := new(mocks.AuthRepositoryMock)
-	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), "test-secret-key")
+func TestAuthService_StartOAuthLogin(t *testing.T) {
+	const redirectURI = "http://localhost:3000/callback"
+
+	newService := func() (domain.AuthService, *mocks.OAuthProviderRegistryMock) {
+		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
+		service := services.NewAuthService(new(mocks.UsersServiceMock), new(mocks.AuthRepositoryMock), oauthProviderRegistry, newTransactorMock(), "test-secret-key")
+		return service, oauthProviderRegistry
+	}
 
 	t.Run("success", func(t *testing.T) {
+		service, oauthProviderRegistry := newService()
 		providerMock := new(mocks.OAuthProviderMock)
-		providerMock.On("GetAuthURL", "test-state").Return("https://provider.com/auth?state=test-state").Once()
-
+		var state, verifier string
+		providerMock.On("GetAuthURL", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+			state = args.String(0)
+			verifier = args.String(1)
+		}).Return("https://provider.com/auth").Once()
 		oauthProviderRegistry.On("Get", domain.OAuthProviderGoogle).Return(providerMock, nil).Once()
 
-		url, err := service.GetOAuthProviderAuthURL(context.Background(), domain.OAuthProviderGoogle, "test-state")
+		result, err := service.StartOAuthLogin(context.Background(), domain.StartOAuthLoginDTO{
+			Provider:    domain.OAuthProviderGoogle,
+			RedirectURI: redirectURI,
+		})
 
-		assert.NoError(t, err)
-		assert.Equal(t, "https://provider.com/auth?state=test-state", url)
-		oauthProviderRegistry.AssertExpectations(t)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "https://provider.com/auth", result.AuthURL)
+		assert.NotEmpty(t, result.Nonce)
+		assert.GreaterOrEqual(t, len(result.CodeVerifier), 43)
+		assert.Equal(t, verifier, result.CodeVerifier)
+		assert.NotEqual(t, result.Nonce, result.CodeVerifier)
+
+		tokenData, err := service.VerifyToken(context.Background(), domain.VerifyTokenDTO{
+			Token:    state,
+			Audience: domain.TokenAudienceOAuthState,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, string(domain.OAuthProviderGoogle), tokenData.Subject)
+		payload, ok := tokenData.Payload.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, redirectURI, payload["redirect_uri"])
+		assert.Equal(t, result.Nonce, payload["nonce"])
 		providerMock.AssertExpectations(t)
+		oauthProviderRegistry.AssertExpectations(t)
+	})
+
+	t.Run("nonce and verifier are unique per call", func(t *testing.T) {
+		service, oauthProviderRegistry := newService()
+		providerMock := new(mocks.OAuthProviderMock)
+		providerMock.On("GetAuthURL", mock.Anything, mock.Anything).Return("https://provider.com/auth")
+		oauthProviderRegistry.On("Get", domain.OAuthProviderGoogle).Return(providerMock, nil)
+		dto := domain.StartOAuthLoginDTO{Provider: domain.OAuthProviderGoogle, RedirectURI: redirectURI}
+
+		first, err := service.StartOAuthLogin(context.Background(), dto)
+		require.NoError(t, err)
+		second, err := service.StartOAuthLogin(context.Background(), dto)
+		require.NoError(t, err)
+
+		assert.NotEqual(t, first.Nonce, second.Nonce)
+		assert.NotEqual(t, first.CodeVerifier, second.CodeVerifier)
 	})
 
 	t.Run("provider not configured", func(t *testing.T) {
+		service, oauthProviderRegistry := newService()
 		oauthProviderRegistry.On("Get", domain.OAuthProviderGoogle).Return(nil, errors.New("provider not configured")).Once()
 
-		url, err := service.GetOAuthProviderAuthURL(context.Background(), domain.OAuthProviderGoogle, "test-state")
+		result, err := service.StartOAuthLogin(context.Background(), domain.StartOAuthLoginDTO{
+			Provider:    domain.OAuthProviderGoogle,
+			RedirectURI: redirectURI,
+		})
 
 		require.NotNil(t, err)
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))
 		assert.Equal(t, "auth.oauthProvider.invalid", validationErr.Error())
-		assert.Empty(t, url)
+		assert.Nil(t, result)
 		oauthProviderRegistry.AssertExpectations(t)
 	})
 }
@@ -705,9 +751,9 @@ func TestAuthService_GetOAuthProviderUserInfo(t *testing.T) {
 		}
 
 		oauthProviderRegistry.On("Get", domain.OAuthProviderGoogle).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), "auth-code").Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), "auth-code", "verifier").Return(userInfo, nil).Once()
 
-		result, err := service.GetOAuthProviderUserInfo(context.Background(), domain.OAuthProviderGoogle, "auth-code")
+		result, err := service.GetOAuthProviderUserInfo(context.Background(), domain.OAuthProviderGoogle, "auth-code", "verifier")
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -721,7 +767,7 @@ func TestAuthService_GetOAuthProviderUserInfo(t *testing.T) {
 	t.Run("provider not configured", func(t *testing.T) {
 		oauthProviderRegistry.On("Get", domain.OAuthProviderGoogle).Return(nil, errors.New("provider not configured")).Once()
 
-		result, err := service.GetOAuthProviderUserInfo(context.Background(), domain.OAuthProviderGoogle, "auth-code")
+		result, err := service.GetOAuthProviderUserInfo(context.Background(), domain.OAuthProviderGoogle, "auth-code", "verifier")
 
 		require.NotNil(t, err)
 		var validationErr *domain.ValidationError
@@ -735,9 +781,9 @@ func TestAuthService_GetOAuthProviderUserInfo(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
 
 		oauthProviderRegistry.On("Get", domain.OAuthProviderGoogle).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), "invalid-code").Return(nil, errors.New("invalid code")).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), "invalid-code", "verifier").Return(nil, errors.New("invalid code")).Once()
 
-		result, err := service.GetOAuthProviderUserInfo(context.Background(), domain.OAuthProviderGoogle, "invalid-code")
+		result, err := service.GetOAuthProviderUserInfo(context.Background(), domain.OAuthProviderGoogle, "invalid-code", "verifier")
 
 		require.NotNil(t, err)
 		var internalErr *domain.InternalServerError
@@ -756,6 +802,8 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		code           = "auth-code"
 		redirectURI    = "http://localhost:3000/callback"
 		jwtSecret      = "test-secret-key"
+		nonce          = "browser-nonce"
+		codeVerifier   = "code-verifier"
 	)
 
 	newState := func(t *testing.T, service domain.AuthService, subject string) string {
@@ -765,6 +813,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 			Audience: domain.TokenAudienceOAuthState,
 			Payload: map[string]string{
 				"redirect_uri": redirectURI,
+				"nonce":        nonce,
 			},
 		})
 		require.NoError(t, err)
@@ -784,12 +833,12 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		user := &domain.User{UUID: userUUID, Email: "test@example.com", Name: "Test User"}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(userOAuthProvider, nil).Once()
 		usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(user, nil).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -814,7 +863,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		user := &domain.User{UUID: userUUID, Email: email, Name: "Test User"}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(user, nil).Once()
 		authRepo.On("CreateUserOAuthProvider", mock.MatchedBy(func(p domain.UserOAuthProvider) bool {
@@ -822,7 +871,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		})).Return(&domain.UserOAuthProvider{}, nil).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -843,12 +892,12 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		existingUser := &domain.User{UUID: "user-uuid", Email: email}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(existingUser, nil).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.NotNil(t, err)
 		var validationErr *domain.ValidationError
@@ -874,7 +923,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		newUser := &domain.User{UUID: newUserUUID, Email: email, Name: name}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
 		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(newUser, nil).Once()
@@ -883,7 +932,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		})).Return(&domain.UserOAuthProvider{}, nil).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -906,13 +955,13 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: name, Email: email}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
 		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(nil, errors.New("db error")).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -936,7 +985,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		newUser := &domain.User{UUID: newUserUUID, Email: email, Name: name}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
 		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(newUser, nil).Once()
@@ -946,7 +995,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		})).Return(nil, linkErr).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.Error(t, err)
 		assert.Equal(t, linkErr, err)
@@ -968,12 +1017,12 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		userOAuthProvider := &domain.UserOAuthProvider{UserUUID: userUUID, Provider: provider, ProviderUserID: providerUserID}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(userOAuthProvider, nil).Once()
 		usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(nil, errors.New("db error")).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -993,7 +1042,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		user := &domain.User{UUID: userUUID, Email: email}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(user, nil).Once()
 		authRepo.On("CreateUserOAuthProvider", mock.MatchedBy(func(p domain.UserOAuthProvider) bool {
@@ -1001,7 +1050,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		})).Return(nil, errors.New("db error")).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -1014,13 +1063,64 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
 
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{
-			Provider: provider,
-			State:    "invalid-state",
-			Code:     code,
+			Provider:     provider,
+			State:        "invalid-state",
+			Code:         code,
+			Nonce:        nonce,
+			CodeVerifier: codeVerifier,
 		})
 
 		require.Error(t, err)
 		assert.Nil(t, result)
+	})
+
+	t.Run("error - browser binding", func(t *testing.T) {
+		cases := []struct {
+			name         string
+			nonce        string
+			codeVerifier string
+			stateNonce   string
+			wantErr      string
+		}{
+			{"missing nonce cookie", "", codeVerifier, nonce, "auth.oauthLogin.nonceMismatch"},
+			{"nonce differs from state", "other-nonce", codeVerifier, nonce, "auth.oauthLogin.nonceMismatch"},
+			{"both nonces empty", "", codeVerifier, "", "auth.oauthLogin.nonceMismatch"},
+			{"missing code verifier cookie", nonce, "", nonce, "auth.oauthLogin.missingCodeVerifier"},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				usersService := new(mocks.UsersServiceMock)
+				authRepo := new(mocks.AuthRepositoryMock)
+				oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
+				service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), jwtSecret)
+
+				payload := map[string]string{"redirect_uri": redirectURI}
+				if tc.stateNonce != "" {
+					payload["nonce"] = tc.stateNonce
+				}
+				state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+					Subject:  string(provider),
+					Audience: domain.TokenAudienceOAuthState,
+					Payload:  payload,
+				})
+				require.NoError(t, err)
+
+				result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{
+					Provider:     provider,
+					State:        state,
+					Code:         code,
+					Nonce:        tc.nonce,
+					CodeVerifier: tc.codeVerifier,
+				})
+
+				var unauthorizedErr *domain.UnauthorizedError
+				require.True(t, errors.As(err, &unauthorizedErr))
+				assert.Equal(t, tc.wantErr, err.Error())
+				assert.Nil(t, result)
+				oauthProviderRegistry.AssertNotCalled(t, "Get", mock.Anything)
+			})
+		}
 	})
 
 	t.Run("error - state subject does not match callback provider", func(t *testing.T) {
@@ -1031,9 +1131,11 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 
 		state := newState(t, service, string(domain.OAuthProviderGitHub))
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{
-			Provider: domain.OAuthProviderGoogle,
-			State:    state,
-			Code:     code,
+			Provider:     domain.OAuthProviderGoogle,
+			State:        state,
+			Code:         code,
+			Nonce:        nonce,
+			CodeVerifier: codeVerifier,
 		})
 
 		require.NotNil(t, err)
@@ -1056,7 +1158,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.NotNil(t, err)
 		var validationErr *domain.ValidationError
@@ -1080,7 +1182,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+				result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 				var validationErr *domain.ValidationError
 				require.True(t, errors.As(err, &validationErr))
@@ -1098,10 +1200,10 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(nil, errors.New("provider error")).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(nil, errors.New("provider error")).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -1117,10 +1219,10 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		userInfo := &domain.OAuthProviderUserInfo{ID: "", Name: "Test User", Email: "test@example.com"}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.NotNil(t, err)
 		var validationErr *domain.ValidationError
@@ -1139,11 +1241,11 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: "test@example.com"}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, errors.New("db down")).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -1161,12 +1263,12 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: email}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code).Return(userInfo, nil).Once()
+		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(nil, errors.New("db down")).Once()
 
 		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.Error(t, err)
 		assert.Nil(t, result)

@@ -34,6 +34,8 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		providerUserID = "google-user-123"
 		code           = "auth-code"
 		email          = "new-oauth@example.com"
+		nonce          = "browser-nonce"
+		codeVerifier   = "code-verifier"
 	)
 
 	setup := func(t *testing.T, linkErr error) (domain.AuthService, domain.UsersRepository, domain.AuthRepository, string) {
@@ -50,7 +52,7 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		}
 
 		providerMock := new(mocks.OAuthProviderMock)
-		providerMock.On("GetUserInfo", mock.Anything, code).Return(&domain.OAuthProviderUserInfo{
+		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).Return(&domain.OAuthProviderUserInfo{
 			ID:            providerUserID,
 			Name:          "New OAuth User",
 			Email:         email,
@@ -70,7 +72,7 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  string(provider),
 			Audience: domain.TokenAudienceOAuthState,
-			Payload:  map[string]string{"redirect_uri": "http://localhost:3000/callback"},
+			Payload:  map[string]string{"redirect_uri": "http://localhost:3000/callback", "nonce": nonce},
 		})
 		require.NoError(t, err)
 
@@ -80,7 +82,7 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 	t.Run("creates the user and links the provider", func(t *testing.T) {
 		service, usersRepo, authRepo, state := setup(t, nil)
 
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		require.NoError(t, err)
 		created, err := usersRepo.FindByEmail(context.Background(), email)
@@ -95,7 +97,7 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		linkErr := errors.New("link failed")
 		service, usersRepo, _, state := setup(t, linkErr)
 
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code})
+		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
 		assert.Equal(t, linkErr, err)
 		assert.Nil(t, result)

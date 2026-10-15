@@ -145,26 +145,18 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	state, err := c.authService.GenerateToken(r.Context(), domain.GenerateTokenDTO{
-		Audience: domain.TokenAudienceOAuthState,
-		Subject:  string(providerName),
-		Payload: map[string]string{
-			"redirect_uri": redirectURI,
-		},
+	result, err := c.authService.StartOAuthLogin(r.Context(), domain.StartOAuthLoginDTO{
+		Provider:    providerName,
+		RedirectURI: redirectURI,
 	})
-
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
 	}
 
-	authURL, err := c.authService.GetOAuthProviderAuthURL(r.Context(), providerName, state)
-	if err != nil {
-		api.HandleError(r.Context(), w, err)
-		return
-	}
+	c.setOAuthFlowCookies(w, providerName, result.Nonce, result.CodeVerifier)
 
-	http.Redirect(w, r, authURL, http.StatusFound)
+	http.Redirect(w, r, result.AuthURL, http.StatusFound)
 }
 
 func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Request) {
@@ -195,10 +187,15 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	nonce := c.oauthFlowCookieValue(r, api.OAuthNonceCookieName)
+	codeVerifier := c.oauthFlowCookieValue(r, api.OAuthVerifierCookieName)
+
 	result, err := c.authService.OAuthLogin(r.Context(), domain.OAuthLoginDTO{
-		Provider: providerName,
-		State:    state,
-		Code:     code,
+		Provider:     providerName,
+		State:        state,
+		Code:         code,
+		Nonce:        nonce,
+		CodeVerifier: codeVerifier,
 	})
 	if err != nil {
 		reason := err.Error()
@@ -222,9 +219,41 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		Status:       domain.AuditStatusSuccess,
 	})
 
+	c.deleteOAuthFlowCookies(w, providerName)
 	c.setAuthCookies(w, result.Tokens)
 
 	http.Redirect(w, r, result.RedirectURI, http.StatusFound)
+}
+
+func (c *AuthController) setOAuthFlowCookies(w http.ResponseWriter, provider domain.OAuthProviderName, nonce string, codeVerifier string) {
+	maxAge := int(domain.TokenExpirationOAuthState.Seconds())
+	http.SetCookie(w, c.newOAuthFlowCookie(api.OAuthNonceCookieName, nonce, provider, maxAge))
+	http.SetCookie(w, c.newOAuthFlowCookie(api.OAuthVerifierCookieName, codeVerifier, provider, maxAge))
+}
+
+func (c *AuthController) deleteOAuthFlowCookies(w http.ResponseWriter, provider domain.OAuthProviderName) {
+	http.SetCookie(w, c.newOAuthFlowCookie(api.OAuthNonceCookieName, "", provider, -1))
+	http.SetCookie(w, c.newOAuthFlowCookie(api.OAuthVerifierCookieName, "", provider, -1))
+}
+
+func (c *AuthController) newOAuthFlowCookie(baseName string, value string, provider domain.OAuthProviderName, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name:     api.OAuthFlowCookieName(baseName, c.isSecureCookie),
+		Value:    value,
+		Path:     api.OAuthFlowCookiePath(provider, c.isSecureCookie),
+		HttpOnly: true,
+		MaxAge:   maxAge,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   c.isSecureCookie,
+	}
+}
+
+func (c *AuthController) oauthFlowCookieValue(r *http.Request, baseName string) string {
+	cookie, err := r.Cookie(api.OAuthFlowCookieName(baseName, c.isSecureCookie))
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
 }
 
 func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.AuthTokens) {

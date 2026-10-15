@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"errors"
 	"time"
 
@@ -9,9 +11,14 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
 )
 
-var ErrInvalidToken = domain.NewUnauthorizedError("auth.invalidToken")
+var (
+	ErrInvalidToken             = domain.NewUnauthorizedError("auth.invalidToken")
+	ErrOAuthNonceMismatch       = domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")
+	ErrOAuthMissingCodeVerifier = domain.NewUnauthorizedError("auth.oauthLogin.missingCodeVerifier")
+)
 
 type authService struct {
 	usersService          domain.UsersService
@@ -188,31 +195,57 @@ func (s *authService) GetUserOAuthProvidersByUserUUID(ctx context.Context, userU
 	return s.authRepository.ListUserOAuthProvidersByUserUUID(ctx, userUUID)
 }
 
-func (s *authService) GetOAuthProviderAuthURL(ctx context.Context, providerName domain.OAuthProviderName, state string) (string, error) {
-	provider, err := s.oauthProviderRegistry.Get(providerName)
+func (s *authService) StartOAuthLogin(ctx context.Context, dto domain.StartOAuthLoginDTO) (*domain.StartOAuthLoginResult, error) {
+	provider, err := s.getOAuthProvider(dto.Provider)
 	if err != nil {
-		return "", domain.NewValidationError("auth.oauthProvider.invalid", map[string]string{
-			"provider": err.Error(),
-		})
+		return nil, err
 	}
 
-	return provider.GetAuthURL(ctx, state), nil
+	nonce := rand.Text()
+	codeVerifier := oauth2.GenerateVerifier()
+
+	state, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
+		Audience: domain.TokenAudienceOAuthState,
+		Subject:  string(dto.Provider),
+		Payload: map[string]string{
+			"redirect_uri": dto.RedirectURI,
+			"nonce":        nonce,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.StartOAuthLoginResult{
+		AuthURL:      provider.GetAuthURL(ctx, state, codeVerifier),
+		Nonce:        nonce,
+		CodeVerifier: codeVerifier,
+	}, nil
 }
 
-func (s *authService) GetOAuthProviderUserInfo(ctx context.Context, providerName domain.OAuthProviderName, code string) (*domain.OAuthProviderUserInfo, error) {
-	provider, err := s.oauthProviderRegistry.Get(providerName)
+func (s *authService) GetOAuthProviderUserInfo(ctx context.Context, providerName domain.OAuthProviderName, code string, codeVerifier string) (*domain.OAuthProviderUserInfo, error) {
+	provider, err := s.getOAuthProvider(providerName)
+	if err != nil {
+		return nil, err
+	}
+
+	userInfo, err := provider.GetUserInfo(ctx, code, codeVerifier)
+	if err != nil {
+		return nil, domain.NewInternalServerError("auth.oauthProvider.userInfoFetchFailed", err)
+	}
+
+	return userInfo, nil
+}
+
+func (s *authService) getOAuthProvider(name domain.OAuthProviderName) (domain.OAuthProvider, error) {
+	provider, err := s.oauthProviderRegistry.Get(name)
 	if err != nil {
 		return nil, domain.NewValidationError("auth.oauthProvider.invalid", map[string]string{
 			"provider": err.Error(),
 		})
 	}
 
-	userInfo, err := provider.GetUserInfo(ctx, code)
-	if err != nil {
-		return nil, domain.NewInternalServerError("auth.oauthProvider.userInfoFetchFailed", err)
-	}
-
-	return userInfo, nil
+	return provider, nil
 }
 
 func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) (*domain.OAuthLoginResult, error) {
@@ -239,7 +272,16 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		)
 	}
 
-	userInfo, err := s.GetOAuthProviderUserInfo(ctx, dto.Provider, dto.Code)
+	stateNonce, _ := payload["nonce"].(string)
+	if dto.Nonce == "" || subtle.ConstantTimeCompare([]byte(stateNonce), []byte(dto.Nonce)) != 1 {
+		return nil, ErrOAuthNonceMismatch
+	}
+
+	if dto.CodeVerifier == "" {
+		return nil, ErrOAuthMissingCodeVerifier
+	}
+
+	userInfo, err := s.GetOAuthProviderUserInfo(ctx, dto.Provider, dto.Code, dto.CodeVerifier)
 	if err != nil {
 		return nil, err
 	}

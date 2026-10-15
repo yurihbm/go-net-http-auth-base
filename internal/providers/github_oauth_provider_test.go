@@ -24,9 +24,19 @@ func TestGitHubOAuthProvider_GetAuthURL(t *testing.T) {
 	provider := providers.NewGitHubOAuthProvider(config)
 	state := "test-state"
 
-	authURL := provider.GetAuthURL(context.Background(), state)
+	authURL := provider.GetAuthURL(context.Background(), state, testCodeVerifier)
 
 	assert.Contains(t, authURL, "state="+state)
+	assertPKCEChallenge(t, authURL)
+}
+
+func TestGitHubOAuthProvider_GetUserInfo_SendsCodeVerifier(t *testing.T) {
+	cfg, receivedVerifier := newVerifierCapturingTokenConfig(t)
+	provider := providers.NewGitHubOAuthProvider(cfg)
+
+	_, _ = provider.GetUserInfo(context.Background(), "test-auth-code", testCodeVerifier)
+
+	assert.Equal(t, testCodeVerifier, *receivedVerifier)
 }
 
 func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
@@ -81,7 +91,7 @@ func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGitHubOAuthProvider(testConfig, userInfoServer.URL+"/user")
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code")
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, userInfo)
@@ -115,7 +125,7 @@ func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGitHubOAuthProvider(testConfig, "http://example.com/user")
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "invalid-code")
+		userInfo, err := provider.GetUserInfo(ctx, "invalid-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
@@ -154,7 +164,7 @@ func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGitHubOAuthProvider(testConfig, userInfoServer.URL)
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code")
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
@@ -199,7 +209,7 @@ func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGitHubOAuthProvider(testConfig, userInfoServer.URL)
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code")
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
@@ -234,7 +244,7 @@ func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGitHubOAuthProvider(testConfig, "http://invalid-unreachable-host:9999/user")
 		ctx := context.Background()
 
-		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code")
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
@@ -300,7 +310,7 @@ func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
 
 			provider := providers.NewGitHubOAuthProvider(testConfig, userInfoServer.URL+"/user")
 
-			userInfo, err := provider.GetUserInfo(context.Background(), "test-auth-code")
+			userInfo, err := provider.GetUserInfo(context.Background(), "test-auth-code", testCodeVerifier)
 
 			if tc.wantErr {
 				assert.Error(t, err)
@@ -317,7 +327,7 @@ func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
 		provider := providers.NewGitHubOAuthProvider(newHangingTokenConfig(t), "http://example.com/user")
 
 		start := time.Now()
-		userInfo, err := provider.GetUserInfo(context.Background(), "test-auth-code")
+		userInfo, err := provider.GetUserInfo(context.Background(), "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)

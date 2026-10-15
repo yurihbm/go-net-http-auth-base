@@ -78,16 +78,16 @@ func (m *AuthServiceMock) GetUserOAuthProvidersByUserUUID(ctx context.Context, u
 	return nil, args.Error(1)
 }
 
-func (m *AuthServiceMock) GetOAuthProviderAuthURL(ctx context.Context, providerName domain.OAuthProviderName, state string) (string, error) {
-	args := m.Called(providerName, state)
+func (m *AuthServiceMock) StartOAuthLogin(ctx context.Context, dto domain.StartOAuthLoginDTO) (*domain.StartOAuthLoginResult, error) {
+	args := m.Called(dto)
 	if args.Get(0) != nil {
-		return args.String(0), args.Error(1)
+		return args.Get(0).(*domain.StartOAuthLoginResult), args.Error(1)
 	}
-	return "", errNotImplemented
+	return nil, args.Error(1)
 }
 
-func (m *AuthServiceMock) GetOAuthProviderUserInfo(ctx context.Context, providerName domain.OAuthProviderName, code string) (*domain.OAuthProviderUserInfo, error) {
-	args := m.Called(ctx, providerName, code)
+func (m *AuthServiceMock) GetOAuthProviderUserInfo(ctx context.Context, providerName domain.OAuthProviderName, code string, codeVerifier string) (*domain.OAuthProviderUserInfo, error) {
+	args := m.Called(ctx, providerName, code, codeVerifier)
 	if args.Get(0) != nil {
 		return args.Get(0).(*domain.OAuthProviderUserInfo), args.Error(1)
 	}
