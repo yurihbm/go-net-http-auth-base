@@ -176,6 +176,7 @@ type TokenGenerator interface {
 type TokenService interface {
 	TokenGenerator
 	VerifyToken(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
+	VerifyTokenIgnoringExpiry(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
 }
 
 type AuthService interface {

@@ -541,6 +541,63 @@ func TestAuthService_Logout(t *testing.T) {
 		})
 	}
 
+	t.Run("clears the stored refresh jti with an expired access token", func(t *testing.T) {
+		service, usersService := newService()
+		expired := signTestToken(t, jwt.MapClaims{
+			"sub": userUUID,
+			"exp": time.Now().Add(-time.Hour).Unix(),
+			"aud": domain.TokenAudienceAccess,
+		})
+		usersService.On("SetRefreshJTI", userUUID, (*string)(nil)).Return(nil).Once()
+
+		err := service.Logout(context.Background(), domain.LogoutDTO{AccessToken: expired})
+
+		assert.NoError(t, err)
+		usersService.AssertExpectations(t)
+	})
+
+	t.Run("ignores an expired access token with a bad signature", func(t *testing.T) {
+		service, usersService := newService()
+		forged, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub": userUUID,
+			"exp": time.Now().Add(-time.Hour).Unix(),
+			"aud": domain.TokenAudienceAccess,
+		}).SignedString([]byte("other-secret"))
+		require.NoError(t, err)
+
+		err = service.Logout(context.Background(), domain.LogoutDTO{AccessToken: forged})
+
+		assert.NoError(t, err)
+		usersService.AssertNotCalled(t, "SetRefreshJTI", mock.Anything, mock.Anything)
+	})
+
+	t.Run("ignores an expired token with the wrong audience", func(t *testing.T) {
+		service, usersService := newService()
+		expired := signTestToken(t, jwt.MapClaims{
+			"sub": userUUID,
+			"exp": time.Now().Add(-time.Hour).Unix(),
+			"aud": domain.TokenAudienceEmailVerification,
+		})
+
+		err := service.Logout(context.Background(), domain.LogoutDTO{AccessToken: expired})
+
+		assert.NoError(t, err)
+		usersService.AssertNotCalled(t, "SetRefreshJTI", mock.Anything, mock.Anything)
+	})
+
+	t.Run("ignores an expired access token without subject", func(t *testing.T) {
+		service, usersService := newService()
+		expired := signTestToken(t, jwt.MapClaims{
+			"exp": time.Now().Add(-time.Hour).Unix(),
+			"aud": domain.TokenAudienceAccess,
+		})
+
+		err := service.Logout(context.Background(), domain.LogoutDTO{AccessToken: expired})
+
+		assert.NoError(t, err)
+		usersService.AssertNotCalled(t, "SetRefreshJTI", mock.Anything, mock.Anything)
+	})
+
 	t.Run("ignores a refresh token presented as access token", func(t *testing.T) {
 		service, usersService := newService()
 		refreshToken := signTestToken(t, refreshClaims(userUUID, "jti", time.Now().Unix()))

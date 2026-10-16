@@ -117,11 +117,11 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 }
 
 func (s *authService) Logout(ctx context.Context, dto domain.LogoutDTO) error {
-	tokenData, err := s.VerifyToken(ctx, domain.VerifyTokenDTO{
+	tokenData, err := s.tokens.VerifyTokenIgnoringExpiry(ctx, domain.VerifyTokenDTO{
 		Token:    dto.AccessToken,
 		Audience: domain.TokenAudienceAccess,
 	})
-	if err != nil {
+	if err != nil || tokenData.Subject == "" {
 		return nil
 	}
 

@@ -26,3 +26,11 @@ func (m *TokenServiceMock) VerifyToken(ctx context.Context, dto domain.VerifyTok
 	}
 	return nil, args.Error(1)
 }
+
+func (m *TokenServiceMock) VerifyTokenIgnoringExpiry(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
+	args := m.Called(dto)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.VerifiedTokenData), args.Error(1)
+	}
+	return nil, args.Error(1)
+}

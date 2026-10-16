@@ -18,12 +18,15 @@ func NewTokenService(jwtSecret string) domain.TokenService {
 }
 
 func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
-	token, err := jwt.Parse(dto.Token, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
-		}
-		return []byte(s.jwtSecret), nil
-	})
+	return s.verify(dto)
+}
+
+func (s *tokenService) VerifyTokenIgnoringExpiry(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
+	return s.verify(dto, jwt.WithoutClaimsValidation())
+}
+
+func (s *tokenService) verify(dto domain.VerifyTokenDTO, opts ...jwt.ParserOption) (*domain.VerifiedTokenData, error) {
+	token, err := jwt.Parse(dto.Token, s.signingKey, opts...)
 
 	if err != nil {
 		return nil, ErrInvalidToken
@@ -54,6 +57,13 @@ func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDT
 		Role:       domain.UserRole(role),
 		Payload:    claims["payload"],
 	}, nil
+}
+
+func (s *tokenService) signingKey(token *jwt.Token) (any, error) {
+	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
+	}
+	return []byte(s.jwtSecret), nil
 }
 
 func (s *tokenService) GenerateToken(ctx context.Context, dto domain.GenerateTokenDTO) (string, error) {
