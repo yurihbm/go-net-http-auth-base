@@ -169,13 +169,17 @@ type OAuthProviderRegistry interface {
 	IsConfigured(name OAuthProviderName) bool
 }
 
+type TokenVerifier interface {
+	VerifyToken(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
+}
+
 type TokenGenerator interface {
 	GenerateToken(context.Context, GenerateTokenDTO) (string, error)
 }
 
 type TokenService interface {
+	TokenVerifier
 	TokenGenerator
-	VerifyToken(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
 	VerifyTokenIgnoringExpiry(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
 }
 
@@ -183,8 +187,7 @@ type AuthService interface {
 	CredentialsLogin(context.Context, CredentialsLoginDTO) (AuthTokens, error)
 	RefreshToken(context.Context, RefreshTokenDTO) (AuthTokens, error)
 	Logout(context.Context, LogoutDTO) error
-	VerifyToken(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
-	GenerateToken(context.Context, GenerateTokenDTO) (string, error)
+	TokenVerifier
 	AddUserOAuthProvider(context.Context, AddUserOAuthProviderDTO) (*UserOAuthProvider, error)
 	GetUserOAuthProvider(context.Context, GetUserOAuthProviderDTO) (*UserOAuthProvider, error)
 	RemoveUserOAuthProvider(context.Context, RemoveUserOAuthProviderDTO) error

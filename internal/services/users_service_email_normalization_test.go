@@ -149,7 +149,7 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 			UserUUID: "local-uuid", Provider: provider, ProviderUserID: providerUserID, ProviderEmail: normalizedEmail,
 		}).Return(&domain.UserOAuthProvider{}, nil).Once()
 		repo.On("SetRefreshJTI", "local-uuid", mock.AnythingOfType("*string")).Return(nil).Once()
-		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+		state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  string(provider),
 			Audience: domain.TokenAudienceOAuthState,
 			Payload:  map[string]string{"redirect_uri": "http://localhost:3000/callback", "nonce": nonce},

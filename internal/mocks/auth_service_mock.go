@@ -46,14 +46,6 @@ func (m *AuthServiceMock) VerifyToken(ctx context.Context, dto domain.VerifyToke
 	return nil, args.Error(1)
 }
 
-func (m *AuthServiceMock) GenerateToken(ctx context.Context, dto domain.GenerateTokenDTO) (string, error) {
-	args := m.Called(dto)
-	if args.Get(0) != nil {
-		return args.String(0), args.Error(1)
-	}
-	return "", errNotImplemented
-}
-
 func (m *AuthServiceMock) AddUserOAuthProvider(ctx context.Context, dto domain.AddUserOAuthProviderDTO) (*domain.UserOAuthProvider, error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {
