@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/controllers"
@@ -135,6 +134,8 @@ func TestAuthController_Login(t *testing.T) {
 		assert.True(t, refreshTokenCookie.HttpOnly)
 		assert.Equal(t, "/", accessTokenCookie.Path)
 		assert.Equal(t, "/auth/refresh", refreshTokenCookie.Path)
+		assert.Equal(t, int(domain.TokenExpirationAccess.Seconds()), accessTokenCookie.MaxAge)
+		assert.Equal(t, int(domain.TokenExpirationRefresh.Seconds()), refreshTokenCookie.MaxAge)
 		serviceMock.AssertExpectations(t)
 		auditMock.AssertExpectations(t)
 	})
@@ -231,6 +232,8 @@ func TestAuthController_RefreshToken(t *testing.T) {
 		assert.True(t, refreshTokenCookie.HttpOnly)
 		assert.Equal(t, "/", accessTokenCookie.Path)
 		assert.Equal(t, "/auth/refresh", refreshTokenCookie.Path)
+		assert.Equal(t, int(domain.TokenExpirationAccess.Seconds()), accessTokenCookie.MaxAge)
+		assert.Equal(t, int(domain.TokenExpirationRefresh.Seconds()), refreshTokenCookie.MaxAge)
 		serviceMock.AssertExpectations(t)
 	})
 
@@ -320,9 +323,8 @@ func TestAuthController_Logout(t *testing.T) {
 		assert.True(t, refreshTokenCookie.HttpOnly)
 		assert.Equal(t, "/", accessTokenCookie.Path)
 		assert.Equal(t, "/auth/refresh", refreshTokenCookie.Path)
-		// Check that cookies are expired (set to past time)
-		assert.True(t, accessTokenCookie.Expires.Before(time.Now()))
-		assert.True(t, refreshTokenCookie.Expires.Before(time.Now()))
+		assert.Negative(t, accessTokenCookie.MaxAge)
+		assert.Negative(t, refreshTokenCookie.MaxAge)
 		auditMock.AssertExpectations(t)
 	})
 }
@@ -568,6 +570,109 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Empty(t, w.Result().Cookies())
 		authServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("provider error - redirects to verified redirect_uri and clears flow cookies", func(t *testing.T) {
+		for _, mode := range oauthFlowCookieModes {
+			t.Run(mode.name, func(t *testing.T) {
+				controller, authServiceMock, auditMock := newTestAuthControllerWithOptions(mode.isSecure, []string{allowedRedirectURI})
+				authServiceMock.On("VerifyOAuthState", domain.VerifyOAuthStateDTO{
+					Provider: domain.OAuthProviderGoogle,
+					State:    "valid-state",
+					Nonce:    "nonce-123",
+				}).Return(allowedRedirectURI, nil).Once()
+				auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+					return d.Action == domain.AuditActionOAuthLogin &&
+						d.Status == domain.AuditStatusFailure &&
+						d.FailureReason != nil && *d.FailureReason == "access_denied"
+				})).Return(nil).Once()
+
+				w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&error=access_denied&error_description=user+said+no", nil)
+				req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+				req.AddCookie(&http.Cookie{Name: mode.cookies.nonce, Value: "nonce-123"})
+
+				controller.OAuthProviderCallback(w, req)
+
+				assert.Equal(t, http.StatusFound, w.Code)
+				assert.Equal(t, allowedRedirectURI+"?error=access_denied", w.Header().Get("Location"))
+				cookies := w.Result().Cookies()
+				assertOAuthFlowCookiesCleared(t, cookies, mode.cookies)
+				assert.Nil(t, findCookie(cookies, "access_token"))
+				authServiceMock.AssertNotCalled(t, "OAuthLogin", mock.Anything)
+				authServiceMock.AssertExpectations(t)
+				auditMock.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("provider error - unknown error code maps to access_denied", func(t *testing.T) {
+		controller, authServiceMock, auditMock := newTestAuthController()
+		authServiceMock.On("VerifyOAuthState", mock.Anything).Return(allowedRedirectURI, nil).Once()
+		auditMock.On("Log", mock.Anything).Return(nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&error=%3Cscript%3E", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, allowedRedirectURI+"?error=access_denied", w.Header().Get("Location"))
+	})
+
+	t.Run("provider error - known error code is forwarded", func(t *testing.T) {
+		controller, authServiceMock, auditMock := newTestAuthController()
+		authServiceMock.On("VerifyOAuthState", mock.Anything).Return(allowedRedirectURI, nil).Once()
+		auditMock.On("Log", mock.Anything).Return(nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&error=server_error", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, allowedRedirectURI+"?error=server_error", w.Header().Get("Location"))
+	})
+
+	t.Run("provider error - state verification failure does not redirect or clear cookies", func(t *testing.T) {
+		controller, authServiceMock, auditMock := newTestAuthController()
+		authServiceMock.On("VerifyOAuthState", mock.Anything).Return("", domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")).Once()
+		auditMock.On("Log", mock.Anything).Return(nil).Maybe()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state=forged&error=access_denied", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Empty(t, w.Header().Get("Location"))
+		assert.Empty(t, w.Result().Cookies())
+	})
+
+	t.Run("provider error - redirect_uri outside allow-list is not followed", func(t *testing.T) {
+		controller, authServiceMock, auditMock := newTestAuthController()
+		authServiceMock.On("VerifyOAuthState", mock.Anything).Return("https://evil.test/cb", nil).Once()
+		auditMock.On("Log", mock.Anything).Return(nil).Maybe()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&error=access_denied", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Empty(t, w.Header().Get("Location"))
+		assert.Empty(t, w.Result().Cookies())
+	})
+
+	t.Run("provider error - missing state", func(t *testing.T) {
+		controller, authServiceMock, _ := newTestAuthController()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?error=access_denied", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Empty(t, w.Result().Cookies())
+		authServiceMock.AssertNotCalled(t, "VerifyOAuthState", mock.Anything)
 	})
 
 	t.Run("error - service returns error", func(t *testing.T) {

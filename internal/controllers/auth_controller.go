@@ -1,9 +1,10 @@
 package controllers
 
 import (
+	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
-	"time"
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
@@ -22,6 +23,18 @@ var ErrInvalidRedirectURI = domain.NewValidationError(
 		"redirect_uri": "redirect_uri is not allowed",
 	},
 )
+
+var oauthProviderErrorCodes = []string{
+	"access_denied",
+	"invalid_request",
+	"unauthorized_client",
+	"unsupported_response_type",
+	"invalid_scope",
+	"server_error",
+	"temporarily_unavailable",
+}
+
+const defaultOAuthProviderErrorCode = "access_denied"
 
 type AuthController struct {
 	authService       domain.AuthService
@@ -132,15 +145,14 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.Request) {
-	providerName := domain.OAuthProviderName(r.PathValue("provider"))
-	isValidProvider := domain.OAuthProviderName.IsValid(providerName)
-	if !isValidProvider {
-		api.HandleError(r.Context(), w, ErrInvalidOAuthProvider)
+	providerName, err := oauthProviderFromRequest(r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
 	redirectURI := r.URL.Query().Get("redirect_uri")
-	if !slices.Contains(c.callbackAllowList, redirectURI) || redirectURI == "" {
+	if !slices.Contains(c.callbackAllowList, redirectURI) {
 		api.HandleError(r.Context(), w, ErrInvalidRedirectURI)
 		return
 	}
@@ -160,27 +172,28 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 }
 
 func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Request) {
-	providerName := domain.OAuthProviderName(r.PathValue("provider"))
-	isValidProvider := providerName.IsValid()
-	if !isValidProvider {
-		api.HandleError(r.Context(), w, ErrInvalidOAuthProvider)
+	providerName, err := oauthProviderFromRequest(r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
-	state := r.URL.Query().Get("state")
-	code := r.URL.Query().Get("code")
+	query := r.URL.Query()
+	state := query.Get("state")
+	code := query.Get("code")
+	providerError := query.Get("error")
 
-	if state == "" || code == "" {
+	if state == "" || (code == "" && providerError == "") {
 		details := map[string]string{}
 		if state == "" {
 			details["state"] = "state is required"
 		}
-		if code == "" {
+		if code == "" && providerError == "" {
 			details["code"] = "code is required"
 		}
 		api.HandleError(r.Context(), w,
 			domain.NewValidationError(
-				"auth.provider_callback.missingParams",
+				"auth.providerCallback.missingParams",
 				details,
 			),
 		)
@@ -188,6 +201,12 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	}
 
 	nonce := c.oauthFlowCookieValue(r, api.OAuthNonceCookieName)
+
+	if providerError != "" {
+		c.redirectOAuthProviderError(w, r, providerName, state, nonce, providerError, query.Get("error_description"))
+		return
+	}
+
 	codeVerifier := c.oauthFlowCookieValue(r, api.OAuthVerifierCookieName)
 
 	result, err := c.authService.OAuthLogin(r.Context(), domain.OAuthLoginDTO{
@@ -223,6 +242,69 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	c.setAuthCookies(w, result.Tokens)
 
 	http.Redirect(w, r, result.RedirectURI, http.StatusFound)
+}
+
+func (c *AuthController) redirectOAuthProviderError(
+	w http.ResponseWriter,
+	r *http.Request,
+	providerName domain.OAuthProviderName,
+	state string,
+	nonce string,
+	providerError string,
+	providerErrorDescription string,
+) {
+	redirectURI, err := c.authService.VerifyOAuthState(r.Context(), domain.VerifyOAuthStateDTO{
+		Provider: providerName,
+		State:    state,
+		Nonce:    nonce,
+	})
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	if !slices.Contains(c.callbackAllowList, redirectURI) {
+		api.HandleError(r.Context(), w, ErrInvalidRedirectURI)
+		return
+	}
+
+	errorCode := defaultOAuthProviderErrorCode
+	if slices.Contains(oauthProviderErrorCodes, providerError) {
+		errorCode = providerError
+	}
+
+	slog.Warn("oauth provider returned an error",
+		"provider", providerName,
+		"error", errorCode,
+		"error_description_length", len(providerErrorDescription),
+	)
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		Action:        domain.AuditActionOAuthLogin,
+		ResourceType:  domain.AuditResourceAuth,
+		ResourceUUID:  "",
+		Status:        domain.AuditStatusFailure,
+		FailureReason: &errorCode,
+	})
+
+	target, err := url.Parse(redirectURI)
+	if err != nil {
+		api.HandleError(r.Context(), w, ErrInvalidRedirectURI)
+		return
+	}
+	query := target.Query()
+	query.Set("error", errorCode)
+	target.RawQuery = query.Encode()
+
+	c.deleteOAuthFlowCookies(w, providerName)
+	http.Redirect(w, r, target.String(), http.StatusFound)
+}
+
+func oauthProviderFromRequest(r *http.Request) (domain.OAuthProviderName, error) {
+	providerName := domain.OAuthProviderName(r.PathValue("provider"))
+	if !providerName.IsValid() {
+		return "", ErrInvalidOAuthProvider
+	}
+	return providerName, nil
 }
 
 func (c *AuthController) setOAuthFlowCookies(w http.ResponseWriter, provider domain.OAuthProviderName, nonce string, codeVerifier string) {
@@ -264,7 +346,7 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 		Value:    tokens.AccessToken,
 		Path:     api.AccessTokenCookiePath,
 		HttpOnly: true,
-		Expires:  time.Time.Add(time.Now(), domain.TokenExpirationAccess),
+		MaxAge:   int(domain.TokenExpirationAccess.Seconds()),
 		SameSite: http.SameSiteStrictMode,
 		Secure:   isSecure,
 	})
@@ -274,7 +356,7 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 		Value:    tokens.RefreshToken,
 		Path:     api.RefreshTokenCookiePath,
 		HttpOnly: true,
-		Expires:  time.Time.Add(time.Now(), domain.TokenExpirationRefresh),
+		MaxAge:   int(domain.TokenExpirationRefresh.Seconds()),
 		SameSite: http.SameSiteStrictMode,
 		Secure:   isSecure,
 	})
@@ -286,7 +368,7 @@ func (c *AuthController) deleteAuthCookies(w http.ResponseWriter) {
 		Value:    "",
 		Path:     api.AccessTokenCookiePath,
 		HttpOnly: true,
-		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
 	})
 
 	http.SetCookie(w, &http.Cookie{
@@ -294,6 +376,6 @@ func (c *AuthController) deleteAuthCookies(w http.ResponseWriter) {
 		Value:    "",
 		Path:     api.RefreshTokenCookiePath,
 		HttpOnly: true,
-		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
 	})
 }
