@@ -1277,3 +1277,77 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService.AssertNotCalled(t, "CreateOAuth", mock.Anything)
 	})
 }
+
+func TestAuthService_VerifyOAuthState(t *testing.T) {
+	const (
+		provider    = domain.OAuthProviderGoogle
+		redirectURI = "http://localhost:3000/callback"
+		nonce       = "browser-nonce"
+	)
+
+	newService := func() domain.AuthService {
+		return services.NewAuthService(new(mocks.UsersServiceMock), new(mocks.AuthRepositoryMock), new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key"))
+	}
+
+	newState := func(t *testing.T, service domain.AuthService, subject string, payload map[string]string) string {
+		t.Helper()
+		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+			Subject:  subject,
+			Audience: domain.TokenAudienceOAuthState,
+			Payload:  payload,
+		})
+		require.NoError(t, err)
+		return state
+	}
+
+	t.Run("success returns redirect uri", func(t *testing.T) {
+		service := newService()
+		state := newState(t, service, string(provider), map[string]string{"redirect_uri": redirectURI, "nonce": nonce})
+
+		got, err := service.VerifyOAuthState(context.Background(), domain.VerifyOAuthStateDTO{Provider: provider, State: state, Nonce: nonce})
+
+		require.NoError(t, err)
+		assert.Equal(t, redirectURI, got)
+	})
+
+	t.Run("error - invalid state token", func(t *testing.T) {
+		got, err := newService().VerifyOAuthState(context.Background(), domain.VerifyOAuthStateDTO{Provider: provider, State: "invalid", Nonce: nonce})
+
+		require.Error(t, err)
+		assert.Empty(t, got)
+	})
+
+	t.Run("error - provider mismatch", func(t *testing.T) {
+		service := newService()
+		state := newState(t, service, "github", map[string]string{"redirect_uri": redirectURI, "nonce": nonce})
+
+		got, err := service.VerifyOAuthState(context.Background(), domain.VerifyOAuthStateDTO{Provider: provider, State: state, Nonce: nonce})
+
+		require.Error(t, err)
+		assert.Equal(t, "auth.oauthLogin.providerMismatch", err.Error())
+		assert.Empty(t, got)
+	})
+
+	t.Run("error - nonce mismatch or missing", func(t *testing.T) {
+		for _, cookieNonce := range []string{"", "other-nonce"} {
+			service := newService()
+			state := newState(t, service, string(provider), map[string]string{"redirect_uri": redirectURI, "nonce": nonce})
+
+			got, err := service.VerifyOAuthState(context.Background(), domain.VerifyOAuthStateDTO{Provider: provider, State: state, Nonce: cookieNonce})
+
+			require.Error(t, err)
+			assert.Equal(t, "auth.oauthLogin.nonceMismatch", err.Error())
+			assert.Empty(t, got)
+		}
+	})
+
+	t.Run("error - missing redirect uri in payload", func(t *testing.T) {
+		service := newService()
+		state := newState(t, service, string(provider), map[string]string{"nonce": nonce})
+
+		got, err := service.VerifyOAuthState(context.Background(), domain.VerifyOAuthStateDTO{Provider: provider, State: state, Nonce: nonce})
+
+		require.Error(t, err)
+		assert.Empty(t, got)
+	})
+}

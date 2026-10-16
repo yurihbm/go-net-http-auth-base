@@ -101,3 +101,8 @@ func (m *AuthServiceMock) OAuthLogin(ctx context.Context, dto domain.OAuthLoginD
 	}
 	return nil, args.Error(1)
 }
+
+func (m *AuthServiceMock) VerifyOAuthState(ctx context.Context, dto domain.VerifyOAuthStateDTO) (string, error) {
+	args := m.Called(dto)
+	return args.String(0), args.Error(1)
+}
