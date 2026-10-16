@@ -12,20 +12,26 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, email, password_hash)
-    VALUES ($1, $2, $3)
+INSERT INTO users (name, email, password_hash, email_verified)
+    VALUES ($1, $2, $3, $4)
 RETURNING
-    uuid, name, email, password_hash, role, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	Name         string
-	Email        string
-	PasswordHash pgtype.Text
+	Name          string
+	Email         string
+	PasswordHash  pgtype.Text
+	EmailVerified bool
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Email, arg.PasswordHash)
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Name,
+		arg.Email,
+		arg.PasswordHash,
+		arg.EmailVerified,
+	)
 	var i User
 	err := row.Scan(
 		&i.Uuid,
@@ -33,6 +39,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
+		&i.EmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -53,7 +60,7 @@ func (q *Queries) DeleteUser(ctx context.Context, uuid pgtype.UUID) error {
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-    uuid, name, email, password_hash, role, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
 FROM
     users
 WHERE
@@ -69,6 +76,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
+		&i.EmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -77,7 +85,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 
 const getUserByUUID = `-- name: GetUserByUUID :one
 SELECT
-    uuid, name, email, password_hash, role, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
 FROM
     users
 WHERE
@@ -93,6 +101,7 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
+		&i.EmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -101,7 +110,7 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 
 const listUsers = `-- name: ListUsers :many
 SELECT
-    uuid, name, email, password_hash, role, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
 FROM
     users
 ORDER BY
@@ -129,6 +138,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Email,
 			&i.PasswordHash,
 			&i.Role,
+			&i.EmailVerified,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -140,6 +150,20 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 		return nil, err
 	}
 	return items, nil
+}
+
+const markUserEmailVerified = `-- name: MarkUserEmailVerified :exec
+UPDATE
+    users
+SET
+    email_verified = true
+WHERE
+    uuid = $1
+`
+
+func (q *Queries) MarkUserEmailVerified(ctx context.Context, uuid pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markUserEmailVerified, uuid)
+	return err
 }
 
 const updateUser = `-- name: UpdateUser :exec

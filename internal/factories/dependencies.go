@@ -27,8 +27,12 @@ type Dependencies struct {
 func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, error) {
 	db := repositories.NewTxAwareDB(pool)
 
+	tokenService := services.NewTokenService(cfg.JWTSecret)
+	emailProvider := newEmailProvider(cfg.Email)
+	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.VerificationURL)
+
 	usersRepository := repositories.NewUsersPostgresRepository(db)
-	usersService := services.NewUserService(usersRepository)
+	usersService := services.NewUserService(usersRepository, emailVerificationService)
 
 	authRepository := repositories.NewAuthPostgresRepository(db)
 	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
@@ -52,7 +56,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		authRepository,
 		oauthProviderRegistry,
 		repositories.NewPostgresTransactor(pool),
-		cfg.JWTSecret,
+		tokenService,
 	)
 
 	auditRepository := repositories.NewAuditPostgresRepository(db)
@@ -63,7 +67,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		UsersService:        usersService,
 		AuthService:         authService,
 		AuditService:        auditService,
-		EmailProvider:       newEmailProvider(cfg.Email),
+		EmailProvider:       emailProvider,
 		AuthMiddleware:      middlewares.NewAuthMiddleware(authService),
 		AdminRoleMiddleware: middlewares.NewRoleMiddleware([]domain.UserRole{domain.RoleAdmin}),
 	}, nil

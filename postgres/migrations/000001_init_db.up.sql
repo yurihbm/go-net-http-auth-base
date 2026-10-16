@@ -11,6 +11,7 @@ CREATE TABLE users (
     email text UNIQUE NOT NULL,
     password_hash text,
     role user_role NOT NULL DEFAULT 'user',
+    email_verified boolean NOT NULL DEFAULT false,
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL
 );

@@ -127,13 +127,14 @@ type AuditLogsDefault struct {
 }
 
 type User struct {
-	Uuid         pgtype.UUID
-	Name         string
-	Email        string
-	PasswordHash pgtype.Text
-	Role         UserRole
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
+	Uuid          pgtype.UUID
+	Name          string
+	Email         string
+	PasswordHash  pgtype.Text
+	Role          UserRole
+	EmailVerified bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
 }
 
 type UserOauthProvider struct {

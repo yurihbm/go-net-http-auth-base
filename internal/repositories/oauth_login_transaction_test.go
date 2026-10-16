@@ -62,11 +62,11 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		registry.On("Get", provider).Return(providerMock, nil)
 
 		service := services.NewAuthService(
-			services.NewUserService(usersRepo),
+			services.NewUserService(usersRepo, new(mocks.EmailVerificationServiceMock)),
 			serviceAuthRepo,
 			registry,
 			repositories.NewPostgresTransactor(testDB),
-			"test-secret-key",
+			services.NewTokenService("test-secret-key"),
 		)
 
 		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{

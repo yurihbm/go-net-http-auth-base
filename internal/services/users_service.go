@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 
 	"go-net-http-auth-base/internal/domain"
 
@@ -11,11 +13,12 @@ import (
 var errForbiddenUserAccess = domain.NewForbiddenError("users.forbidden")
 
 type usersService struct {
-	repo domain.UsersRepository
+	repo              domain.UsersRepository
+	emailVerification domain.EmailVerificationService
 }
 
-func NewUserService(repo domain.UsersRepository) domain.UsersService {
-	return &usersService{repo: repo}
+func NewUserService(repo domain.UsersRepository, emailVerification domain.EmailVerificationService) domain.UsersService {
+	return &usersService{repo: repo, emailVerification: emailVerification}
 }
 
 func (s *usersService) GetByUUID(ctx context.Context, actor domain.Actor, uuid string) (*domain.User, error) {
@@ -40,14 +43,24 @@ func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*d
 		PasswordHash: string(hash),
 		Role:         domain.RoleUser,
 	}
-	return s.repo.Create(ctx, user)
+	created, err := s.repo.Create(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.emailVerification.SendVerificationEmail(ctx, created); err != nil {
+		slog.Error("verification email failed", "error", err, "user_uuid", created.UUID)
+	}
+
+	return created, nil
 }
 
 func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUserDTO) (*domain.User, error) {
 	user := domain.User{
-		Name:  dto.Name,
-		Email: dto.Email,
-		Role:  domain.RoleUser,
+		Name:          dto.Name,
+		Email:         dto.Email,
+		Role:          domain.RoleUser,
+		EmailVerified: dto.EmailVerified,
 	}
 	return s.repo.Create(ctx, user)
 }
@@ -70,6 +83,41 @@ func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid stri
 	}
 
 	return s.repo.Update(ctx, *user)
+}
+
+func (s *usersService) VerifyEmail(ctx context.Context, token string) error {
+	userUUID, err := s.emailVerification.VerifyVerificationToken(ctx, token)
+	if err != nil {
+		return err
+	}
+
+	user, err := s.repo.FindByUUID(ctx, userUUID)
+	if err != nil {
+		return err
+	}
+
+	if user.EmailVerified {
+		return nil
+	}
+
+	return s.repo.MarkEmailVerified(ctx, user.UUID)
+}
+
+func (s *usersService) ResendVerification(ctx context.Context, email string) error {
+	user, err := s.GetByEmail(ctx, email)
+	if err != nil {
+		var notFoundErr *domain.NotFoundError
+		if errors.As(err, &notFoundErr) {
+			return nil
+		}
+		return err
+	}
+
+	if user.EmailVerified {
+		return nil
+	}
+
+	return s.emailVerification.SendVerificationEmail(ctx, user)
 }
 
 func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid string) error {

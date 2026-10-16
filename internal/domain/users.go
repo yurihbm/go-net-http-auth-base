@@ -19,13 +19,14 @@ func (r UserRole) IsValid() bool {
 }
 
 type User struct {
-	UUID         string   `json:"uuid"`
-	Name         string   `json:"name"`
-	Email        string   `json:"email"`
-	PasswordHash string   `json:"-"`
-	Role         UserRole `json:"role"`
-	CreatedAt    int64    `json:"created_at"`
-	UpdatedAt    int64    `json:"updated_at"`
+	UUID          string   `json:"uuid"`
+	Name          string   `json:"name"`
+	Email         string   `json:"email"`
+	PasswordHash  string   `json:"-"`
+	Role          UserRole `json:"role"`
+	EmailVerified bool     `json:"email_verified"`
+	CreatedAt     int64    `json:"created_at"`
+	UpdatedAt     int64    `json:"updated_at"`
 }
 
 type CreateUserDTO struct {
@@ -35,8 +36,9 @@ type CreateUserDTO struct {
 }
 
 type CreateOAuthUserDTO struct {
-	Name  string
-	Email string
+	Name          string
+	Email         string
+	EmailVerified bool
 }
 
 type UserUpdateDTO struct {
@@ -59,6 +61,8 @@ type UsersService interface {
 	Create(context.Context, CreateUserDTO) (*User, error)
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
 	Update(context.Context, Actor, string, UserUpdateDTO) error
+	VerifyEmail(context.Context, string) error
+	ResendVerification(context.Context, string) error
 	Delete(context.Context, Actor, string) error
 }
 
@@ -67,5 +71,6 @@ type UsersRepository interface {
 	FindByEmail(context.Context, string) (*User, error)
 	Create(context.Context, User) (*User, error)
 	Update(context.Context, User) error
+	MarkEmailVerified(context.Context, string) error
 	Delete(context.Context, string) error
 }

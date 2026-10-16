@@ -21,13 +21,13 @@ var (
 
 func TestNewUserService(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 	assert.NotNil(t, service)
 }
 
 func TestUsersService_GetByUUID(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 
 	t.Run("self is allowed", func(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User"}
@@ -53,7 +53,7 @@ func TestUsersService_GetByUUID(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 
 		result, err := service.GetByUUID(context.Background(), otherActor, "some-uuid")
 
@@ -76,7 +76,7 @@ func TestUsersService_GetByUUID(t *testing.T) {
 
 func TestUsersService_GetByEmail(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 
 	t.Run("success", func(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User", Email: "test@example.com"}
@@ -101,27 +101,28 @@ func TestUsersService_GetByEmail(t *testing.T) {
 }
 
 func TestUsersService_Create(t *testing.T) {
-	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo)
+	dto := domain.CreateUserDTO{
+		Name:     "Test User",
+		Email:    "test@example.com",
+		Password: "password123",
+	}
+	created := &domain.User{
+		UUID:         "generated-uuid",
+		Name:         "Test User",
+		Email:        "test@example.com",
+		PasswordHash: "hashed-password",
+		Role:         domain.RoleUser,
+		CreatedAt:    1234567890,
+	}
 
-	t.Run("success", func(t *testing.T) {
-		password := "password123"
-		dto := domain.CreateUserDTO{
-			Name:     "Test User",
-			Email:    "test@example.com",
-			Password: password,
-		}
-
+	t.Run("success sends the verification email", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		sender := new(mocks.EmailVerificationServiceMock)
+		service := services.NewUserService(repo, sender)
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
 			return u.Role == domain.RoleUser
-		})).Return(&domain.User{
-			UUID:         "generated-uuid",
-			Name:         "Test User",
-			Email:        "test@example.com",
-			PasswordHash: "hashed-password",
-			Role:         domain.RoleUser,
-			CreatedAt:    1234567890,
-		}, nil).Once()
+		})).Return(created, nil).Once()
+		sender.On("SendVerificationEmail", mock.Anything, created).Return(nil).Once()
 
 		user, err := service.Create(context.Background(), dto)
 
@@ -134,9 +135,28 @@ func TestUsersService_Create(t *testing.T) {
 		assert.Equal(t, domain.RoleUser, user.Role)
 		assert.Equal(t, int64(1234567890), user.CreatedAt)
 		repo.AssertExpectations(t)
+		sender.AssertExpectations(t)
+		sender.AssertNumberOfCalls(t, "SendVerificationEmail", 1)
 	})
 
-	t.Run("success oauth (no password)", func(t *testing.T) {
+	t.Run("verification email failure does not fail creation", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		sender := new(mocks.EmailVerificationServiceMock)
+		service := services.NewUserService(repo, sender)
+		repo.On("Create", mock.AnythingOfType("domain.User")).Return(created, nil).Once()
+		sender.On("SendVerificationEmail", mock.Anything, created).Return(errors.New("smtp down")).Once()
+
+		user, err := service.Create(context.Background(), dto)
+
+		assert.NoError(t, err)
+		assert.Equal(t, created, user)
+		sender.AssertExpectations(t)
+	})
+
+	t.Run("success oauth (no password) does not send the verification email", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		sender := new(mocks.EmailVerificationServiceMock)
+		service := services.NewUserService(repo, sender)
 		dto := domain.CreateOAuthUserDTO{
 			Name:  "Test User",
 			Email: "test@example.com",
@@ -164,16 +184,13 @@ func TestUsersService_Create(t *testing.T) {
 		assert.Equal(t, domain.RoleUser, user.Role)
 		assert.Equal(t, int64(1234567890), user.CreatedAt)
 		repo.AssertExpectations(t)
+		sender.AssertNotCalled(t, "SendVerificationEmail", mock.Anything, mock.Anything)
 	})
 
 	t.Run("repository create error", func(t *testing.T) {
-		password := "password123"
-		dto := domain.CreateUserDTO{
-			Name:     "Test User",
-			Email:    "test@example.com",
-			Password: password,
-		}
-
+		repo := new(mocks.UsersRepositoryMock)
+		sender := new(mocks.EmailVerificationServiceMock)
+		service := services.NewUserService(repo, sender)
 		repo.On("Create", mock.AnythingOfType("domain.User")).Return(nil, errors.New("db error")).Once()
 
 		user, err := service.Create(context.Background(), dto)
@@ -182,12 +199,13 @@ func TestUsersService_Create(t *testing.T) {
 		assert.Equal(t, "db error", err.Error())
 		assert.Nil(t, user)
 		repo.AssertExpectations(t)
+		sender.AssertNotCalled(t, "SendVerificationEmail", mock.Anything, mock.Anything)
 	})
 }
 
 func TestUsersService_Update(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 	uuid := "some-uuid"
 	originalUser := &domain.User{
 		UUID:  uuid,
@@ -252,7 +270,7 @@ func TestUsersService_Update(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 		name := "New Name"
 		dto := domain.UserUpdateDTO{Name: &name}
 
@@ -267,7 +285,7 @@ func TestUsersService_Update(t *testing.T) {
 
 func TestUsersService_Delete(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 	uuid := "some-uuid"
 
 	t.Run("success", func(t *testing.T) {
@@ -300,7 +318,7 @@ func TestUsersService_Delete(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 
 		err := service.Delete(context.Background(), otherActor, uuid)
 
@@ -308,4 +326,144 @@ func TestUsersService_Delete(t *testing.T) {
 		assert.True(t, errors.As(err, &forbiddenErr))
 		repo.AssertNotCalled(t, "Delete", uuid)
 	})
+}
+
+func newVerificationUsersService() (domain.UsersService, *mocks.UsersRepositoryMock, *mocks.EmailVerificationServiceMock) {
+	repo := new(mocks.UsersRepositoryMock)
+	emailVerification := new(mocks.EmailVerificationServiceMock)
+	return services.NewUserService(repo, emailVerification), repo, emailVerification
+}
+
+func TestUsersService_VerifyEmail(t *testing.T) {
+	t.Run("marks unverified user as verified", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		emailVerification.On("VerifyVerificationToken", "token").Return("user-uuid", nil).Once()
+		repo.On("FindByUUID", "user-uuid").Return(&domain.User{UUID: "user-uuid"}, nil).Once()
+		repo.On("MarkEmailVerified", "user-uuid").Return(nil).Once()
+
+		err := service.VerifyEmail(context.Background(), "token")
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("already verified is idempotent", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		emailVerification.On("VerifyVerificationToken", "token").Return("user-uuid", nil).Once()
+		repo.On("FindByUUID", "user-uuid").Return(&domain.User{UUID: "user-uuid", EmailVerified: true}, nil).Once()
+
+		err := service.VerifyEmail(context.Background(), "token")
+
+		assert.NoError(t, err)
+		repo.AssertNotCalled(t, "MarkEmailVerified", mock.Anything)
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		emailVerification.On("VerifyVerificationToken", "token").Return("", services.ErrInvalidToken).Once()
+
+		err := service.VerifyEmail(context.Background(), "token")
+
+		assert.ErrorIs(t, err, services.ErrInvalidToken)
+		repo.AssertNotCalled(t, "FindByUUID", mock.Anything)
+	})
+
+	t.Run("unknown user", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		notFound := domain.NewNotFoundError("users.notFound")
+		emailVerification.On("VerifyVerificationToken", "token").Return("ghost", nil).Once()
+		repo.On("FindByUUID", "ghost").Return(nil, notFound).Once()
+
+		err := service.VerifyEmail(context.Background(), "token")
+
+		assert.ErrorIs(t, err, notFound)
+		repo.AssertNotCalled(t, "MarkEmailVerified", mock.Anything)
+	})
+
+	t.Run("mark error", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		markErr := errors.New("db error")
+		emailVerification.On("VerifyVerificationToken", "token").Return("user-uuid", nil).Once()
+		repo.On("FindByUUID", "user-uuid").Return(&domain.User{UUID: "user-uuid"}, nil).Once()
+		repo.On("MarkEmailVerified", "user-uuid").Return(markErr).Once()
+
+		err := service.VerifyEmail(context.Background(), "token")
+
+		assert.ErrorIs(t, err, markErr)
+	})
+}
+
+func TestUsersService_ResendVerification(t *testing.T) {
+	t.Run("sends for unverified user", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		user := &domain.User{UUID: "user-uuid", Email: "test@example.com"}
+		repo.On("FindByEmail", "test@example.com").Return(user, nil).Once()
+		emailVerification.On("SendVerificationEmail", mock.Anything, user).Return(nil).Once()
+
+		err := service.ResendVerification(context.Background(), "test@example.com")
+
+		assert.NoError(t, err)
+		emailVerification.AssertExpectations(t)
+	})
+
+	t.Run("unknown email succeeds silently", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		repo.On("FindByEmail", "ghost@example.com").Return(nil, domain.NewNotFoundError("users.notFound")).Once()
+
+		err := service.ResendVerification(context.Background(), "ghost@example.com")
+
+		assert.NoError(t, err)
+		emailVerification.AssertNotCalled(t, "SendVerificationEmail", mock.Anything, mock.Anything)
+	})
+
+	t.Run("already verified succeeds silently", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		repo.On("FindByEmail", "test@example.com").Return(&domain.User{UUID: "user-uuid", Email: "test@example.com", EmailVerified: true}, nil).Once()
+
+		err := service.ResendVerification(context.Background(), "test@example.com")
+
+		assert.NoError(t, err)
+		emailVerification.AssertNotCalled(t, "SendVerificationEmail", mock.Anything, mock.Anything)
+	})
+
+	t.Run("lookup error is returned", func(t *testing.T) {
+		service, repo, _ := newVerificationUsersService()
+		lookupErr := errors.New("db error")
+		repo.On("FindByEmail", "test@example.com").Return(nil, lookupErr).Once()
+
+		err := service.ResendVerification(context.Background(), "test@example.com")
+
+		assert.ErrorIs(t, err, lookupErr)
+	})
+
+	t.Run("send error is returned", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		sendErr := errors.New("smtp down")
+		repo.On("FindByEmail", "test@example.com").Return(&domain.User{UUID: "user-uuid", Email: "test@example.com"}, nil).Once()
+		emailVerification.On("SendVerificationEmail", mock.Anything, mock.Anything).Return(sendErr).Once()
+
+		err := service.ResendVerification(context.Background(), "test@example.com")
+
+		assert.ErrorIs(t, err, sendErr)
+	})
+}
+
+func TestUsersService_CreateOAuth_EmailVerified(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
+
+	for _, verified := range []bool{true, false} {
+		repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
+			return u.EmailVerified == verified
+		})).Return(&domain.User{UUID: "uuid", EmailVerified: verified}, nil).Once()
+
+		user, err := service.CreateOAuth(context.Background(), domain.CreateOAuthUserDTO{
+			Name:          "Test",
+			Email:         "test@example.com",
+			EmailVerified: verified,
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, verified, user.EmailVerified)
+	}
 }

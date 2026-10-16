@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO users (name, email, password_hash)
-    VALUES ($1, $2, $3)
+INSERT INTO users (name, email, password_hash, email_verified)
+    VALUES ($1, $2, $3, $4)
 RETURNING
     *;
 
@@ -36,6 +36,14 @@ SET
     name = COALESCE($2, name),
     email = COALESCE($3, email),
     password_hash = COALESCE($4, password_hash)
+WHERE
+    uuid = $1;
+
+-- name: MarkUserEmailVerified :exec
+UPDATE
+    users
+SET
+    email_verified = true
 WHERE
     uuid = $1;
 
