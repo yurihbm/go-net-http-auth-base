@@ -73,6 +73,7 @@ func TestLoad(t *testing.T) {
 	})
 
 	t.Run("applies defaults for optional vars", func(t *testing.T) {
+		t.Setenv("API_ENV", "development")
 		t.Setenv("JWT_SECRET", validJWTSecret)
 		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
 		t.Setenv("API_PORT", "")
@@ -111,6 +112,9 @@ func TestLoad(t *testing.T) {
 		t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "5.5")
 		t.Setenv("RATE_LIMIT_BURST", "10")
 		t.Setenv("DB_STATS_LOG_INTERVAL", "1m")
+		t.Setenv("RESEND_API_KEY", "re_key")
+		t.Setenv("EMAIL_FROM", "no-reply@example.com")
+		t.Setenv("EMAIL_VERIFICATION_URL", "https://app.example.com/verify")
 
 		cfg, err := config.Load()
 
@@ -130,6 +134,64 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, 5.5, cfg.RateLimit.RequestsPerSecond)
 		assert.Equal(t, 10, cfg.RateLimit.Burst)
 		assert.Equal(t, time.Minute, cfg.DBStatsLogInterval)
+		assert.Equal(t, config.EmailConfig{
+			ResendAPIKey:    "re_key",
+			From:            "no-reply@example.com",
+			VerificationURL: "https://app.example.com/verify",
+		}, cfg.Email)
+	})
+
+	emailVars := map[string]string{
+		"RESEND_API_KEY":         "re_key",
+		"EMAIL_FROM":             "no-reply@example.com",
+		"EMAIL_VERIFICATION_URL": "https://app.example.com/verify",
+	}
+
+	for name := range emailVars {
+		t.Run("returns error outside development when "+name+" is missing", func(t *testing.T) {
+			t.Setenv("JWT_SECRET", validJWTSecret)
+			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+			t.Setenv("API_ENV", "production")
+			t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "http://a.com/cb")
+			for k, v := range emailVars {
+				t.Setenv(k, v)
+			}
+			t.Setenv(name, "")
+
+			cfg, err := config.Load()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), name)
+			assert.Nil(t, cfg)
+		})
+	}
+
+	t.Run("requires email vars when API_ENV is unset", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "")
+		t.Setenv("RESEND_API_KEY", "")
+		t.Setenv("EMAIL_FROM", "")
+		t.Setenv("EMAIL_VERIFICATION_URL", "")
+
+		cfg, err := config.Load()
+
+		require.Error(t, err)
+		assert.Nil(t, cfg)
+	})
+
+	t.Run("allows missing email vars in development", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("RESEND_API_KEY", "")
+		t.Setenv("EMAIL_FROM", "")
+		t.Setenv("EMAIL_VERIFICATION_URL", "")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Equal(t, config.EmailConfig{}, cfg.Email)
 	})
 }
 
