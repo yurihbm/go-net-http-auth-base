@@ -46,7 +46,7 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		usersRepo := repositories.NewUsersPostgresRepository(db)
 		authRepo := repositories.NewAuthPostgresRepository(db)
 
-		var serviceAuthRepo domain.AuthRepository = authRepo
+		serviceAuthRepo := authRepo
 		if linkErr != nil {
 			serviceAuthRepo = failingLinkAuthRepository{AuthRepository: authRepo, err: linkErr}
 		}
