@@ -120,6 +120,14 @@ func (s *usersService) ResendVerification(ctx context.Context, email string) err
 	return s.emailVerification.SendVerificationEmail(ctx, user)
 }
 
+func (s *usersService) SetRefreshJTI(ctx context.Context, uuid string, jti *string) error {
+	return s.repo.SetRefreshJTI(ctx, uuid, jti)
+}
+
+func (s *usersService) RotateRefreshJTI(ctx context.Context, uuid string, currentJTI string, nextJTI string) error {
+	return s.repo.RotateRefreshJTI(ctx, uuid, currentJTI, nextJTI)
+}
+
 func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid string) error {
 	if !actor.CanAccess(uuid) {
 		return errForbiddenUserAccess

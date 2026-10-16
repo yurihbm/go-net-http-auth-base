@@ -12,6 +12,7 @@ CREATE TABLE users (
     password_hash text,
     role user_role NOT NULL DEFAULT 'user',
     email_verified boolean NOT NULL DEFAULT false,
+    current_refresh_jti text,
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL
 );

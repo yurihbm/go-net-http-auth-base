@@ -70,6 +70,8 @@ type UsersService interface {
 	Update(context.Context, Actor, string, UserUpdateDTO) error
 	VerifyEmail(context.Context, string) error
 	ResendVerification(context.Context, string) error
+	SetRefreshJTI(context.Context, string, *string) error
+	RotateRefreshJTI(ctx context.Context, uuid string, currentJTI string, nextJTI string) error
 	Delete(context.Context, Actor, string) error
 }
 
@@ -79,5 +81,7 @@ type UsersRepository interface {
 	Create(context.Context, User) (*User, error)
 	Update(context.Context, User) error
 	MarkEmailVerified(context.Context, string) error
+	SetRefreshJTI(context.Context, string, *string) error
+	RotateRefreshJTI(ctx context.Context, uuid string, currentJTI string, nextJTI string) error
 	Delete(context.Context, string) error
 }

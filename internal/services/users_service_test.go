@@ -448,6 +448,53 @@ func TestUsersService_ResendVerification(t *testing.T) {
 	})
 }
 
+func TestUsersService_SetRefreshJTI(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
+	jti := "jti"
+
+	t.Run("success", func(t *testing.T) {
+		repo.On("SetRefreshJTI", "user-uuid", &jti).Return(nil).Once()
+
+		err := service.SetRefreshJTI(context.Background(), "user-uuid", &jti)
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("repository error", func(t *testing.T) {
+		repoErr := errors.New("db error")
+		repo.On("SetRefreshJTI", "user-uuid", (*string)(nil)).Return(repoErr).Once()
+
+		err := service.SetRefreshJTI(context.Background(), "user-uuid", nil)
+
+		assert.ErrorIs(t, err, repoErr)
+	})
+}
+
+func TestUsersService_RotateRefreshJTI(t *testing.T) {
+	repo := new(mocks.UsersRepositoryMock)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
+
+	t.Run("success", func(t *testing.T) {
+		repo.On("RotateRefreshJTI", "user-uuid", "current", "next").Return(nil).Once()
+
+		err := service.RotateRefreshJTI(context.Background(), "user-uuid", "current", "next")
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("repository error", func(t *testing.T) {
+		repoErr := domain.NewNotFoundError("users.refreshSession.notFound")
+		repo.On("RotateRefreshJTI", "user-uuid", "stale", "next").Return(repoErr).Once()
+
+		err := service.RotateRefreshJTI(context.Background(), "user-uuid", "stale", "next")
+
+		assert.ErrorIs(t, err, repoErr)
+	})
+}
+
 func TestUsersService_CreateOAuth_EmailVerified(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
 	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))

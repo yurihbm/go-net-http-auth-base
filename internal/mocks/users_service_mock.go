@@ -65,3 +65,13 @@ func (m *UsersServiceMock) ResendVerification(ctx context.Context, email string)
 	args := m.Called(email)
 	return args.Error(0)
 }
+
+func (m *UsersServiceMock) SetRefreshJTI(ctx context.Context, uuid string, jti *string) error {
+	args := m.Called(uuid, jti)
+	return args.Error(0)
+}
+
+func (m *UsersServiceMock) RotateRefreshJTI(ctx context.Context, uuid string, currentJTI string, nextJTI string) error {
+	args := m.Called(uuid, currentJTI, nextJTI)
+	return args.Error(0)
+}

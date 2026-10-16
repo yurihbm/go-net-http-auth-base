@@ -112,6 +112,43 @@ func (r *UsersPostgresRepository) MarkEmailVerified(ctx context.Context, uuidStr
 	return nil
 }
 
+func (r *UsersPostgresRepository) SetRefreshJTI(ctx context.Context, uuidStr string, jti *string) error {
+	uuid, err := parseUsersUUID(uuidStr)
+	if err != nil {
+		return err
+	}
+
+	params := postgres.SetUserRefreshJTIParams{Uuid: *uuid}
+	if jti != nil {
+		params.CurrentRefreshJti = pgtype.Text{String: *jti, Valid: true}
+	}
+
+	if err = r.q.SetUserRefreshJTI(ctx, params); err != nil {
+		return domain.NewInternalServerError("users.internalServerError", err)
+	}
+	return nil
+}
+
+func (r *UsersPostgresRepository) RotateRefreshJTI(ctx context.Context, uuidStr string, currentJTI string, nextJTI string) error {
+	uuid, err := parseUsersUUID(uuidStr)
+	if err != nil {
+		return err
+	}
+
+	rows, err := r.q.RotateUserRefreshJTI(ctx, postgres.RotateUserRefreshJTIParams{
+		Uuid:       *uuid,
+		CurrentJti: pgtype.Text{String: currentJTI, Valid: true},
+		NextJti:    pgtype.Text{String: nextJTI, Valid: true},
+	})
+	if err != nil {
+		return domain.NewInternalServerError("users.internalServerError", err)
+	}
+	if rows == 0 {
+		return domain.NewNotFoundError("users.refreshSession.notFound")
+	}
+	return nil
+}
+
 func (r *UsersPostgresRepository) Delete(ctx context.Context, uuidStr string) error {
 	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {
