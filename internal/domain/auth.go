@@ -138,6 +138,12 @@ type OAuthLoginDTO struct {
 	CodeVerifier string
 }
 
+type VerifyOAuthStateDTO struct {
+	Provider OAuthProviderName
+	State    string
+	Nonce    string
+}
+
 type OAuthLoginResult struct {
 	User        *User
 	Tokens      AuthTokens
@@ -175,6 +181,7 @@ type AuthService interface {
 	GetUserOAuthProvidersByUserUUID(context.Context, string) ([]UserOAuthProvider, error)
 	StartOAuthLogin(context.Context, StartOAuthLoginDTO) (*StartOAuthLoginResult, error)
 	GetOAuthProviderUserInfo(ctx context.Context, provider OAuthProviderName, code string, codeVerifier string) (*OAuthProviderUserInfo, error)
+	VerifyOAuthState(context.Context, VerifyOAuthStateDTO) (string, error)
 	OAuthLogin(context.Context, OAuthLoginDTO) (*OAuthLoginResult, error)
 }
 
