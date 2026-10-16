@@ -41,6 +41,7 @@ type Config struct {
 	OAuth     OAuthConfig
 	CORS      CORSConfig
 	RateLimit RateLimitConfig
+	Email     EmailConfig
 
 	DBStatsLogInterval time.Duration
 }
@@ -72,6 +73,12 @@ type OAuthConfig struct {
 type CORSConfig struct {
 	AllowedOrigins []string
 	AllowedMethods []string
+}
+
+type EmailConfig struct {
+	ResendAPIKey    string
+	From            string
+	VerificationURL string
 }
 
 type RateLimitConfig struct {
@@ -136,11 +143,30 @@ func Load() (*Config, error) {
 			Burst:             env.GetEnvAsInt("RATE_LIMIT_BURST", defaultRateLimitBurst),
 		},
 
+		Email: EmailConfig{
+			ResendAPIKey:    os.Getenv("RESEND_API_KEY"),
+			From:            os.Getenv("EMAIL_FROM"),
+			VerificationURL: os.Getenv("EMAIL_VERIFICATION_URL"),
+		},
+
 		DBStatsLogInterval: env.GetEnvAsDuration("DB_STATS_LOG_INTERVAL", defaultDBStatsLogInterval),
 	}
 
 	if cfg.IsProduction() && len(cfg.OAuth.CallbackAllowList) == 0 {
 		return nil, errors.New("OAUTH_CALLBACK_ALLOW_LIST must not be empty in production")
+	}
+
+	if !cfg.IsDevelopment() {
+		required := []struct{ name, value string }{
+			{"RESEND_API_KEY", cfg.Email.ResendAPIKey},
+			{"EMAIL_FROM", cfg.Email.From},
+			{"EMAIL_VERIFICATION_URL", cfg.Email.VerificationURL},
+		}
+		for _, r := range required {
+			if r.value == "" {
+				return nil, fmt.Errorf("%s not set in environment", r.name)
+			}
+		}
 	}
 
 	return cfg, nil
