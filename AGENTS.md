@@ -185,6 +185,11 @@ Services implement business logic. Key patterns:
   - Password hashing is performed in the service layer using `bcrypt.GenerateFromPassword()`.
   - Validation logic (e.g., checking if password is required for email auth) is handled here.
   - Services perform partial updates by fetching existing entities, modifying only provided fields, then calling repository update.
+- **Email**: `domain.EmailProvider` (`Send`) is built once in `factories.Dependencies`: `ResendEmailProvider` when `RESEND_API_KEY` is set, otherwise `LogEmailProvider` (development). `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_VERIFICATION_URL` are required outside development and `SESSION_MAX_AGE` (default 30d) is optional; all are loaded and validated in `config/config.go`.
+- **Email Verification**: `domain.EmailVerificationService` (`services.NewEmailVerificationService`, depends only on `TokenService`, `EmailProvider` and the verification URL) sends the mail (`SendVerificationEmail`) and checks its token (`VerifyVerificationToken`). `UsersService` owns the flow: `Create` (`POST /users`) sends the mail and only logs a failure (`CreateOAuth` never sends), `VerifyEmail` backs `POST /users/verify-email` and `ResendVerification` backs `POST /users/resend-verification` (silent for unknown or already verified emails). The link carries a JWT with audience `email_verification_token` (24h). OAuth account creation requires a provider-verified email, and linking into an existing account requires both provider and local `email_verified`.
+- **Email Normalization**: Services always pass emails through the unexported `normalizeEmail` helper (`services/helpers.go`, trim + lowercase) before lookup or write; repositories receive already normalized emails; the database enforces a unique index on `lower(email)`.
+- **Refresh Sessions**: Multi-device: each login (credentials or OAuth, via `startSession`) creates a row in `user_sessions` (`current_jti`, `last_used_at`, `expires_at` = login + `SESSION_MAX_AGE`, never extended on rotation), inside one `WithinTx` that first deletes the user's expired or idle sessions and then trims the user to the newest `MAX_SESSIONS_PER_USER` (optional, default 10; least recently used evicted). Refresh tokens carry `sub`, `sid` and `jti`; access tokens carry `sub` and `sid` (`tokenService` rejects either without `sid`). Refresh loads the session by `sid` + `sub`, rejects it past `expires_at`, and rotates the `jti` through `SessionsRepository.RotateJTI` (per-session atomic compare-and-set, keeping the same `sid`); a reused or stale token, or a lost concurrent refresh, deletes only that session (the user's other devices stay signed in). There is no grace window, so clients must send one refresh at a time. `POST /auth/logout` is authenticated (`AuthMiddleware` puts `SessionUUID` in `shared.RequestContextData`) and deletes only the current session; the stateless access token stays valid for up to 15 minutes after logout, but the session can no longer be refreshed. With an expired access token, clients refresh first and then log out.
+- **Token Interfaces**: All JWTs are signed and verified by the dependency-free `tokenService` (`services.NewTokenService`, holds only the JWT secret; `domain.TokenService`), used by `AuthService` (which delegates its token methods to it) and `EmailVerificationService`. `domain.TokenVerifier` (`VerifyToken`) is what middlewares depend on; `domain.TokenGenerator` (`GenerateToken`) is separate and not part of `AuthService`. Depend on the narrowest one.
 - **Error Handling**: Services return domain-specific errors with meaningful messages (e.g., `"user.create.password_required"`).
 - **Multi-Step Orchestration**: Flows spanning several steps and services (e.g., `AuthService.OAuthLogin`, which verifies the state token, resolves/creates the user via `UsersService`, links the OAuth provider, and mints tokens) are implemented as a single service method. Controllers stay thin: decode input, call the one service method, then handle the HTTP concerns (cookies, redirect, audit log).
 
@@ -277,6 +282,12 @@ func toDomainUser(user postgres.User) domain.User {
 ```
 
 ### Testing Patterns
+
+#### Test Naming
+
+- **Files**: One `<name>_test.go` next to each `<name>.go`. Provider-specific tests live in `<provider>_oauth_provider_test.go`, cross-provider tests in `oauth_provider_test.go`, and shared helpers in `helpers_test.go`.
+- **Functions**: One `Test<Type>_<Method>` per tested method (`TestNew<Type>` for constructors). Never write a standalone `Test...` function per scenario.
+- **Scenarios**: Subtests via `t.Run` with a short description (`"success"`, `"error - <description>"`). Table-driven cases use `t.Run(tc.name, ...)`.
 
 #### Controller Tests
 
