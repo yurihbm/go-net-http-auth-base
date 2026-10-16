@@ -18,6 +18,8 @@ type Dependencies struct {
 	AuthService  domain.AuthService
 	AuditService domain.AuditService
 
+	EmailProvider domain.EmailProvider
+
 	AuthMiddleware      middlewares.HandlerMiddleware
 	AdminRoleMiddleware middlewares.HandlerMiddleware
 }
@@ -61,7 +63,15 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		UsersService:        usersService,
 		AuthService:         authService,
 		AuditService:        auditService,
+		EmailProvider:       newEmailProvider(cfg.Email),
 		AuthMiddleware:      middlewares.NewAuthMiddleware(authService),
 		AdminRoleMiddleware: middlewares.NewRoleMiddleware([]domain.UserRole{domain.RoleAdmin}),
 	}, nil
+}
+
+func newEmailProvider(cfg config.EmailConfig) domain.EmailProvider {
+	if cfg.ResendAPIKey == "" {
+		return providers.NewLogEmailProvider()
+	}
+	return providers.NewResendEmailProvider(cfg.ResendAPIKey, cfg.From)
 }
