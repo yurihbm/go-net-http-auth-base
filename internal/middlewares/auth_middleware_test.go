@@ -18,8 +18,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func getTestAuthMiddleware() (middlewares.HandlerMiddleware, *mocks.AuthServiceMock) {
-	serviceMock := new(mocks.AuthServiceMock)
+func getTestAuthMiddleware() (middlewares.HandlerMiddleware, *mocks.TokenVerifierMock) {
+	serviceMock := new(mocks.TokenVerifierMock)
 	middleware := middlewares.NewAuthMiddleware(serviceMock)
 
 	return middleware, serviceMock
@@ -27,7 +27,7 @@ func getTestAuthMiddleware() (middlewares.HandlerMiddleware, *mocks.AuthServiceM
 
 func TestNewAuthMiddleware(t *testing.T) {
 	t.Run("should create new auth middleware", func(t *testing.T) {
-		serviceMock := new(mocks.AuthServiceMock)
+		serviceMock := new(mocks.TokenVerifierMock)
 		middleware := middlewares.NewAuthMiddleware(serviceMock)
 
 		assert.NotNil(t, middleware)

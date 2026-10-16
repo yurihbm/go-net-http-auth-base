@@ -665,7 +665,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			SessionID: "session-uuid",
 		}
 
-		token, err := service.GenerateToken(context.Background(), dto)
+		token, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token)
@@ -682,7 +682,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 	})
 
 	t.Run("role is carried in the token", func(t *testing.T) {
-		token, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+		token, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:   "user-uuid-123",
 			Audience:  domain.TokenAudienceAccess,
 			SessionID: "session-uuid",
@@ -705,7 +705,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			SessionID: "session-uuid",
 		}
 
-		token, err := service.GenerateToken(context.Background(), dto)
+		token, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token)
@@ -727,7 +727,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 			Audience: domain.TokenAudienceExchange,
 		}
 
-		token, err := service.GenerateToken(context.Background(), dto)
+		token, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token)
@@ -1084,7 +1084,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 
 	newState := func(t *testing.T, service domain.AuthService, subject string) string {
 		t.Helper()
-		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+		state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  subject,
 			Audience: domain.TokenAudienceOAuthState,
 			Payload: map[string]string{
@@ -1390,7 +1390,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 				if tc.stateNonce != "" {
 					payload["nonce"] = tc.stateNonce
 				}
-				state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+				state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 					Subject:  string(provider),
 					Audience: domain.TokenAudienceOAuthState,
 					Payload:  payload,
@@ -1442,7 +1442,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
 		service := services.NewAuthService(usersService, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), testSessionMaxAge, testMaxSessions)
 
-		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+		state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  string(provider),
 			Audience: domain.TokenAudienceOAuthState,
 			Payload:  map[string]string{},
@@ -1466,7 +1466,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 				oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
 				service := services.NewAuthService(usersService, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), testSessionMaxAge, testMaxSessions)
 
-				state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+				state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 					Subject:  string(provider),
 					Audience: domain.TokenAudienceOAuthState,
 					Payload:  payload,
@@ -1580,7 +1580,7 @@ func TestAuthService_VerifyOAuthState(t *testing.T) {
 
 	newState := func(t *testing.T, service domain.AuthService, subject string, payload map[string]string) string {
 		t.Helper()
-		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+		state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  subject,
 			Audience: domain.TokenAudienceOAuthState,
 			Payload:  payload,
