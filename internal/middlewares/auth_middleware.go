@@ -9,13 +9,13 @@ import (
 )
 
 type AuthMiddleware struct {
-	authService domain.AuthService
+	tokenVerifier domain.TokenVerifier
 }
 
 var _ HandlerMiddleware = (*AuthMiddleware)(nil)
 
-func NewAuthMiddleware(authService domain.AuthService) HandlerMiddleware {
-	return &AuthMiddleware{authService: authService}
+func NewAuthMiddleware(tokenVerifier domain.TokenVerifier) HandlerMiddleware {
+	return &AuthMiddleware{tokenVerifier: tokenVerifier}
 }
 
 func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
@@ -29,7 +29,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		tokenData, err := m.authService.VerifyToken(r.Context(), domain.VerifyTokenDTO{
+		tokenData, err := m.tokenVerifier.VerifyToken(r.Context(), domain.VerifyTokenDTO{
 			Token:    accessToken.Value,
 			Audience: domain.TokenAudienceAccess,
 		})
