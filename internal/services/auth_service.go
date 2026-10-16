@@ -194,23 +194,23 @@ func (s *authService) getOAuthProvider(name domain.OAuthProviderName) (domain.OA
 	return provider, nil
 }
 
-func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) (*domain.OAuthLoginResult, error) {
+func (s *authService) VerifyOAuthState(ctx context.Context, dto domain.VerifyOAuthStateDTO) (string, error) {
 	tokenData, err := s.VerifyToken(ctx, domain.VerifyTokenDTO{
 		Token:    dto.State,
 		Audience: domain.TokenAudienceOAuthState,
 	})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if tokenData.Subject != string(dto.Provider) {
-		return nil, domain.NewUnauthorizedError("auth.oauthLogin.providerMismatch")
+		return "", domain.NewUnauthorizedError("auth.oauthLogin.providerMismatch")
 	}
 
 	payload, _ := tokenData.Payload.(map[string]any)
 	redirectURI, ok := payload["redirect_uri"].(string)
 	if !ok {
-		return nil, domain.NewValidationError(
+		return "", domain.NewValidationError(
 			"auth.providerCallback.invalidStatePayload",
 			map[string]string{
 				"redirect_uri": "invalid redirect_uri in state payload",
@@ -220,7 +220,20 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 
 	stateNonce, _ := payload["nonce"].(string)
 	if dto.Nonce == "" || subtle.ConstantTimeCompare([]byte(stateNonce), []byte(dto.Nonce)) != 1 {
-		return nil, ErrOAuthNonceMismatch
+		return "", ErrOAuthNonceMismatch
+	}
+
+	return redirectURI, nil
+}
+
+func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) (*domain.OAuthLoginResult, error) {
+	redirectURI, err := s.VerifyOAuthState(ctx, domain.VerifyOAuthStateDTO{
+		Provider: dto.Provider,
+		State:    dto.State,
+		Nonce:    dto.Nonce,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if dto.CodeVerifier == "" {
