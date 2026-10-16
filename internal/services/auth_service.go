@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
+	"strings"
 
 	"go-net-http-auth-base/internal/domain"
 
@@ -227,10 +228,13 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		return nil, ErrOAuthMissingCodeVerifier
 	}
 
-	userInfo, err := s.GetOAuthProviderUserInfo(ctx, dto.Provider, dto.Code, dto.CodeVerifier)
+	providerUserInfo, err := s.GetOAuthProviderUserInfo(ctx, dto.Provider, dto.Code, dto.CodeVerifier)
 	if err != nil {
 		return nil, err
 	}
+
+	userInfo := *providerUserInfo
+	userInfo.Email = strings.ToLower(strings.TrimSpace(userInfo.Email))
 
 	if userInfo.ID == "" || userInfo.Email == "" {
 		details := map[string]string{}
@@ -243,7 +247,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		return nil, domain.NewValidationError("auth.providerCallback.invalidUserInfo", details)
 	}
 
-	authenticatedUser, err := s.resolveOAuthUser(ctx, dto.Provider, userInfo)
+	authenticatedUser, err := s.resolveOAuthUser(ctx, dto.Provider, &userInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -261,6 +265,33 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 }
 
 func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, error) {
+	user, err := s.resolveOAuthUserWithinTx(ctx, provider, userInfo)
+
+	// A concurrent or replayed callback may have created the user or link first;
+	// its transaction has committed, so resolving again finds the existing records.
+	var conflictErr *domain.ConflictError
+	if errors.As(err, &conflictErr) {
+		return s.resolveOAuthUserWithinTx(ctx, provider, userInfo)
+	}
+
+	return user, err
+}
+
+func (s *authService) resolveOAuthUserWithinTx(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, error) {
+	var user *domain.User
+	err := s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		user, err = s.findOrCreateOAuthUser(ctx, provider, userInfo)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, error) {
 	var notFoundErr *domain.NotFoundError
 
 	userOAuthProvider, err := s.GetUserOAuthProvider(ctx, domain.GetUserOAuthProviderDTO{
@@ -281,14 +312,25 @@ func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAut
 		return nil, err
 	}
 
+	// Both Case 2 and Case 3 trust the provider's claim of owning this email.
+	if !userInfo.EmailVerified {
+		return nil, domain.NewValidationError(
+			"auth.providerCallback.emailNotVerified",
+			map[string]string{
+				"email": "provider email is not verified",
+			},
+		)
+	}
+
 	// Case 2: provider email matches an existing user account (link provider).
-	// Require the provider to have verified this email to prevent account takeover.
+	// The local account must be verified too, otherwise whoever pre-registered
+	// this email without owning it would share the account with the real owner.
 	if existingUser != nil {
-		if !userInfo.EmailVerified {
+		if !existingUser.EmailVerified {
 			return nil, domain.NewValidationError(
-				"auth.providerCallback.emailNotVerified",
+				"auth.providerCallback.localEmailNotVerified",
 				map[string]string{
-					"email": "provider email is not verified",
+					"email": "local account email is not verified",
 				},
 			)
 		}
@@ -306,26 +348,21 @@ func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAut
 	}
 
 	// Case 3: provider is not used and there is no user with this email (create user and link).
-	var newUser *domain.User
-	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
-		var err error
-		newUser, err = s.usersService.CreateOAuth(ctx, domain.CreateOAuthUserDTO{
-			Name:  userInfo.Name,
-			Email: userInfo.Email,
-		})
-		if err != nil {
-			return err
-		}
-
-		_, err = s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
-			UserUUID:       newUser.UUID,
-			Provider:       provider,
-			ProviderUserID: userInfo.ID,
-			ProviderEmail:  userInfo.Email,
-		})
-		return err
+	newUser, err := s.usersService.CreateOAuth(ctx, domain.CreateOAuthUserDTO{
+		Name:          userInfo.Name,
+		Email:         userInfo.Email,
+		EmailVerified: true,
 	})
 	if err != nil {
+		return nil, err
+	}
+
+	if _, err := s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
+		UserUUID:       newUser.UUID,
+		Provider:       provider,
+		ProviderUserID: userInfo.ID,
+		ProviderEmail:  userInfo.Email,
+	}); err != nil {
 		return nil, err
 	}
 

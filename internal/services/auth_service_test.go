@@ -824,7 +824,8 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret))
+		transactor := newTransactorMock()
+		service := services.NewAuthService(usersService, authRepo, oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret))
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -848,6 +849,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		assert.NotEmpty(t, result.Tokens.RefreshToken)
 		usersService.AssertExpectations(t)
 		authRepo.AssertExpectations(t)
+		transactor.AssertNumberOfCalls(t, "WithinTx", 1)
 	})
 
 	t.Run("success - link to existing user by email (Case 2)", func(t *testing.T) {
@@ -860,7 +862,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		userUUID := "user-uuid"
 		email := "test@example.com"
 		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: email, EmailVerified: true}
-		user := &domain.User{UUID: userUUID, Email: email, Name: "Test User"}
+		user := &domain.User{UUID: userUUID, Email: email, Name: "Test User", EmailVerified: true}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
@@ -919,14 +921,14 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		newUserUUID := "new-user-uuid"
 		email := "new@example.com"
 		name := "New User"
-		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: name, Email: email}
+		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: name, Email: email, EmailVerified: true}
 		newUser := &domain.User{UUID: newUserUUID, Email: email, Name: name}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
-		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(newUser, nil).Once()
+		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email, EmailVerified: true}).Return(newUser, nil).Once()
 		authRepo.On("CreateUserOAuthProvider", mock.MatchedBy(func(p domain.UserOAuthProvider) bool {
 			return p.UserUUID == newUserUUID && p.Provider == provider
 		})).Return(&domain.UserOAuthProvider{}, nil).Once()
@@ -952,13 +954,13 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 
 		email := "new@example.com"
 		name := "New User"
-		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: name, Email: email}
+		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: name, Email: email, EmailVerified: true}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
-		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(nil, errors.New("db error")).Once()
+		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email, EmailVerified: true}).Return(nil, errors.New("db error")).Once()
 
 		state := newState(t, service, string(provider))
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
@@ -981,14 +983,14 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		newUserUUID := "new-user-uuid"
 		email := "new@example.com"
 		name := "New User"
-		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: name, Email: email}
+		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: name, Email: email, EmailVerified: true}
 		newUser := &domain.User{UUID: newUserUUID, Email: email, Name: name}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
-		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(newUser, nil).Once()
+		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email, EmailVerified: true}).Return(newUser, nil).Once()
 		linkErr := errors.New("db error")
 		authRepo.On("CreateUserOAuthProvider", mock.MatchedBy(func(p domain.UserOAuthProvider) bool {
 			return p.UserUUID == newUserUUID
@@ -1039,7 +1041,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		userUUID := "user-uuid"
 		email := "test@example.com"
 		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: email, EmailVerified: true}
-		user := &domain.User{UUID: userUUID, Email: email}
+		user := &domain.User{UUID: userUUID, Email: email, EmailVerified: true}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
