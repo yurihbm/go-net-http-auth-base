@@ -41,10 +41,11 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		authRepo := new(mocks.AuthRepositoryMock)
 		registry := new(mocks.OAuthProviderRegistryMock)
 		transactor := newTransactorMock()
+		usersService.On("SetRefreshJTI", mock.Anything, mock.Anything).Return(nil).Maybe()
 		providerMock := new(mocks.OAuthProviderMock)
 		registry.On("Get", provider).Return(providerMock, nil)
 		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).Return(userInfo, nil)
-		service := services.NewAuthService(usersService, authRepo, registry, transactor, services.NewTokenService("test-secret-key"))
+		service := services.NewAuthService(usersService, authRepo, registry, transactor, services.NewTokenService("test-secret-key"), testSessionMaxAge)
 		return fixture{service, usersService, authRepo, transactor}
 	}
 

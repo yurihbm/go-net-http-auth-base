@@ -83,6 +83,8 @@ type VerifiedTokenData struct {
 	Subject    string        `json:"subject"`
 	Audience   TokenAudience `json:"audience"`
 	Expiration int64         `json:"expiration"`
+	ID         string        `json:"id,omitempty"`
+	AuthTime   int64         `json:"auth_time,omitempty"`
 	Role       UserRole      `json:"role,omitempty"`
 	Payload    any           `json:"payload,omitempty"`
 }
@@ -90,8 +92,14 @@ type VerifiedTokenData struct {
 type GenerateTokenDTO struct {
 	Subject  string        `json:"subject"`
 	Audience TokenAudience `json:"token_audience"`
+	ID       string        `json:"id,omitempty"`
+	AuthTime int64         `json:"auth_time,omitempty"`
 	Role     UserRole      `json:"role,omitempty"`
 	Payload  any           `json:"payload,omitempty"`
+}
+
+type LogoutDTO struct {
+	AccessToken string
 }
 
 type VerifyEmailDTO struct {
@@ -173,6 +181,7 @@ type TokenService interface {
 type AuthService interface {
 	CredentialsLogin(context.Context, CredentialsLoginDTO) (AuthTokens, error)
 	RefreshToken(context.Context, RefreshTokenDTO) (AuthTokens, error)
+	Logout(context.Context, LogoutDTO) error
 	VerifyToken(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
 	GenerateToken(context.Context, GenerateTokenDTO) (string, error)
 	AddUserOAuthProvider(context.Context, AddUserOAuthProviderDTO) (*UserOAuthProvider, error)

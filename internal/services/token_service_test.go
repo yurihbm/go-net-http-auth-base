@@ -108,3 +108,25 @@ func TestTokenService_VerifyToken_Rejects(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenService_RoundTrip_SessionClaims(t *testing.T) {
+	service := services.NewTokenService(tokenSecret)
+	authTime := time.Now().Add(-time.Hour).Unix()
+
+	token, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+		Subject:  "user-uuid",
+		Audience: domain.TokenAudienceRefresh,
+		ID:       "refresh-jti",
+		AuthTime: authTime,
+	})
+	require.NoError(t, err)
+
+	data, err := service.VerifyToken(context.Background(), domain.VerifyTokenDTO{
+		Token:    token,
+		Audience: domain.TokenAudienceRefresh,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "refresh-jti", data.ID)
+	assert.Equal(t, authTime, data.AuthTime)
+}

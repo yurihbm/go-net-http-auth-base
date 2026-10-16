@@ -286,13 +286,16 @@ func TestAuthController_RefreshToken(t *testing.T) {
 
 func TestAuthController_Logout(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		controller, _, auditMock := newTestAuthController()
+		controller, serviceMock, auditMock := newTestAuthController()
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionLogout &&
 				d.Status == domain.AuditStatusSuccess
 		})).Return(nil)
 
+		serviceMock.On("Logout", domain.LogoutDTO{AccessToken: "access-token"}).Return(nil).Once()
+
 		w, req := getControllerArgs("POST", "/auth/logout", nil)
+		req.AddCookie(&http.Cookie{Name: api.AccessTokenCookieName, Value: "access-token"})
 
 		controller.Logout(w, req)
 
@@ -325,6 +328,44 @@ func TestAuthController_Logout(t *testing.T) {
 		assert.Equal(t, "/auth/refresh", refreshTokenCookie.Path)
 		assert.Negative(t, accessTokenCookie.MaxAge)
 		assert.Negative(t, refreshTokenCookie.MaxAge)
+		auditMock.AssertExpectations(t)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("without access token cookie", func(t *testing.T) {
+		controller, serviceMock, auditMock := newTestAuthController()
+		auditMock.On("Log", mock.Anything).Return(nil)
+		serviceMock.On("Logout", domain.LogoutDTO{}).Return(nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/logout", nil)
+
+		controller.Logout(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Len(t, w.Result().Cookies(), 2)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("service error still clears cookies", func(t *testing.T) {
+		controller, serviceMock, auditMock := newTestAuthController()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionLogout &&
+				d.Status == domain.AuditStatusFailure
+		})).Return(nil)
+		serviceMock.On("Logout", domain.LogoutDTO{AccessToken: "access-token"}).
+			Return(domain.NewInternalServerError("users.internalServerError", errors.New("db down"))).Once()
+
+		w, req := getControllerArgs("POST", "/auth/logout", nil)
+		req.AddCookie(&http.Cookie{Name: api.AccessTokenCookieName, Value: "access-token"})
+
+		controller.Logout(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		for _, cookie := range w.Result().Cookies() {
+			assert.Empty(t, cookie.Value)
+			assert.Negative(t, cookie.MaxAge)
+		}
+		assert.Len(t, w.Result().Cookies(), 2)
 		auditMock.AssertExpectations(t)
 	})
 }

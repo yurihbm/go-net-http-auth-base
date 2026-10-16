@@ -5,9 +5,11 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 )
@@ -24,6 +26,7 @@ type authService struct {
 	oauthProviderRegistry domain.OAuthProviderRegistry
 	transactor            domain.Transactor
 	tokens                domain.TokenService
+	sessionMaxAge         time.Duration
 }
 
 func NewAuthService(
@@ -32,6 +35,7 @@ func NewAuthService(
 	oauthProviderRegistry domain.OAuthProviderRegistry,
 	transactor domain.Transactor,
 	tokens domain.TokenService,
+	sessionMaxAge time.Duration,
 ) domain.AuthService {
 	return &authService{
 		usersService,
@@ -39,6 +43,7 @@ func NewAuthService(
 		oauthProviderRegistry,
 		transactor,
 		tokens,
+		sessionMaxAge,
 	}
 }
 
@@ -56,7 +61,7 @@ func (s *authService) CredentialsLogin(ctx context.Context, dto domain.Credentia
 		return domain.AuthTokens{}, domain.NewUnauthorizedError("auth.authenticate.invalidCredentials")
 	}
 
-	tokens, err := s.issueTokens(ctx, user.UUID, user.Role)
+	tokens, err := s.startSession(ctx, user)
 	if err != nil {
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed", err)
 	}
@@ -77,32 +82,81 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 		return domain.AuthTokens{}, err
 	}
 
+	if tokenData.ID == "" || tokenData.AuthTime == 0 {
+		return domain.AuthTokens{}, ErrInvalidToken
+	}
+
+	if time.Since(time.Unix(tokenData.AuthTime, 0)) > s.sessionMaxAge {
+		return domain.AuthTokens{}, ErrInvalidToken
+	}
+
 	user, err := s.usersService.GetByUUID(ctx, domain.Actor{UUID: tokenData.Subject}, tokenData.Subject)
 	if err != nil {
+		var notFoundErr *domain.NotFoundError
+		if errors.As(err, &notFoundErr) {
+			return domain.AuthTokens{}, ErrInvalidToken
+		}
 		return domain.AuthTokens{}, err
 	}
 
-	tokens, err := s.issueTokens(ctx, user.UUID, user.Role)
+	nextJTI := uuid.NewString()
+	tokens, err := s.issueTokens(ctx, user, nextJTI, tokenData.AuthTime)
 	if err != nil {
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
+	}
+
+	if err := s.usersService.RotateRefreshJTI(ctx, user.UUID, tokenData.ID, nextJTI); err != nil {
+		var notFoundErr *domain.NotFoundError
+		if errors.As(err, &notFoundErr) {
+			return domain.AuthTokens{}, ErrInvalidToken
+		}
+		return domain.AuthTokens{}, err
 	}
 
 	return tokens, nil
 }
 
-func (s *authService) issueTokens(ctx context.Context, userUUID string, role domain.UserRole) (domain.AuthTokens, error) {
-	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
-		Subject:  userUUID,
+func (s *authService) Logout(ctx context.Context, dto domain.LogoutDTO) error {
+	tokenData, err := s.VerifyToken(ctx, domain.VerifyTokenDTO{
+		Token:    dto.AccessToken,
 		Audience: domain.TokenAudienceAccess,
-		Role:     role,
+	})
+	if err != nil {
+		return nil
+	}
+
+	return s.usersService.SetRefreshJTI(ctx, tokenData.Subject, nil)
+}
+
+func (s *authService) startSession(ctx context.Context, user *domain.User) (domain.AuthTokens, error) {
+	jti := uuid.NewString()
+	tokens, err := s.issueTokens(ctx, user, jti, time.Now().Unix())
+	if err != nil {
+		return domain.AuthTokens{}, err
+	}
+
+	if err := s.usersService.SetRefreshJTI(ctx, user.UUID, &jti); err != nil {
+		return domain.AuthTokens{}, err
+	}
+
+	return tokens, nil
+}
+
+func (s *authService) issueTokens(ctx context.Context, user *domain.User, refreshJTI string, authTime int64) (domain.AuthTokens, error) {
+	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
+		Subject:  user.UUID,
+		Audience: domain.TokenAudienceAccess,
+		Role:     user.Role,
 	})
 	if err != nil {
 		return domain.AuthTokens{}, err
 	}
 
 	refreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
-		Subject:  userUUID,
+		Subject:  user.UUID,
 		Audience: domain.TokenAudienceRefresh,
+		ID:       refreshJTI,
+		AuthTime: authTime,
 	})
 	if err != nil {
 		return domain.AuthTokens{}, err
@@ -264,7 +318,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		return nil, err
 	}
 
-	tokens, err := s.issueTokens(ctx, authenticatedUser.UUID, authenticatedUser.Role)
+	tokens, err := s.startSession(ctx, authenticatedUser)
 	if err != nil {
 		return nil, domain.NewInternalServerError("auth.oauthLogin.tokenGenerationFailed", err)
 	}
