@@ -180,6 +180,45 @@ func TestLoad(t *testing.T) {
 		assert.Nil(t, cfg)
 	})
 
+	t.Run("defaults SESSION_MAX_AGE to 30 days", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("SESSION_MAX_AGE", "")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Equal(t, 30*24*time.Hour, cfg.SessionMaxAge)
+	})
+
+	t.Run("reads SESSION_MAX_AGE", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("SESSION_MAX_AGE", "72h")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Equal(t, 72*time.Hour, cfg.SessionMaxAge)
+	})
+
+	for _, value := range []string{"0s", "-1h"} {
+		t.Run("returns error when SESSION_MAX_AGE is not positive: "+value, func(t *testing.T) {
+			t.Setenv("JWT_SECRET", validJWTSecret)
+			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+			t.Setenv("API_ENV", "development")
+			t.Setenv("SESSION_MAX_AGE", value)
+
+			cfg, err := config.Load()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "SESSION_MAX_AGE")
+			assert.Nil(t, cfg)
+		})
+	}
+
 	t.Run("allows missing email vars in development", func(t *testing.T) {
 		t.Setenv("JWT_SECRET", validJWTSecret)
 		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
