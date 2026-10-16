@@ -231,3 +231,17 @@ func TestUsersPostgresRepository_MarkEmailVerified(t *testing.T) {
 		assert.True(t, errors.As(err, &validationErr))
 	})
 }
+
+func TestUsersPostgresRepository_CaseInsensitiveEmail(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+
+	_, err := repo.Create(context.Background(), domain.User{Name: "Jane", Email: "jane@example.com", PasswordHash: "hash"})
+	require.NoError(t, err)
+
+	_, err = repo.Create(context.Background(), domain.User{Name: "Jane Upper", Email: "Jane@Example.com", PasswordHash: "hash"})
+
+	require.Error(t, err)
+	var conflictErr *domain.ConflictError
+	assert.True(t, errors.As(err, &conflictErr))
+	assert.Equal(t, "users.email.conflict", conflictErr.Error())
+}
