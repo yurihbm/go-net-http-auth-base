@@ -55,3 +55,13 @@ func (m *UsersServiceMock) Delete(ctx context.Context, actor domain.Actor, uuid 
 	args := m.Called(actor, uuid)
 	return args.Error(0)
 }
+
+func (m *UsersServiceMock) VerifyEmail(ctx context.Context, token string) error {
+	args := m.Called(token)
+	return args.Error(0)
+}
+
+func (m *UsersServiceMock) ResendVerification(ctx context.Context, email string) error {
+	args := m.Called(email)
+	return args.Error(0)
+}

@@ -195,3 +195,39 @@ func TestUsersPostgresRepository_Delete(t *testing.T) {
 		assert.True(t, errors.As(err, &validationErr))
 	})
 }
+
+func TestUsersPostgresRepository_MarkEmailVerified(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	createdUser := seedUser(t, repo)
+
+	t.Run("new users are unverified by default", func(t *testing.T) {
+		assert.False(t, createdUser.EmailVerified)
+	})
+
+	t.Run("create persists email verified flag", func(t *testing.T) {
+		verified, err := repo.Create(context.Background(), domain.User{
+			Name:          "Verified",
+			Email:         "verified@example.com",
+			Role:          domain.RoleUser,
+			EmailVerified: true,
+		})
+		require.NoError(t, err)
+		assert.True(t, verified.EmailVerified)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		err := repo.MarkEmailVerified(context.Background(), createdUser.UUID)
+		require.NoError(t, err)
+
+		found, err := repo.FindByUUID(context.Background(), createdUser.UUID)
+		require.NoError(t, err)
+		assert.True(t, found.EmailVerified)
+	})
+
+	t.Run("invalid uuid", func(t *testing.T) {
+		err := repo.MarkEmailVerified(context.Background(), "invalid-uuid")
+		require.Error(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
