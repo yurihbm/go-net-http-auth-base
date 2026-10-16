@@ -2,79 +2,38 @@ package providers
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"go-net-http-auth-base/internal/domain"
-	"net/http"
 
 	"golang.org/x/oauth2"
 )
 
 type microsoftOAuthProvider struct {
-	config  oauth2.Config
-	infoURL string
+	baseOAuthProvider
 }
 
 func NewMicrosoftOAuthProvider(config oauth2.Config, infoURL ...string) domain.OAuthProvider {
-	urlToUse := "https://graph.microsoft.com/oidc/userinfo"
-	if len(infoURL) > 0 && infoURL[0] != "" {
-		urlToUse = infoURL[0]
-	}
 	return &microsoftOAuthProvider{
-		config,
-		urlToUse,
+		newBaseOAuthProvider("Microsoft", config, "https://graph.microsoft.com/oidc/userinfo", infoURL),
 	}
-}
-
-func (p *microsoftOAuthProvider) GetAuthURL(_ context.Context, state string, codeVerifier string) string {
-	return p.config.AuthCodeURL(state, oauth2.S256ChallengeOption(codeVerifier))
 }
 
 func (p *microsoftOAuthProvider) GetUserInfo(ctx context.Context, code string, codeVerifier string) (*domain.OAuthProviderUserInfo, error) {
-	tokens, err := p.config.Exchange(withOAuthHTTPClient(ctx), code, oauth2.VerifierOption(codeVerifier))
+	tokens, err := p.exchange(ctx, code, codeVerifier)
 	if err != nil {
 		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", p.infoURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
-
-	client := &http.Client{Timeout: oauthHTTPTimeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			fmt.Println("Failed to close response body:", err)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("failed to fetch user info from Microsoft")
 	}
 
 	var microsoftUser microsoftUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&microsoftUser); err != nil {
+	if err := p.fetch(ctx, p.infoURL, tokens.AccessToken, &microsoftUser); err != nil {
 		return nil, err
 	}
 
-	userInfo := &domain.OAuthProviderUserInfo{
+	return &domain.OAuthProviderUserInfo{
 		ID:            microsoftUser.ID,
 		Name:          microsoftUser.Name,
 		Email:         microsoftUser.Email,
 		EmailVerified: microsoftUser.EmailVerified,
-	}
-
-	return userInfo, nil
-
+	}, nil
 }
 
 type microsoftUserInfo struct {

@@ -11,6 +11,7 @@ import (
 	"go-net-http-auth-base/internal/providers"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 )
 
@@ -322,6 +323,49 @@ func TestGitHubOAuthProvider_GetUserInfo(t *testing.T) {
 			assert.Equal(t, tc.wantVerified, userInfo.EmailVerified)
 		})
 	}
+
+	newProfileServer := func(t *testing.T, user map[string]any) string {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Path == "/user/emails" {
+				encodeJSON(t, w, []map[string]any{{"email": "john@example.com", "primary": true, "verified": true}})
+				return
+			}
+			encodeJSON(t, w, user)
+		}))
+		t.Cleanup(server.Close)
+		return server.URL + "/user"
+	}
+
+	t.Run("success - falls back to login when name is null", func(t *testing.T) {
+		cfg, _ := newVerifierCapturingTokenConfig(t)
+		provider := providers.NewGitHubOAuthProvider(cfg, newProfileServer(t, map[string]any{"id": 1, "name": nil, "login": "johnd"}))
+
+		userInfo, err := provider.GetUserInfo(context.Background(), "code", testCodeVerifier)
+
+		require.NoError(t, err)
+		assert.Equal(t, "johnd", userInfo.Name)
+	})
+
+	t.Run("success - falls back to login when name is empty", func(t *testing.T) {
+		cfg, _ := newVerifierCapturingTokenConfig(t)
+		provider := providers.NewGitHubOAuthProvider(cfg, newProfileServer(t, map[string]any{"id": 1, "name": "", "login": "johnd"}))
+
+		userInfo, err := provider.GetUserInfo(context.Background(), "code", testCodeVerifier)
+
+		require.NoError(t, err)
+		assert.Equal(t, "johnd", userInfo.Name)
+	})
+
+	t.Run("success - supports ids larger than 32 bits", func(t *testing.T) {
+		cfg, _ := newVerifierCapturingTokenConfig(t)
+		provider := providers.NewGitHubOAuthProvider(cfg, newProfileServer(t, map[string]any{"id": int64(9007199254740991), "name": "John", "login": "johnd"}))
+
+		userInfo, err := provider.GetUserInfo(context.Background(), "code", testCodeVerifier)
+
+		require.NoError(t, err)
+		assert.Equal(t, "9007199254740991", userInfo.ID)
+	})
 
 	t.Run("exchange times out", func(t *testing.T) {
 		provider := providers.NewGitHubOAuthProvider(newHangingTokenConfig(t), "http://example.com/user")
