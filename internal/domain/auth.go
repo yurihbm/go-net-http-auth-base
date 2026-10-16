@@ -8,17 +8,19 @@ import (
 type TokenAudience string
 
 const (
-	TokenAudienceAccess     TokenAudience = "access_token"
-	TokenAudienceRefresh    TokenAudience = "refresh_token"
-	TokenAudienceExchange   TokenAudience = "exchange_token"
-	TokenAudienceOAuthState TokenAudience = "oauth_state_token"
+	TokenAudienceAccess            TokenAudience = "access_token"
+	TokenAudienceRefresh           TokenAudience = "refresh_token"
+	TokenAudienceExchange          TokenAudience = "exchange_token"
+	TokenAudienceOAuthState        TokenAudience = "oauth_state_token"
+	TokenAudienceEmailVerification TokenAudience = "email_verification_token"
 )
 
 const (
-	TokenExpirationAccess     = time.Minute * 15   // 15 minutes
-	TokenExpirationRefresh    = time.Hour * 24 * 7 // 7 days
-	TokenExpirationExchange   = time.Minute        // 1 minute
-	TokenExpirationOAuthState = time.Minute * 5    // 5 minutes
+	TokenExpirationAccess            = time.Minute * 15   // 15 minutes
+	TokenExpirationRefresh           = time.Hour * 24 * 7 // 7 days
+	TokenExpirationExchange          = time.Minute        // 1 minute
+	TokenExpirationOAuthState        = time.Minute * 5    // 5 minutes
+	TokenExpirationEmailVerification = time.Hour * 24     // 24 hours
 )
 
 type OAuthProviderName string
@@ -92,6 +94,14 @@ type GenerateTokenDTO struct {
 	Payload  any           `json:"payload,omitempty"`
 }
 
+type VerifyEmailDTO struct {
+	Token string `json:"token" validate:"required"`
+}
+
+type ResendVerificationDTO struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
 type AddUserOAuthProviderDTO struct {
 	UserUUID       string            `json:"user_uuid"`
 	Provider       OAuthProviderName `json:"provider"`
@@ -143,6 +153,15 @@ type OAuthProviderRegistry interface {
 	Get(name OAuthProviderName) (OAuthProvider, error)
 	GetAll() map[OAuthProviderName]OAuthProvider
 	IsConfigured(name OAuthProviderName) bool
+}
+
+type TokenGenerator interface {
+	GenerateToken(context.Context, GenerateTokenDTO) (string, error)
+}
+
+type TokenService interface {
+	TokenGenerator
+	VerifyToken(context.Context, VerifyTokenDTO) (*VerifiedTokenData, error)
 }
 
 type AuthService interface {

@@ -47,3 +47,8 @@ func (m *UsersRepositoryMock) Delete(ctx context.Context, uuid string) error {
 	args := m.Called(uuid)
 	return args.Error(0)
 }
+
+func (m *UsersRepositoryMock) MarkEmailVerified(ctx context.Context, uuid string) error {
+	args := m.Called(uuid)
+	return args.Error(0)
+}

@@ -31,6 +31,8 @@ func NewUsersController(
 
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users", c.CreateUser)
+	router.HandleFunc("POST /users/verify-email", c.VerifyEmail)
+	router.HandleFunc("POST /users/resend-verification", c.ResendVerification)
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
 	router.HandleFunc("GET /users/{uuid}", c.authMiddleware.Use(c.GetUserByUUID))
 	router.HandleFunc("PUT /users/{uuid}", c.authMiddleware.Use(c.UpdateUser))
@@ -70,6 +72,47 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 	api.WriteJSONResponse(w, http.StatusCreated, api.ResponseBody[domain.User]{
 		Data:    *user,
 		Message: "user.create.success",
+	})
+}
+
+func (c *UsersController) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.VerifyEmailDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	if err := c.userService.VerifyEmail(r.Context(), dto.Token); err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		Action:       domain.AuditActionVerifyEmail,
+		ResourceType: domain.AuditResourceAuth,
+		ResourceUUID: "",
+		Status:       domain.AuditStatusSuccess,
+	})
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
+		Message: "user.verifyEmail.success",
+	})
+}
+
+func (c *UsersController) ResendVerification(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.ResendVerificationDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	if err := c.userService.ResendVerification(r.Context(), dto.Email); err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
+		Message: "user.resendVerification.success",
 	})
 }
 

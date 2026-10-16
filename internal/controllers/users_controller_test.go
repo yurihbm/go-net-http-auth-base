@@ -3,6 +3,7 @@ package controllers_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,6 +47,10 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 		controller.RegisterRoutes(router)
 
 		authMiddleware.AssertNumberOfCalls(t, "Use", 4)
+		for _, path := range []string{"/users/verify-email", "/users/resend-verification"} {
+			_, pattern := router.Handler(httptest.NewRequest("POST", path, nil))
+			assert.Equal(t, "POST "+path, pattern)
+		}
 	})
 }
 
@@ -434,5 +439,95 @@ func TestUsersController_DeleteUser(t *testing.T) {
 		controller.DeleteUser(w, req)
 
 		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+}
+
+func TestUsersController_VerifyEmail(t *testing.T) {
+	dto := domain.VerifyEmailDTO{Token: "verification-token"}
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("VerifyEmail", dto.Token).Return(nil)
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionVerifyEmail &&
+				d.ResourceType == domain.AuditResourceAuth &&
+				d.Status == domain.AuditStatusSuccess
+		})).Return(nil)
+
+		w, req := getControllerArgs("POST", "/users/verify-email", dto)
+
+		controller.VerifyEmail(w, req)
+
+		var response api.ResponseBody[any]
+		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "user.verifyEmail.success", response.Message)
+		serviceMock.AssertExpectations(t)
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("validation error - missing token", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+
+		w, req := getControllerArgs("POST", "/users/verify-email", domain.VerifyEmailDTO{})
+
+		controller.VerifyEmail(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		serviceMock.AssertNotCalled(t, "VerifyEmail", mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("invalid token", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("VerifyEmail", dto.Token).Return(domain.NewUnauthorizedError("auth.invalidToken"))
+
+		w, req := getControllerArgs("POST", "/users/verify-email", dto)
+
+		controller.VerifyEmail(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+}
+
+func TestUsersController_ResendVerification(t *testing.T) {
+	dto := domain.ResendVerificationDTO{Email: "test@mail.com"}
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("ResendVerification", dto.Email).Return(nil)
+
+		w, req := getControllerArgs("POST", "/users/resend-verification", dto)
+
+		controller.ResendVerification(w, req)
+
+		var response api.ResponseBody[any]
+		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "user.resendVerification.success", response.Message)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("validation error - invalid email", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+
+		w, req := getControllerArgs("POST", "/users/resend-verification", domain.ResendVerificationDTO{Email: "nope"})
+
+		controller.ResendVerification(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		serviceMock.AssertNotCalled(t, "ResendVerification", mock.Anything)
+	})
+
+	t.Run("service error", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("ResendVerification", dto.Email).Return(errors.New("boom"))
+
+		w, req := getControllerArgs("POST", "/users/resend-verification", dto)
+
+		controller.ResendVerification(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }
