@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 type UserRole string
 
@@ -8,6 +11,10 @@ const (
 	RoleAdmin UserRole = "admin"
 	RoleUser  UserRole = "user"
 )
+
+func NormalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
 
 func (r UserRole) IsValid() bool {
 	switch r {

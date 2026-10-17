@@ -16,6 +16,8 @@ CREATE TABLE users (
     updated_at timestamptz DEFAULT now() NOT NULL
 );
 
+CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email));
+
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS trigger
 AS $$

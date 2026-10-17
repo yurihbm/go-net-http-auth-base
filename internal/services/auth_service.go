@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
-	"strings"
 
 	"go-net-http-auth-base/internal/domain"
 
@@ -234,7 +233,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 	}
 
 	userInfo := *providerUserInfo
-	userInfo.Email = strings.ToLower(strings.TrimSpace(userInfo.Email))
+	userInfo.Email = domain.NormalizeEmail(userInfo.Email)
 
 	if userInfo.ID == "" || userInfo.Email == "" {
 		details := map[string]string{}

@@ -29,7 +29,7 @@ func (s *usersService) GetByUUID(ctx context.Context, actor domain.Actor, uuid s
 }
 
 func (s *usersService) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
-	return s.repo.FindByEmail(ctx, email)
+	return s.repo.FindByEmail(ctx, domain.NormalizeEmail(email))
 }
 
 func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*domain.User, error) {
@@ -39,7 +39,7 @@ func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*d
 	}
 	user := domain.User{
 		Name:         dto.Name,
-		Email:        dto.Email,
+		Email:        domain.NormalizeEmail(dto.Email),
 		PasswordHash: string(hash),
 		Role:         domain.RoleUser,
 	}
@@ -58,7 +58,7 @@ func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*d
 func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUserDTO) (*domain.User, error) {
 	user := domain.User{
 		Name:          dto.Name,
-		Email:         dto.Email,
+		Email:         domain.NormalizeEmail(dto.Email),
 		Role:          domain.RoleUser,
 		EmailVerified: dto.EmailVerified,
 	}
@@ -79,7 +79,7 @@ func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid stri
 		user.Name = *dto.Name
 	}
 	if dto.Email != nil {
-		user.Email = *dto.Email
+		user.Email = domain.NormalizeEmail(*dto.Email)
 	}
 
 	return s.repo.Update(ctx, *user)
