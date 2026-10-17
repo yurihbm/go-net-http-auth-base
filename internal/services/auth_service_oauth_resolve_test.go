@@ -51,7 +51,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 
 	login := func(t *testing.T, f fixture) (*domain.OAuthLoginResult, error) {
 		t.Helper()
-		state, err := f.service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+		state, err := f.service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  string(provider),
 			Audience: domain.TokenAudienceOAuthState,
 			Payload:  map[string]string{"redirect_uri": "http://localhost:3000/callback", "nonce": nonce},
