@@ -108,3 +108,72 @@ func TestTokenService_VerifyToken_Rejects(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenService_RoundTrip_SessionClaims(t *testing.T) {
+	service := services.NewTokenService(tokenSecret)
+	authTime := time.Now().Add(-time.Hour).Unix()
+
+	token, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
+		Subject:  "user-uuid",
+		Audience: domain.TokenAudienceRefresh,
+		ID:       "refresh-jti",
+		AuthTime: authTime,
+	})
+	require.NoError(t, err)
+
+	data, err := service.VerifyToken(context.Background(), domain.VerifyTokenDTO{
+		Token:    token,
+		Audience: domain.TokenAudienceRefresh,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "refresh-jti", data.ID)
+	assert.Equal(t, authTime, data.AuthTime)
+}
+
+func TestTokenService_VerifyTokenIgnoringExpiry(t *testing.T) {
+	service := services.NewTokenService(tokenSecret)
+	sign := func(t *testing.T, claims jwt.MapClaims, secret string) string {
+		t.Helper()
+		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+		require.NoError(t, err)
+		return token
+	}
+	expiredClaims := func(audience domain.TokenAudience) jwt.MapClaims {
+		return jwt.MapClaims{
+			"sub": "user-uuid",
+			"aud": audience,
+			"exp": time.Now().Add(-time.Hour).Unix(),
+		}
+	}
+
+	t.Run("accepts an expired token", func(t *testing.T) {
+		data, err := service.VerifyTokenIgnoringExpiry(context.Background(), domain.VerifyTokenDTO{
+			Token:    sign(t, expiredClaims(domain.TokenAudienceAccess), tokenSecret),
+			Audience: domain.TokenAudienceAccess,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, "user-uuid", data.Subject)
+	})
+
+	t.Run("rejects a bad signature", func(t *testing.T) {
+		data, err := service.VerifyTokenIgnoringExpiry(context.Background(), domain.VerifyTokenDTO{
+			Token:    sign(t, expiredClaims(domain.TokenAudienceAccess), "different-secret-key"),
+			Audience: domain.TokenAudienceAccess,
+		})
+
+		assert.Equal(t, services.ErrInvalidToken, err)
+		assert.Nil(t, data)
+	})
+
+	t.Run("rejects the wrong audience", func(t *testing.T) {
+		data, err := service.VerifyTokenIgnoringExpiry(context.Background(), domain.VerifyTokenDTO{
+			Token:    sign(t, expiredClaims(domain.TokenAudienceRefresh), tokenSecret),
+			Audience: domain.TokenAudienceAccess,
+		})
+
+		assert.Equal(t, services.ErrInvalidToken, err)
+		assert.Nil(t, data)
+	})
+}

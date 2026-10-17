@@ -18,12 +18,15 @@ func NewTokenService(jwtSecret string) domain.TokenService {
 }
 
 func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
-	token, err := jwt.Parse(dto.Token, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
-		}
-		return []byte(s.jwtSecret), nil
-	})
+	return s.verify(dto)
+}
+
+func (s *tokenService) VerifyTokenIgnoringExpiry(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
+	return s.verify(dto, jwt.WithoutClaimsValidation())
+}
+
+func (s *tokenService) verify(dto domain.VerifyTokenDTO, opts ...jwt.ParserOption) (*domain.VerifiedTokenData, error) {
+	token, err := jwt.Parse(dto.Token, s.signingKey, opts...)
 
 	if err != nil {
 		return nil, ErrInvalidToken
@@ -38,6 +41,8 @@ func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDT
 	audClaim, audOk := claims["aud"].(string)
 	exp, expOk := claims["exp"].(float64)
 	role, _ := claims["role"].(string)
+	jti, _ := claims["jti"].(string)
+	authTime, _ := claims["auth_time"].(float64)
 	aud := domain.TokenAudience(audClaim)
 	if !subOk || !audOk || !expOk || aud != dto.Audience {
 		return nil, ErrInvalidToken
@@ -47,9 +52,18 @@ func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDT
 		Subject:    sub,
 		Audience:   aud,
 		Expiration: int64(exp),
+		ID:         jti,
+		AuthTime:   int64(authTime),
 		Role:       domain.UserRole(role),
 		Payload:    claims["payload"],
 	}, nil
+}
+
+func (s *tokenService) signingKey(token *jwt.Token) (any, error) {
+	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
+	}
+	return []byte(s.jwtSecret), nil
 }
 
 func (s *tokenService) GenerateToken(ctx context.Context, dto domain.GenerateTokenDTO) (string, error) {
@@ -61,6 +75,12 @@ func (s *tokenService) GenerateToken(ctx context.Context, dto domain.GenerateTok
 	}
 	if dto.Role != "" {
 		claims["role"] = dto.Role
+	}
+	if dto.ID != "" {
+		claims["jti"] = dto.ID
+	}
+	if dto.AuthTime != 0 {
+		claims["auth_time"] = dto.AuthTime
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

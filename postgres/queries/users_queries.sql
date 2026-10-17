@@ -47,6 +47,23 @@ SET
 WHERE
     uuid = $1;
 
+-- name: SetUserRefreshJTI :exec
+UPDATE
+    users
+SET
+    current_refresh_jti = $2
+WHERE
+    uuid = $1;
+
+-- name: RotateUserRefreshJTI :execrows
+UPDATE
+    users
+SET
+    current_refresh_jti = sqlc.arg(next_jti)
+WHERE
+    uuid = $1
+    AND current_refresh_jti = sqlc.arg(current_jti);
+
 -- name: DeleteUser :exec
 DELETE FROM 
     users

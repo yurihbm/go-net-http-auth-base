@@ -52,3 +52,13 @@ func (m *UsersRepositoryMock) MarkEmailVerified(ctx context.Context, uuid string
 	args := m.Called(uuid)
 	return args.Error(0)
 }
+
+func (m *UsersRepositoryMock) SetRefreshJTI(ctx context.Context, uuid string, jti *string) error {
+	args := m.Called(uuid, jti)
+	return args.Error(0)
+}
+
+func (m *UsersRepositoryMock) RotateRefreshJTI(ctx context.Context, uuid string, currentJTI string, nextJTI string) error {
+	args := m.Called(uuid, currentJTI, nextJTI)
+	return args.Error(0)
+}

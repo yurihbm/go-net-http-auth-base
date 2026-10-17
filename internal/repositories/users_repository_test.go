@@ -5,6 +5,7 @@ import (
 	"errors"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/repositories"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -244,4 +245,85 @@ func TestUsersPostgresRepository_CaseInsensitiveEmail(t *testing.T) {
 	var conflictErr *domain.ConflictError
 	assert.True(t, errors.As(err, &conflictErr))
 	assert.Equal(t, "users.email.conflict", conflictErr.Error())
+}
+
+func TestUsersPostgresRepository_RefreshJTI(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	ctx := context.Background()
+	var notFoundErr *domain.NotFoundError
+
+	t.Run("rotates only from the current jti", func(t *testing.T) {
+		user := seedUser(t, repo)
+		current := "jti-1"
+		require.NoError(t, repo.SetRefreshJTI(ctx, user.UUID, &current))
+
+		require.NoError(t, repo.RotateRefreshJTI(ctx, user.UUID, "jti-1", "jti-2"))
+
+		err := repo.RotateRefreshJTI(ctx, user.UUID, "jti-1", "jti-3")
+		assert.True(t, errors.As(err, &notFoundErr))
+		require.NoError(t, repo.RotateRefreshJTI(ctx, user.UUID, "jti-2", "jti-3"))
+	})
+
+	t.Run("set overwrites the previous jti", func(t *testing.T) {
+		user := seedUser(t, repo)
+		first, second := "first", "second"
+		require.NoError(t, repo.SetRefreshJTI(ctx, user.UUID, &first))
+		require.NoError(t, repo.SetRefreshJTI(ctx, user.UUID, &second))
+
+		err := repo.RotateRefreshJTI(ctx, user.UUID, first, "next")
+		assert.True(t, errors.As(err, &notFoundErr))
+		require.NoError(t, repo.RotateRefreshJTI(ctx, user.UUID, second, "next"))
+	})
+
+	t.Run("clearing the jti blocks rotation", func(t *testing.T) {
+		user := seedUser(t, repo)
+		current := "to-clear"
+		require.NoError(t, repo.SetRefreshJTI(ctx, user.UUID, &current))
+		require.NoError(t, repo.SetRefreshJTI(ctx, user.UUID, nil))
+
+		err := repo.RotateRefreshJTI(ctx, user.UUID, current, "next")
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("rotation fails for a deleted user", func(t *testing.T) {
+		user := seedUser(t, repo)
+		current := "deleted"
+		require.NoError(t, repo.SetRefreshJTI(ctx, user.UUID, &current))
+		require.NoError(t, repo.Delete(ctx, user.UUID))
+
+		err := repo.RotateRefreshJTI(ctx, user.UUID, current, "next")
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("concurrent rotations from the same jti have a single winner", func(t *testing.T) {
+		user := seedUser(t, repo)
+		current := "shared"
+		require.NoError(t, repo.SetRefreshJTI(ctx, user.UUID, &current))
+
+		const rotations = 10
+		errs := make([]error, rotations)
+		var wg sync.WaitGroup
+		for i := range rotations {
+			wg.Go(func() {
+				errs[i] = repo.RotateRefreshJTI(ctx, user.UUID, current, uuid.NewString())
+			})
+		}
+		wg.Wait()
+
+		succeeded := 0
+		for _, err := range errs {
+			if err == nil {
+				succeeded++
+				continue
+			}
+			assert.True(t, errors.As(err, &notFoundErr))
+		}
+		assert.Equal(t, 1, succeeded)
+	})
+
+	t.Run("invalid uuid", func(t *testing.T) {
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(repo.SetRefreshJTI(ctx, "invalid", nil), &validationErr))
+		assert.True(t, errors.As(repo.RotateRefreshJTI(ctx, "invalid", "a", "b"), &validationErr))
+	})
 }

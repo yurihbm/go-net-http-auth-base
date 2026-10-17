@@ -57,6 +57,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		oauthProviderRegistry,
 		repositories.NewPostgresTransactor(pool),
 		tokenService,
+		cfg.SessionMaxAge,
 	)
 
 	auditRepository := repositories.NewAuditPostgresRepository(db)

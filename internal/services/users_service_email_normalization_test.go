@@ -96,7 +96,7 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 func newAuthServiceOverRealUsers(repo *mocks.UsersRepositoryMock, authRepo *mocks.AuthRepositoryMock, registry *mocks.OAuthProviderRegistryMock, emailProvider *mocks.EmailProviderMock) domain.AuthService {
 	tokens := services.NewTokenService(normalizationKey)
 	emailVerification := services.NewEmailVerificationService(tokens, emailProvider, "https://app.test/verify-email")
-	return services.NewAuthService(services.NewUserService(repo, emailVerification), authRepo, registry, newTransactorMock(), tokens)
+	return services.NewAuthService(services.NewUserService(repo, emailVerification), authRepo, registry, newTransactorMock(), tokens, testSessionMaxAge)
 }
 
 func TestAuthService_EmailNormalization(t *testing.T) {
@@ -105,6 +105,7 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 		require.NoError(t, err)
 		repo := new(mocks.UsersRepositoryMock)
 		repo.On("FindByEmail", normalizedEmail).Return(&domain.User{UUID: "uuid", Email: normalizedEmail, PasswordHash: string(hash), Role: domain.RoleUser}, nil).Once()
+		repo.On("SetRefreshJTI", "uuid", mock.AnythingOfType("*string")).Return(nil).Once()
 		service := newAuthServiceOverRealUsers(repo, new(mocks.AuthRepositoryMock), new(mocks.OAuthProviderRegistryMock), new(mocks.EmailProviderMock))
 
 		tokens, err := service.CredentialsLogin(context.Background(), domain.CredentialsLoginDTO{Email: messyEmail, Password: "password123"})
@@ -147,6 +148,7 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 		authRepo.On("CreateUserOAuthProvider", domain.UserOAuthProvider{
 			UserUUID: "local-uuid", Provider: provider, ProviderUserID: providerUserID, ProviderEmail: normalizedEmail,
 		}).Return(&domain.UserOAuthProvider{}, nil).Once()
+		repo.On("SetRefreshJTI", "local-uuid", mock.AnythingOfType("*string")).Return(nil).Once()
 		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  string(provider),
 			Audience: domain.TokenAudienceOAuthState,

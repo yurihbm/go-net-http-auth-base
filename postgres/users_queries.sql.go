@@ -15,7 +15,7 @@ const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email, password_hash, email_verified)
     VALUES ($1, $2, $3, $4)
 RETURNING
-    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, current_refresh_jti, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -40,6 +40,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.Role,
 		&i.EmailVerified,
+		&i.CurrentRefreshJti,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -60,7 +61,7 @@ func (q *Queries) DeleteUser(ctx context.Context, uuid pgtype.UUID) error {
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, current_refresh_jti, created_at, updated_at
 FROM
     users
 WHERE
@@ -77,6 +78,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.PasswordHash,
 		&i.Role,
 		&i.EmailVerified,
+		&i.CurrentRefreshJti,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -85,7 +87,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 
 const getUserByUUID = `-- name: GetUserByUUID :one
 SELECT
-    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, current_refresh_jti, created_at, updated_at
 FROM
     users
 WHERE
@@ -102,6 +104,7 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 		&i.PasswordHash,
 		&i.Role,
 		&i.EmailVerified,
+		&i.CurrentRefreshJti,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -110,7 +113,7 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 
 const listUsers = `-- name: ListUsers :many
 SELECT
-    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, current_refresh_jti, created_at, updated_at
 FROM
     users
 ORDER BY
@@ -139,6 +142,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.PasswordHash,
 			&i.Role,
 			&i.EmailVerified,
+			&i.CurrentRefreshJti,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -163,6 +167,49 @@ WHERE
 
 func (q *Queries) MarkUserEmailVerified(ctx context.Context, uuid pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, markUserEmailVerified, uuid)
+	return err
+}
+
+const rotateUserRefreshJTI = `-- name: RotateUserRefreshJTI :execrows
+UPDATE
+    users
+SET
+    current_refresh_jti = $2
+WHERE
+    uuid = $1
+    AND current_refresh_jti = $3
+`
+
+type RotateUserRefreshJTIParams struct {
+	Uuid       pgtype.UUID
+	NextJti    pgtype.Text
+	CurrentJti pgtype.Text
+}
+
+func (q *Queries) RotateUserRefreshJTI(ctx context.Context, arg RotateUserRefreshJTIParams) (int64, error) {
+	result, err := q.db.Exec(ctx, rotateUserRefreshJTI, arg.Uuid, arg.NextJti, arg.CurrentJti)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setUserRefreshJTI = `-- name: SetUserRefreshJTI :exec
+UPDATE
+    users
+SET
+    current_refresh_jti = $2
+WHERE
+    uuid = $1
+`
+
+type SetUserRefreshJTIParams struct {
+	Uuid              pgtype.UUID
+	CurrentRefreshJti pgtype.Text
+}
+
+func (q *Queries) SetUserRefreshJTI(ctx context.Context, arg SetUserRefreshJTIParams) error {
+	_, err := q.db.Exec(ctx, setUserRefreshJTI, arg.Uuid, arg.CurrentRefreshJti)
 	return err
 }
 

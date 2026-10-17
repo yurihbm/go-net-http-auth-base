@@ -103,7 +103,26 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
+	var dto domain.LogoutDTO
+	if accessToken, err := r.Cookie(api.AccessTokenCookieName); err == nil {
+		dto.AccessToken = accessToken.Value
+	}
+
+	err := c.authService.Logout(r.Context(), dto)
 	c.deleteAuthCookies(w)
+	if err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			ActorUUID:     actorUUID(r),
+			Action:        domain.AuditActionLogout,
+			ResourceType:  domain.AuditResourceAuth,
+			ResourceUUID:  "",
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 
 	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),
