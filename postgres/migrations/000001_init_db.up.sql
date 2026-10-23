@@ -49,6 +49,17 @@ CREATE TABLE user_oauth_providers (
     UNIQUE (provider, provider_user_id)
 );
 
+CREATE TABLE user_sessions (
+    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
+    current_jti text NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    last_used_at timestamptz DEFAULT now() NOT NULL,
+    expires_at timestamptz NOT NULL
+);
+
+CREATE INDEX idx_user_sessions_user_last_used ON user_sessions (user_uuid, last_used_at);
+
 CREATE TABLE audit_logs (
     uuid uuid DEFAULT uuidv7() NOT NULL,
     actor_uuid UUID, -- Nullable for system actions or anonymous users
