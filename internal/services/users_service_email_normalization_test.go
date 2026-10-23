@@ -91,7 +91,11 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 func newAuthServiceOverRealUsers(repo *mocks.UsersRepositoryMock, authRepo *mocks.AuthRepositoryMock, registry *mocks.OAuthProviderRegistryMock, emailProvider *mocks.EmailProviderMock) domain.AuthService {
 	tokens := services.NewTokenService(normalizationKey)
 	emailVerification := services.NewEmailVerificationService(tokens, emailProvider, "https://app.test/verify-email")
-	return services.NewAuthService(services.NewUserService(repo, emailVerification), authRepo, registry, newTransactorMock(), tokens)
+	sessionsRepo := new(mocks.SessionsRepositoryMock)
+	sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil)
+	sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil)
+	sessionsRepo.On("DeleteOldestBeyond", mock.Anything, mock.Anything).Return(nil)
+	return services.NewAuthService(services.NewUserService(repo, emailVerification), authRepo, sessionsRepo, registry, newTransactorMock(), tokens, testSessionMaxAge, testMaxSessions)
 }
 
 func TestAuthService_EmailNormalization(t *testing.T) {

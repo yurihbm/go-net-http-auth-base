@@ -5,9 +5,11 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 )
@@ -21,24 +23,33 @@ var (
 type authService struct {
 	usersService          domain.UsersService
 	authRepository        domain.AuthRepository
+	sessionsRepository    domain.SessionsRepository
 	oauthProviderRegistry domain.OAuthProviderRegistry
 	transactor            domain.Transactor
 	tokens                domain.TokenService
+	sessionMaxAge         time.Duration
+	maxSessionsPerUser    int
 }
 
 func NewAuthService(
 	usersService domain.UsersService,
 	authRepository domain.AuthRepository,
+	sessionsRepository domain.SessionsRepository,
 	oauthProviderRegistry domain.OAuthProviderRegistry,
 	transactor domain.Transactor,
 	tokens domain.TokenService,
+	sessionMaxAge time.Duration,
+	maxSessionsPerUser int,
 ) domain.AuthService {
 	return &authService{
 		usersService,
 		authRepository,
+		sessionsRepository,
 		oauthProviderRegistry,
 		transactor,
 		tokens,
+		sessionMaxAge,
+		maxSessionsPerUser,
 	}
 }
 
@@ -56,7 +67,7 @@ func (s *authService) CredentialsLogin(ctx context.Context, dto domain.Credentia
 		return domain.AuthTokens{}, domain.NewUnauthorizedError("auth.authenticate.invalidCredentials")
 	}
 
-	tokens, err := s.issueTokens(ctx, user.UUID, user.Role)
+	tokens, err := s.startSession(ctx, user)
 	if err != nil {
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.authenticate.tokenGenerationFailed", err)
 	}
@@ -77,12 +88,42 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 		return domain.AuthTokens{}, err
 	}
 
-	user, err := s.usersService.GetByUUID(ctx, domain.Actor{UUID: tokenData.Subject}, tokenData.Subject)
+	if tokenData.ID == "" || tokenData.SessionID == "" {
+		return domain.AuthTokens{}, ErrInvalidToken
+	}
+
+	userUUID, sessionUUID := tokenData.Subject, tokenData.SessionID
+	var notFoundErr *domain.NotFoundError
+
+	session, err := s.sessionsRepository.FindByUUID(ctx, userUUID, sessionUUID)
 	if err != nil {
+		if errors.As(err, &notFoundErr) {
+			return domain.AuthTokens{}, ErrInvalidToken
+		}
 		return domain.AuthTokens{}, err
 	}
 
-	tokens, err := s.issueTokens(ctx, user.UUID, user.Role)
+	if time.Now().Unix() >= session.ExpiresAt || session.CurrentJTI != tokenData.ID {
+		return domain.AuthTokens{}, s.revokeSession(ctx, userUUID, sessionUUID)
+	}
+
+	nextJTI := uuid.NewString()
+	if err := s.sessionsRepository.RotateJTI(ctx, userUUID, sessionUUID, tokenData.ID, nextJTI); err != nil {
+		if errors.As(err, &notFoundErr) {
+			return domain.AuthTokens{}, s.revokeSession(ctx, userUUID, sessionUUID)
+		}
+		return domain.AuthTokens{}, err
+	}
+
+	user, err := s.usersService.GetByUUID(ctx, domain.Actor{UUID: userUUID}, userUUID)
+	if err != nil {
+		if errors.As(err, &notFoundErr) {
+			return domain.AuthTokens{}, ErrInvalidToken
+		}
+		return domain.AuthTokens{}, err
+	}
+
+	tokens, err := s.issueTokens(ctx, user, sessionUUID, nextJTI)
 	if err != nil {
 		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
 	}
@@ -90,19 +131,64 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 	return tokens, nil
 }
 
-func (s *authService) issueTokens(ctx context.Context, userUUID string, role domain.UserRole) (domain.AuthTokens, error) {
+func (s *authService) revokeSession(ctx context.Context, userUUID string, sessionUUID string) error {
+	if err := s.sessionsRepository.Delete(ctx, userUUID, sessionUUID); err != nil {
+		return err
+	}
+	return ErrInvalidToken
+}
+
+func (s *authService) Logout(ctx context.Context, userUUID string, sessionUUID string) error {
+	return s.sessionsRepository.Delete(ctx, userUUID, sessionUUID)
+}
+
+func (s *authService) startSession(ctx context.Context, user *domain.User) (domain.AuthTokens, error) {
+	var tokens domain.AuthTokens
+	err := s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		if err := s.sessionsRepository.DeleteExpiredByUser(ctx, user.UUID, domain.TokenExpirationRefresh); err != nil {
+			return err
+		}
+
+		jti := uuid.NewString()
+		session, err := s.sessionsRepository.Create(ctx, domain.UserSession{
+			UserUUID:   user.UUID,
+			CurrentJTI: jti,
+			ExpiresAt:  time.Now().Add(s.sessionMaxAge).Unix(),
+		})
+		if err != nil {
+			return err
+		}
+
+		if err := s.sessionsRepository.DeleteOldestBeyond(ctx, user.UUID, s.maxSessionsPerUser); err != nil {
+			return err
+		}
+
+		tokens, err = s.issueTokens(ctx, user, session.UUID, jti)
+		return err
+	})
+	if err != nil {
+		return domain.AuthTokens{}, err
+	}
+
+	return tokens, nil
+}
+
+func (s *authService) issueTokens(ctx context.Context, user *domain.User, sessionUUID string, refreshJTI string) (domain.AuthTokens, error) {
 	accessToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
-		Subject:  userUUID,
-		Audience: domain.TokenAudienceAccess,
-		Role:     role,
+		Subject:   user.UUID,
+		Audience:  domain.TokenAudienceAccess,
+		SessionID: sessionUUID,
+		Role:      user.Role,
 	})
 	if err != nil {
 		return domain.AuthTokens{}, err
 	}
 
 	refreshToken, err := s.GenerateToken(ctx, domain.GenerateTokenDTO{
-		Subject:  userUUID,
-		Audience: domain.TokenAudienceRefresh,
+		Subject:   user.UUID,
+		Audience:  domain.TokenAudienceRefresh,
+		SessionID: sessionUUID,
+		ID:        refreshJTI,
 	})
 	if err != nil {
 		return domain.AuthTokens{}, err
@@ -264,7 +350,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		return nil, err
 	}
 
-	tokens, err := s.issueTokens(ctx, authenticatedUser.UUID, authenticatedUser.Role)
+	tokens, err := s.startSession(ctx, authenticatedUser)
 	if err != nil {
 		return nil, domain.NewInternalServerError("auth.oauthLogin.tokenGenerationFailed", err)
 	}
