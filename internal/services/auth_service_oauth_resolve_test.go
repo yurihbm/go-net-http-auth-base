@@ -41,10 +41,14 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		authRepo := new(mocks.AuthRepositoryMock)
 		registry := new(mocks.OAuthProviderRegistryMock)
 		transactor := newTransactorMock()
+		sessionsRepo := new(mocks.SessionsRepositoryMock)
+		sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil).Maybe()
+		sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil).Maybe()
+		sessionsRepo.On("DeleteOldestBeyond", mock.Anything, mock.Anything).Return(nil).Maybe()
 		providerMock := new(mocks.OAuthProviderMock)
 		registry.On("Get", provider).Return(providerMock, nil)
 		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).Return(userInfo, nil)
-		service := services.NewAuthService(usersService, authRepo, registry, transactor, services.NewTokenService("test-secret-key"))
+		service := services.NewAuthService(usersService, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
 		return fixture{service, usersService, authRepo, transactor}
 	}
 
@@ -102,7 +106,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, userUUID, result.User.UUID)
 		f.authRepo.AssertExpectations(t)
-		f.transactor.AssertNumberOfCalls(t, "WithinTx", 1)
+		f.transactor.AssertNumberOfCalls(t, "WithinTx", 2)
 	})
 
 	t.Run("normalizes the provider email before lookup, create and link", func(t *testing.T) {
@@ -148,7 +152,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		assert.Equal(t, userUUID, result.User.UUID)
 		f.usersService.AssertExpectations(t)
 		f.authRepo.AssertExpectations(t)
-		f.transactor.AssertNumberOfCalls(t, "WithinTx", 2)
+		f.transactor.AssertNumberOfCalls(t, "WithinTx", 3)
 	})
 
 	t.Run("re-resolves to the existing link when a replayed callback linked it first", func(t *testing.T) {
@@ -163,7 +167,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, userUUID, result.User.UUID)
-		f.transactor.AssertNumberOfCalls(t, "WithinTx", 2)
+		f.transactor.AssertNumberOfCalls(t, "WithinTx", 3)
 	})
 
 	t.Run("returns the conflict when re-resolving conflicts again", func(t *testing.T) {
