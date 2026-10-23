@@ -407,15 +407,20 @@ half-finished behavior.
 - [x] **Unchecked claim type assertions in `VerifyToken` panic on malformed tokens** — `internal/services/auth_service.go:86-88`. `claims["sub"].(string)`, `claims["aud"].(string)`, `int64(claims["exp"].(float64))` run before the `ok`/`token.Valid` check on line 90; a token with a missing/wrong-typed claim panics instead of returning an error — a DoS surface since this path is reachable via attacker-controlled OAuth state and refresh tokens. Use two-value assertions (`v, ok := claims["sub"].(string)`) and return `ErrInvalidToken` on failure.
 - [x] **GitHub `EmailVerified` is hardcoded `true`** (security review) — `internal/providers/github_oauth_provider.go:76`. Sourced from `GET /user`, whose public `email` field isn't attested as verified by GitHub. The controller's Case-2 account-linking logic relies on `EmailVerified` specifically to prevent account-takeover-by-email-match — for GitHub that gate is currently a no-op. Call `GET /user/emails` instead and check the `verified`+`primary` flags for the matching address.
 - [x] **OAuth token exchange has no timeout** — `internal/providers/{google,github,microsoft}_oauth_provider.go:36`. `p.config.Exchange(ctx, code)` falls back to `http.DefaultClient` (no timeout) unless the context carries `oauth2.HTTPClient`, unlike the userinfo fetch which already sets one. A slow/unresponsive provider token endpoint can hang the request indefinitely. Set an `oauth2.HTTPClient` with a timeout (e.g. 10s, matching the userinfo client) on the context passed to `Exchange`.
-- [ ] **OAuth Case 3 creates a user without checking `EmailVerified`** (security review, nOAuth-class) — `internal/services/auth_service.go` (`resolveOAuthUser`, Case 3). Case 2 refuses to link when the provider email is unverified, but Case 3 (no linked provider, no user with that email) creates the account anyway. Microsoft's userinfo carries no `email_verified`, so an attacker can set an unverified email equal to a victim's address on their own Microsoft account, log in first, and own the account for that email — a later sign-up or OAuth login by the victim is then blocked or linked to the attacker's user. Require `userInfo.EmailVerified` before `CreateOAuth` (reuse the `auth.providerCallback.emailNotVerified` error), and decide how Microsoft verification is attested (e.g. `xms_edov` claim or restricting to verified tenants), since it currently always reports `false`.
-- [ ] **OAuth Case 2 links into an account whose local email was never verified (pre-hijacking)** (security review, high) — `internal/services/auth_service.go` (`resolveOAuthUser`, Case 2). The `EmailVerified` gate only attests the _provider_ side. An attacker can register `victim@gmail.com` via `POST /users` with a password they know; when the victim later logs in with Google (verified), their identity is linked to the attacker's account. Only link into accounts with a verified local email, require a confirmed link flow, or invalidate the password when linking an unverified local account.
-- [ ] **OAuth user resolution is not transactional and races on duplicate callbacks** (security review) — `internal/services/auth_service.go` (`resolveOAuthUser`). The Case 1 lookup and the Case 2 find-by-email + link run outside `WithinTx`, and the state JWT is replayable for 5 minutes, so a double-fired or replayed callback can hit a unique violation and return 500 instead of resolving to the existing user. Wrap the whole resolve step in `WithinTx` and re-read on unique violation, or make the state single-use.
-- [ ] **Provider email is not normalized** (security review) — `internal/services/auth_service.go` (`resolveOAuthUser`). The email is used verbatim for `GetByEmail` and `CreateOAuth`, while `users.email UNIQUE` is case-sensitive: `Foo@X.com` from the provider misses the local `foo@x.com` and Case 3 creates a duplicate account. Trim and lowercase on both read and write.
-- [ ] **Callback ignores the provider `error` / `error_description` params** — `internal/controllers/auth_controller.go` (`OAuthProviderCallback`). When the user denies consent the provider redirects back without a `code`, and the user gets a raw JSON 400 (`missingParams`), no audit log, and lingering flow cookies. Handle `error` explicitly: log it, clear the flow cookies, and redirect to the allowed `redirect_uri` (from state) with an error.
-- [ ] **Google/Microsoft userinfo request ignores `ctx` and prints with `fmt.Println`** — `internal/providers/{google,microsoft}_oauth_provider.go:38`. Use `http.NewRequestWithContext(ctx, ...)` so cancellation/deadlines propagate (GitHub's `fetchJSON` already does), and log body-close errors via `slog` instead of `fmt.Println`.
-- [ ] **GitHub user created with empty name; ID decoded as `int`** — `internal/providers/github_oauth_provider.go:58`. `name` is often null/empty; fall back to `login` (add it to `githubUserInfo`). Decode the ID as `int64` and format with `strconv.FormatInt`.
-- [ ] **DRY: the three OAuth providers duplicate the same code** — `internal/providers/{google,github,microsoft}_oauth_provider.go`. `GetAuthURL`, `Exchange`, the Bearer GET + status check + JSON decode + body close, and the variadic-`infoURL` constructor are copied across providers and have already drifted (see the `ctx` item above). Extract a shared `fetchJSON(ctx, url, token, target)` in `oauth_http_client.go` and an embedded base struct for `GetAuthURL`/`Exchange`.
-- [ ] **OAuth controller consistency nits** — `internal/controllers/auth_controller.go:136`. Provider validation is duplicated across both OAuth handlers with inconsistent call style (`domain.OAuthProviderName.IsValid(providerName)` vs `providerName.IsValid()`); the service already validates via the registry, so use one helper or rely on it. Drop the redundant `|| redirectURI == ""` after `slices.Contains`. Rename `auth.provider_callback.missingParams` to `auth.providerCallback.missingParams` to match the camelCase key convention.
+- [x] **OAuth Case 3 creates a user without checking `EmailVerified`** (security review, nOAuth-class) — `internal/services/auth_service.go` (`resolveOAuthUser`, Case 3). Case 2 refuses to link when the provider email is unverified, but Case 3 (no linked provider, no user with that email) creates the account anyway. Microsoft's userinfo carries no `email_verified`, so an attacker can set an unverified email equal to a victim's address on their own Microsoft account, log in first, and own the account for that email — a later sign-up or OAuth login by the victim is then blocked or linked to the attacker's user. Require `userInfo.EmailVerified` before `CreateOAuth` (reuse the `auth.providerCallback.emailNotVerified` error), and decide how Microsoft verification is attested (e.g. `xms_edov` claim or restricting to verified tenants), since it currently always reports `false`.
+  > **Resolved:** Case 3 now requires `userInfo.EmailVerified` and returns `auth.providerCallback.emailNotVerified` otherwise. Microsoft still always reports `EmailVerified=false`, so it can link existing verified accounts but cannot create new ones until its verification is attested (e.g. `xms_edov`).
+- [x] **OAuth Case 2 links into an account whose local email was never verified (pre-hijacking)** (security review, high) — `internal/services/auth_service.go` (`resolveOAuthUser`, Case 2). The `EmailVerified` gate only attests the _provider_ side. An attacker can register `victim@gmail.com` via `POST /users` with a password they know; when the victim later logs in with Google (verified), their identity is linked to the attacker's account. Only link into accounts with a verified local email, require a confirmed link flow, or invalidate the password when linking an unverified local account.
+  > **Resolved:** Case 2 links only when the provider email is verified **and** the local account has `email_verified` set, which comes from the new email verification flow ([2.6.12](#2612-emailprovider-and-local-email-verification)). An unverified local account blocks the link.
+- [x] **OAuth user resolution is not transactional and races on duplicate callbacks** (security review) — `internal/services/auth_service.go` (`resolveOAuthUser`). The Case 1 lookup and the Case 2 find-by-email + link run outside `WithinTx`, and the state JWT is replayable for 5 minutes, so a double-fired or replayed callback can hit a unique violation and return 500 instead of resolving to the existing user. Wrap the whole resolve step in `WithinTx` and re-read on unique violation, or make the state single-use.
+  > **Resolved:** The whole resolve step runs in one `WithinTx` with a single retry on unique-violation conflict, re-reading the winner. Residual: the state JWT is still not single-use.
+- [x] **Provider email is not normalized** (security review) — `internal/services/auth_service.go` (`resolveOAuthUser`). The email is used verbatim for `GetByEmail` and `CreateOAuth`, while `users.email UNIQUE` is case-sensitive: `Foo@X.com` from the provider misses the local `foo@x.com` and Case 3 creates a duplicate account. Trim and lowercase on both read and write.
+  > **Resolved:** Provider email goes through the services `normalizeEmail` helper; local entry paths and a unique index on `lower(email)` do the same (see 2.6.12). Residual: existing mixed-case emails are not migrated (template phase, folded into `000001_init_db`).
+- [x] **Callback ignores the provider `error` / `error_description` params** — `internal/controllers/auth_controller.go` (`OAuthProviderCallback`). When the user denies consent the provider redirects back without a `code`, and the user gets a raw JSON 400 (`missingParams`), no audit log, and lingering flow cookies. Handle `error` explicitly: log it, clear the flow cookies, and redirect to the allowed `redirect_uri` (from state) with an error.
+  > **Resolved:** `OAuthProviderCallback` handles `error` first: it verifies state and nonce via `AuthService.VerifyOAuthState` (no code exchange), checks the `redirect_uri` against the allow-list, maps the provider error to a whitelisted code, clears the flow cookies, audit-logs, and redirects to `redirect_uri?error=<code>`. Unverifiable state yields a plain 400, never a redirect. Residual: no frontend consumes `?error=` yet.
+- [x] **Google/Microsoft userinfo request ignores `ctx` and prints with `fmt.Println`** — `internal/providers/{google,microsoft}_oauth_provider.go:38`. Use `http.NewRequestWithContext(ctx, ...)` so cancellation/deadlines propagate (GitHub's `fetchJSON` already does), and log body-close errors via `slog` instead of `fmt.Println`.
+- [x] **GitHub user created with empty name; ID decoded as `int`** — `internal/providers/github_oauth_provider.go:58`. `name` is often null/empty; fall back to `login` (add it to `githubUserInfo`). Decode the ID as `int64` and format with `strconv.FormatInt`.
+- [x] **DRY: the three OAuth providers duplicate the same code** — `internal/providers/{google,github,microsoft}_oauth_provider.go`. `GetAuthURL`, `Exchange`, the Bearer GET + status check + JSON decode + body close, and the variadic-`infoURL` constructor are copied across providers and have already drifted (see the `ctx` item above). Extract a shared `fetchJSON(ctx, url, token, target)` in `oauth_http_client.go` and an embedded base struct for `GetAuthURL`/`Exchange`.
+- [x] **OAuth controller consistency nits** — `internal/controllers/auth_controller.go:136`. Provider validation is duplicated across both OAuth handlers with inconsistent call style (`domain.OAuthProviderName.IsValid(providerName)` vs `providerName.IsValid()`); the service already validates via the registry, so use one helper or rely on it. Drop the redundant `|| redirectURI == ""` after `slices.Contains`. Rename `auth.provider_callback.missingParams` to `auth.providerCallback.missingParams` (done) to match the camelCase key convention.
 
 **Files to modify**:
 
@@ -440,6 +445,8 @@ Env var reading is currently scattered `os.Getenv` calls across the codebase
 `config/oauth.go`, `cors_factory.go`'s `parseAllowedOrigins`, the rate-limit
 factory, etc.), each with its own ad-hoc parsing and no shared validation. In a
 *template* this means every bootstrap re-invents (or forgets) validation.
+
+> **Note:** `config/config.go` already centralizes env loading and fail-fast validation (JWT secret, session max age, email settings); the tasks below have not been audited against it.
 
 **Tasks**:
 
@@ -469,31 +476,37 @@ A stolen refresh token remains valid for the full 7-day
 
 Not strictly mandatory (many APIs accept this residual risk with short-lived
 access tokens), but worth closing given the long refresh window already
-exists. Default to the cheaper option: track a single active refresh token
-`jti` per user rather than a growing revocation table — simpler, no
-unbounded storage, at the cost of only one active session per user. A full
-revocation store (dedicated table, checked on every refresh) is the upgrade
-path if/when multi-device sessions are needed.
+exists. The template must support web and mobile clients at the same time, so
+a single `jti` per user (one active session; a login on one device signs the
+other out) is not enough: track one server-side session per login instead.
 
 **Tasks**:
 
-- [ ] Decide: single-`jti`-per-user (default) vs. full revocation table (if multi-device sessions matter)
-- [ ] Add `current_refresh_jti` (or similar) column to the `users` table directly in `postgres/migrations/000001_init_db.up.sql`/`.down.sql` — this is still template setup, not a real app in production, so fold it into the initial migration rather than adding a new one (new migration files are for once the template is bootstrapped into a real app)
-- [ ] Include a `jti` claim when generating refresh tokens (`GenerateToken`)
-- [ ] On `RefreshToken()`, verify the presented `jti` matches the stored one before issuing a new pair; overwrite on rotation
-- [ ] On `Logout`, clear the stored `jti` server-side (not just client-side cookies)
-- [ ] **Re-check the user on refresh** (security review) — `RefreshToken()` issues a new pair from the token subject alone; a deleted user keeps working tokens for the full refresh window. Verify the user still exists before issuing new tokens. (Comes for free with the `jti` lookup above.)
-- [ ] **Cap the total session lifetime** (security review) — every refresh issues a fresh 7-day refresh token, so a stolen token can be renewed forever. Carry an `auth_time` (original login timestamp) claim through rotations and reject refresh once an absolute maximum session age is exceeded.
-- [ ] Add tests: reused/stale refresh token is rejected after rotation; logout invalidates the refresh token server-side; refresh fails for a deleted user; refresh fails past the absolute session lifetime
+- [x] Decide: single-`jti`-per-user vs. per-device session table (multi-device sessions matter)
+  > **Resolved:** per-device sessions in a `user_sessions` table (`uuid`, `user_uuid` with `ON DELETE CASCADE`, `current_jti`, `created_at`, `last_used_at`, `expires_at`; index on `(user_uuid, last_used_at)`). Login (credentials and OAuth) runs in one transaction: delete the user's expired sessions (`expires_at` passed or idle longer than the refresh token TTL), create the session with `expires_at` = now + `SESSION_MAX_AGE` (optional, default 30d; never extended on rotation), and keep only the newest `MAX_SESSIONS_PER_USER` (optional, default 10) by `last_used_at`. Refresh tokens carry `sub`, `sid` and `jti`; access tokens carry `sub` and `sid` (no login-time claim: the session age comes from the database). Refresh loads the session by `sid` + `sub`, rejects it past `expires_at` and rotates the `jti` with a per-session compare-and-set; a reused/stale token or a lost concurrent refresh deletes only that session. `POST /auth/logout` is authenticated and deletes only the current session (idempotent); other devices stay signed in. The `users.updated_at` trigger no longer fires on session writes.
+  > **Residual / follow-ups:**
+  > - No grace window for concurrent refreshes: two parallel refreshes with the same token revoke that session, so clients must serialize refreshes.
+  > - Refresh and logout read tokens from cookies only; mobile clients need a body/header transport.
+  > - Logout-all, list-sessions and revoke-session endpoints, and revoking sessions on password change, are follow-ups.
+  > - The access token is stateless and stays valid for up to 15 minutes after logout (the session can no longer be refreshed).
+- [x] Add the `user_sessions` table directly in `postgres/migrations/000001_init_db.up.sql`/`.down.sql` — this is still template setup, not a real app in production, so fold it into the initial migration rather than adding a new one (new migration files are for once the template is bootstrapped into a real app)
+- [x] Include `sid` (both tokens) and `jti` (refresh token) claims when generating tokens (`GenerateToken`)
+- [x] On `RefreshToken()`, verify the presented `jti` matches the session's current one before issuing a new pair; rotate it atomically
+- [x] On `Logout`, delete the current session server-side (not just client-side cookies)
+- [x] **Re-check the user on refresh** (security review) — `RefreshToken()` issues a new pair from the token subject alone; a deleted user keeps working tokens for the full refresh window. Verify the user still exists before issuing new tokens (sessions are also deleted with their user).
+- [x] **Cap the total session lifetime** (security review) — every refresh issues a fresh 7-day refresh token, so a stolen token can be renewed forever. Store an absolute `expires_at` per session and reject refresh once it has passed.
+- [x] Add tests: reused/stale refresh token revokes that session; concurrent refreshes have a single winner; logout ends only the current session; sessions from different logins are independent; the cap evicts the least recently used session; refresh fails for a deleted user; refresh fails past the absolute session lifetime
 
 **Files to modify**:
 
 - `postgres/migrations/000001_init_db.up.sql`
 - `postgres/migrations/000001_init_db.down.sql`
-- `internal/services/auth_service.go`
+- `postgres/queries/sessions_queries.sql`
+- `internal/services/{auth,token}_service.go`
 - `internal/controllers/auth_controller.go`
-- `internal/domain/{auth,users}.go`
-- `internal/repositories/{auth,users}_repository.go`
+- `internal/middlewares/auth_middleware.go`
+- `internal/domain/{auth,sessions}.go`
+- `internal/repositories/sessions_repository.go`
 
 #### 2.6.9 Extract OAuth login business logic into the service layer
 
@@ -544,9 +557,10 @@ interface because the controller used to mint tokens itself (resolved by
 
 **Tasks**:
 
-- [ ] Split token generate/verify into a narrow interface (e.g. `domain.TokenService`, with middleware consuming only a `TokenVerifier` view)
-- [ ] Update `AuthMiddleware` to depend on the narrow interface; drop `GenerateToken` from the public `AuthService` surface if 2.6.9 makes it internal
-- [ ] Shrink mocks accordingly
+- [x] Split token generate/verify into a narrow interface (e.g. `domain.TokenService`, with middleware consuming only a `TokenVerifier` view)
+- [x] Update `AuthMiddleware` to depend on the narrow interface; drop `GenerateToken` from the public `AuthService` surface if 2.6.9 makes it internal
+- [x] Shrink mocks accordingly
+  > **Resolved:** `domain.TokenVerifier` (middlewares) and `domain.TokenGenerator` are narrow interfaces, composed by `domain.TokenService` (implemented by the dependency-free `tokenService`, which `AuthService` delegates to); `AuthService` embeds `TokenVerifier` and `GenerateToken` is no longer on it.
 
 **Files to modify**:
 
@@ -564,13 +578,39 @@ cookies). `MaxAge` is relative and clock-independent. The OAuth flow cookies
 
 **Tasks**:
 
-- [ ] Replace `Expires` with `MaxAge` in `setAuthCookies` (access + refresh) and use `MaxAge: -1` in `deleteAuthCookies`
-- [ ] Update controller tests to assert `MaxAge`
+- [x] Replace `Expires` with `MaxAge` in `setAuthCookies` (access + refresh) and use `MaxAge: -1` in `deleteAuthCookies`
+- [x] Update controller tests to assert `MaxAge`
 
 **Files to modify**:
 
 - `internal/controllers/auth_controller.go`
 - `internal/controllers/auth_controller_test.go`
+
+#### 2.6.12 `EmailProvider` and local email verification
+
+Local sign-ups were never verified, which also left OAuth Case 2 open to
+pre-hijacking (see 2.6.6). Add a mail abstraction and a verification flow.
+
+**Tasks**:
+
+- [x] `domain.EmailProvider` with `ResendEmailProvider` and `LogEmailProvider` (used when `RESEND_API_KEY` is unset); built once in `factories.Dependencies`
+- [x] Config: `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_VERIFICATION_URL`, required outside development
+- [x] `users.email_verified` column (in `000001_init_db`); verification mail sent on `POST /users`
+- [x] JWT audience `email_verification_token` (24h); `POST /users/verify-email` and `POST /users/resend-verification`
+- [x] Email normalization via the services `normalizeEmail` helper on all entry paths plus a unique index on `lower(email)`
+- [x] Tests for providers, config, service, controllers and repositories
+
+> **Resolved:** `domain.EmailVerificationService` builds/sends the mail and checks its token; `UsersService` orchestrates sign-up, verify and resend. `UsersService.Create` sends the verification mail; failures are logged and do not fail the sign-up; users can request another mail via `resend-verification`.
+
+**Files to modify**:
+
+- `internal/domain/{email,auth,users}.go`
+- `internal/providers/{resend,log}_email_provider.go`
+- `internal/services/{auth,users}_service.go`
+- `internal/controllers/{auth,users}_controller.go`
+- `internal/factories/dependencies.go`
+- `config/config.go`
+- `postgres/migrations/000001_init_db.up.sql`
 
 ---
 
