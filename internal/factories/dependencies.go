@@ -35,6 +35,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 	usersService := services.NewUserService(usersRepository, emailVerificationService)
 
 	authRepository := repositories.NewAuthPostgresRepository(db)
+	sessionsRepository := repositories.NewSessionsPostgresRepository(db)
 	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
 		map[domain.OAuthProviderName]domain.OAuthProvider{
 			domain.OAuthProviderGoogle: providers.NewGoogleOAuthProvider(
@@ -54,9 +55,12 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 	authService := services.NewAuthService(
 		usersService,
 		authRepository,
+		sessionsRepository,
 		oauthProviderRegistry,
 		repositories.NewPostgresTransactor(pool),
 		tokenService,
+		cfg.SessionMaxAge,
+		cfg.MaxSessionsPerUser,
 	)
 
 	auditRepository := repositories.NewAuditPostgresRepository(db)

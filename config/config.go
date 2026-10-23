@@ -26,6 +26,9 @@ const (
 
 	defaultRateLimitRequestsPerSecond = 20.0
 	defaultRateLimitBurst             = 50
+
+	defaultSessionMaxAge      = 30 * 24 * time.Hour
+	defaultMaxSessionsPerUser = 10
 )
 
 // Config is the single source of truth for every environment variable the
@@ -35,7 +38,9 @@ type Config struct {
 	Port   string
 	APIURL string
 
-	JWTSecret string
+	JWTSecret          string
+	SessionMaxAge      time.Duration
+	MaxSessionsPerUser int
 
 	Database  DatabaseConfig
 	OAuth     OAuthConfig
@@ -113,7 +118,9 @@ func Load() (*Config, error) {
 		Port:   port,
 		APIURL: os.Getenv("API_URL"),
 
-		JWTSecret: jwtSecret,
+		JWTSecret:          jwtSecret,
+		SessionMaxAge:      env.GetEnvAsDuration("SESSION_MAX_AGE", defaultSessionMaxAge),
+		MaxSessionsPerUser: env.GetEnvAsInt("MAX_SESSIONS_PER_USER", defaultMaxSessionsPerUser),
 
 		Database: dbCfg,
 
@@ -150,6 +157,14 @@ func Load() (*Config, error) {
 		},
 
 		DBStatsLogInterval: env.GetEnvAsDuration("DB_STATS_LOG_INTERVAL", defaultDBStatsLogInterval),
+	}
+
+	if cfg.SessionMaxAge <= 0 {
+		return nil, errors.New("SESSION_MAX_AGE must be positive")
+	}
+
+	if cfg.MaxSessionsPerUser <= 0 {
+		return nil, errors.New("MAX_SESSIONS_PER_USER must be positive")
 	}
 
 	if cfg.IsProduction() && len(cfg.OAuth.CallbackAllowList) == 0 {

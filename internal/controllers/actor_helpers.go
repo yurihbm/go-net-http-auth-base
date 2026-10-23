@@ -25,3 +25,11 @@ func actorUUID(r *http.Request) *string {
 	}
 	return nil
 }
+
+func sessionFromRequest(r *http.Request) (string, string) {
+	reqCtxData, _ := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData)
+	if reqCtxData == nil {
+		return "", ""
+	}
+	return reqCtxData.UserUUID, reqCtxData.SessionUUID
+}
