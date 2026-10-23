@@ -145,3 +145,12 @@ type UserOauthProvider struct {
 	ProviderEmail  string
 	CreatedAt      pgtype.Timestamptz
 }
+
+type UserSession struct {
+	Uuid       pgtype.UUID
+	UserUuid   pgtype.UUID
+	CurrentJti string
+	CreatedAt  pgtype.Timestamptz
+	LastUsedAt pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+}
