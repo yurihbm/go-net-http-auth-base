@@ -9,6 +9,7 @@ const RequestContextDataKey ContextKey = "requestContextData"
 type RequestContextData struct {
 	UserUUID    string
 	UserRole    domain.UserRole
+	SessionUUID string
 	RequestUUID string
 	Error       error
 }

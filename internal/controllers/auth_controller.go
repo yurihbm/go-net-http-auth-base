@@ -8,6 +8,7 @@ import (
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/middlewares"
 )
 
 var ErrInvalidOAuthProvider = domain.NewValidationError(
@@ -39,6 +40,7 @@ const defaultOAuthProviderErrorCode = "access_denied"
 type AuthController struct {
 	authService       domain.AuthService
 	auditService      domain.AuditService
+	authMiddleware    middlewares.HandlerMiddleware
 	isSecureCookie    bool
 	callbackAllowList []string
 }
@@ -48,12 +50,14 @@ var _ Controller = (*AuthController)(nil)
 func NewAuthController(
 	authService domain.AuthService,
 	auditService domain.AuditService,
+	authMiddleware middlewares.HandlerMiddleware,
 	isSecureCookie bool,
 	callbackAllowList []string,
 ) *AuthController {
 	return &AuthController{
 		authService,
 		auditService,
+		authMiddleware,
 		isSecureCookie,
 		callbackAllowList,
 	}
@@ -62,7 +66,7 @@ func NewAuthController(
 func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /auth/login", c.Login)
 	router.HandleFunc("POST "+api.RefreshTokenCookiePath, c.RefreshToken)
-	router.HandleFunc("POST /auth/logout", c.Logout)
+	router.HandleFunc("POST /auth/logout", c.authMiddleware.Use(c.Logout))
 	router.HandleFunc("GET /auth/{provider}/login", c.LoginWithOAuthProvider)
 	router.HandleFunc("GET /auth/{provider}/callback", c.OAuthProviderCallback)
 }
@@ -103,7 +107,22 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
+	userUUID, sessionUUID := sessionFromRequest(r)
+	err := c.authService.Logout(r.Context(), userUUID, sessionUUID)
 	c.deleteAuthCookies(w)
+	if err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			ActorUUID:     actorUUID(r),
+			Action:        domain.AuditActionLogout,
+			ResourceType:  domain.AuditResourceAuth,
+			ResourceUUID:  "",
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 
 	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),

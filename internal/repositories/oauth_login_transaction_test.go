@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/mocks"
@@ -66,9 +67,12 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		service := services.NewAuthService(
 			services.NewUserService(usersRepo, new(mocks.EmailVerificationServiceMock)),
 			serviceAuthRepo,
+			repositories.NewSessionsPostgresRepository(db),
 			registry,
 			repositories.NewPostgresTransactor(testDB),
 			services.NewTokenService("test-secret-key"),
+			30*24*time.Hour,
+			10,
 		)
 
 		state, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
