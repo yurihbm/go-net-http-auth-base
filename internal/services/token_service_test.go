@@ -19,10 +19,11 @@ func TestTokenService_RoundTrip(t *testing.T) {
 	service := services.NewTokenService(tokenSecret)
 
 	token, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
-		Subject:  "user-uuid",
-		Audience: domain.TokenAudienceAccess,
-		Role:     domain.RoleAdmin,
-		Payload:  map[string]string{"key": "value"},
+		Subject:   "user-uuid",
+		Audience:  domain.TokenAudienceAccess,
+		SessionID: "session-uuid",
+		Role:      domain.RoleAdmin,
+		Payload:   map[string]string{"key": "value"},
 	})
 	require.NoError(t, err)
 
@@ -52,8 +53,9 @@ func TestTokenService_Expiration(t *testing.T) {
 	for audience, ttl := range cases {
 		t.Run(string(audience), func(t *testing.T) {
 			token, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
-				Subject:  "user-uuid",
-				Audience: audience,
+				Subject:   "user-uuid",
+				Audience:  audience,
+				SessionID: "session-uuid",
 			})
 			require.NoError(t, err)
 
@@ -107,4 +109,77 @@ func TestTokenService_VerifyToken_Rejects(t *testing.T) {
 			assert.Nil(t, data)
 		})
 	}
+}
+
+func TestTokenService_VerifyToken(t *testing.T) {
+	service := services.NewTokenService(tokenSecret)
+	ctx := context.Background()
+
+	t.Run("success - access token carries the session id", func(t *testing.T) {
+		token, err := service.GenerateToken(ctx, domain.GenerateTokenDTO{
+			Subject:   "user-uuid",
+			Audience:  domain.TokenAudienceAccess,
+			SessionID: "session-uuid",
+		})
+		require.NoError(t, err)
+
+		data, err := service.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceAccess})
+
+		require.NoError(t, err)
+		assert.Equal(t, "session-uuid", data.SessionID)
+		assert.Empty(t, data.ID)
+	})
+
+	t.Run("success - refresh token carries the session id and jti", func(t *testing.T) {
+		token, err := service.GenerateToken(ctx, domain.GenerateTokenDTO{
+			Subject:   "user-uuid",
+			Audience:  domain.TokenAudienceRefresh,
+			SessionID: "session-uuid",
+			ID:        "refresh-jti",
+		})
+		require.NoError(t, err)
+
+		data, err := service.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceRefresh})
+
+		require.NoError(t, err)
+		assert.Equal(t, "session-uuid", data.SessionID)
+		assert.Equal(t, "refresh-jti", data.ID)
+	})
+
+	for _, audience := range []domain.TokenAudience{domain.TokenAudienceAccess, domain.TokenAudienceRefresh} {
+		sidCases := map[string]any{"missing": nil, "empty": "", "non-string": 123}
+		for name, sid := range sidCases {
+			t.Run("error - "+string(audience)+" with "+name+" sid", func(t *testing.T) {
+				claims := jwt.MapClaims{
+					"sub": "user-uuid",
+					"aud": audience,
+					"exp": time.Now().Add(time.Minute).Unix(),
+					"jti": "refresh-jti",
+				}
+				if sid != nil {
+					claims["sid"] = sid
+				}
+				token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(tokenSecret))
+				require.NoError(t, err)
+
+				data, err := service.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: audience})
+
+				assert.Equal(t, services.ErrInvalidToken, err)
+				assert.Nil(t, data)
+			})
+		}
+	}
+
+	t.Run("success - other audiences do not require a session id", func(t *testing.T) {
+		token, err := service.GenerateToken(ctx, domain.GenerateTokenDTO{
+			Subject:  "user-uuid",
+			Audience: domain.TokenAudienceEmailVerification,
+		})
+		require.NoError(t, err)
+
+		data, err := service.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceEmailVerification})
+
+		require.NoError(t, err)
+		assert.Empty(t, data.SessionID)
+	})
 }

@@ -33,6 +33,11 @@ func (m *AuthServiceMock) RefreshToken(ctx context.Context, dto domain.RefreshTo
 	return domain.AuthTokens{}, errNotImplemented
 }
 
+func (m *AuthServiceMock) Logout(ctx context.Context, userUUID string, sessionUUID string) error {
+	args := m.Called(userUUID, sessionUUID)
+	return args.Error(0)
+}
+
 func (m *AuthServiceMock) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {

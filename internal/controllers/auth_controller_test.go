@@ -1,6 +1,7 @@
 package controllers_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"go-net-http-auth-base/internal/controllers"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/mocks"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -28,11 +30,24 @@ func newTestAuthControllerWithAllowList(allowList []string) (*controllers.AuthCo
 }
 
 func newTestAuthControllerWithOptions(isSecure bool, allowList []string) (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.AuditServiceMock) {
+	controller, authServiceMock, auditMock, _ := newTestAuthControllerWithMiddleware(isSecure, allowList)
+	return controller, authServiceMock, auditMock
+}
+
+func newTestAuthControllerWithMiddleware(isSecure bool, allowList []string) (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.AuditServiceMock, *mocks.AuthMiddlewareMock) {
 	authServiceMock := new(mocks.AuthServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
+	authMiddleware := new(mocks.AuthMiddlewareMock)
 
-	controller := controllers.NewAuthController(authServiceMock, auditMock, isSecure, allowList)
-	return controller, authServiceMock, auditMock
+	controller := controllers.NewAuthController(authServiceMock, auditMock, authMiddleware, isSecure, allowList)
+	return controller, authServiceMock, auditMock, authMiddleware
+}
+
+func withSession(req *http.Request, userUUID string, sessionUUID string) *http.Request {
+	return req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{
+		UserUUID:    userUUID,
+		SessionUUID: sessionUUID,
+	}))
 }
 
 type oauthFlowCookieNames struct {
@@ -62,9 +77,12 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 func TestAuthController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes", func(t *testing.T) {
 		router := http.NewServeMux()
-		controller, _, _ := newTestAuthController()
+		controller, _, _, authMiddleware := newTestAuthControllerWithMiddleware(true, []string{allowedRedirectURI})
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Once()
 
 		controller.RegisterRoutes(router)
+
+		authMiddleware.AssertNumberOfCalls(t, "Use", 1)
 
 		// Verify routes are registered by checking if requests match
 		routes := []struct {
@@ -285,14 +303,23 @@ func TestAuthController_RefreshToken(t *testing.T) {
 }
 
 func TestAuthController_Logout(t *testing.T) {
+	const (
+		userUUID    = "user-uuid"
+		sessionUUID = "session-uuid"
+	)
+
 	t.Run("success", func(t *testing.T) {
-		controller, _, auditMock := newTestAuthController()
+		controller, serviceMock, auditMock := newTestAuthController()
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionLogout &&
-				d.Status == domain.AuditStatusSuccess
+				d.Status == domain.AuditStatusSuccess &&
+				d.ActorUUID != nil && *d.ActorUUID == userUUID
 		})).Return(nil)
 
+		serviceMock.On("Logout", userUUID, sessionUUID).Return(nil).Once()
+
 		w, req := getControllerArgs("POST", "/auth/logout", nil)
+		req = withSession(req, userUUID, sessionUUID)
 
 		controller.Logout(w, req)
 
@@ -325,6 +352,30 @@ func TestAuthController_Logout(t *testing.T) {
 		assert.Equal(t, "/auth/refresh", refreshTokenCookie.Path)
 		assert.Negative(t, accessTokenCookie.MaxAge)
 		assert.Negative(t, refreshTokenCookie.MaxAge)
+		auditMock.AssertExpectations(t)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("error - service error still clears cookies", func(t *testing.T) {
+		controller, serviceMock, auditMock := newTestAuthController()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionLogout &&
+				d.Status == domain.AuditStatusFailure
+		})).Return(nil)
+		serviceMock.On("Logout", userUUID, sessionUUID).
+			Return(domain.NewInternalServerError("sessions.internalServerError", errors.New("db down"))).Once()
+
+		w, req := getControllerArgs("POST", "/auth/logout", nil)
+		req = withSession(req, userUUID, sessionUUID)
+
+		controller.Logout(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		for _, cookie := range w.Result().Cookies() {
+			assert.Empty(t, cookie.Value)
+			assert.Negative(t, cookie.MaxAge)
+		}
+		assert.Len(t, w.Result().Cookies(), 2)
 		auditMock.AssertExpectations(t)
 	})
 }

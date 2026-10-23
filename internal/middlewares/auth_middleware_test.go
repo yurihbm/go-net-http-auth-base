@@ -44,8 +44,9 @@ func TestAuthMiddleware_Use(t *testing.T) {
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
 		}).Return(&domain.VerifiedTokenData{
-			Subject: userUUID,
-			Role:    domain.RoleAdmin,
+			Subject:   userUUID,
+			SessionID: "test-session-uuid",
+			Role:      domain.RoleAdmin,
 		}, nil)
 
 		reqContextData := &shared.RequestContextData{}
@@ -78,6 +79,7 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		// Verify that the user UUID was added to the shared request context data
 		assert.Equal(t, userUUID, reqContextData.UserUUID)
 		assert.Equal(t, domain.RoleAdmin, reqContextData.UserRole)
+		assert.Equal(t, "test-session-uuid", reqContextData.SessionUUID)
 		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
