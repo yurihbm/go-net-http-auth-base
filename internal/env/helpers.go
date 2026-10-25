@@ -1,49 +1,41 @@
 package env
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
 )
 
-func GetEnvAsFloat(key string, defaultVal float64) float64 {
-	if value, exists := os.LookupEnv(key); exists {
-		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-			return floatVal
-		}
-	}
-	return defaultVal
-}
-
-func GetEnvAsInt(key string, defaultVal int) int {
-	if value, exists := os.LookupEnv(key); exists {
-		if intVal, err := strconv.Atoi(value); err == nil {
-			return intVal
-		}
-	}
-	return defaultVal
-}
-
-func GetEnvAsInt32(key string, defaultVal int32) int32 {
+func lookup[T any](key string, defaultVal T, parse func(string) (T, error)) (T, error) {
 	value, exists := os.LookupEnv(key)
 	if !exists || value == "" {
-		return defaultVal
+		return defaultVal, nil
 	}
-	parsed, err := strconv.ParseInt(value, 10, 32)
+	parsed, err := parse(value)
 	if err != nil {
-		return defaultVal
+		return defaultVal, fmt.Errorf("%s is invalid: %w", key, err)
 	}
-	return int32(parsed)
+	return parsed, nil
 }
 
-func GetEnvAsDuration(key string, defaultVal time.Duration) time.Duration {
-	value, exists := os.LookupEnv(key)
-	if !exists || value == "" {
-		return defaultVal
-	}
-	parsed, err := time.ParseDuration(value)
-	if err != nil {
-		return defaultVal
-	}
-	return parsed
+func LookupFloat(key string, defaultVal float64) (float64, error) {
+	return lookup(key, defaultVal, func(v string) (float64, error) {
+		return strconv.ParseFloat(v, 64)
+	})
+}
+
+func LookupInt(key string, defaultVal int) (int, error) {
+	return lookup(key, defaultVal, strconv.Atoi)
+}
+
+func LookupInt32(key string, defaultVal int32) (int32, error) {
+	return lookup(key, defaultVal, func(v string) (int32, error) {
+		parsed, err := strconv.ParseInt(v, 10, 32)
+		return int32(parsed), err
+	})
+}
+
+func LookupDuration(key string, defaultVal time.Duration) (time.Duration, error) {
+	return lookup(key, defaultVal, time.ParseDuration)
 }

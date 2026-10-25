@@ -26,34 +26,14 @@ func captureLogger(buf *bytes.Buffer) func() {
 }
 
 func TestNewSlowQueryTracer(t *testing.T) {
-	t.Run("uses default threshold when env var is unset", func(t *testing.T) {
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "")
-
-		tracer := postgres.NewSlowQueryTracer()
-
-		assert.Equal(t, 200*time.Millisecond, tracer.Threshold())
-	})
-
-	t.Run("reads threshold from env var", func(t *testing.T) {
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "500ms")
-
-		tracer := postgres.NewSlowQueryTracer()
+	t.Run("uses the given threshold", func(t *testing.T) {
+		tracer := postgres.NewSlowQueryTracer(500 * time.Millisecond)
 
 		assert.Equal(t, 500*time.Millisecond, tracer.Threshold())
 	})
 
-	t.Run("falls back to default on invalid env value", func(t *testing.T) {
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "not-a-duration")
-
-		tracer := postgres.NewSlowQueryTracer()
-
-		assert.Equal(t, 200*time.Millisecond, tracer.Threshold())
-	})
-
 	t.Run("accepts zero threshold", func(t *testing.T) {
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "0s")
-
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(0)
 
 		assert.Equal(t, time.Duration(0), tracer.Threshold())
 	})
@@ -61,7 +41,7 @@ func TestNewSlowQueryTracer(t *testing.T) {
 
 func TestSlowQueryTracer_TraceQueryStart(t *testing.T) {
 	t.Run("returns an enriched context with start time and SQL", func(t *testing.T) {
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(200 * time.Millisecond)
 		ctx := context.Background()
 
 		before := time.Now()
@@ -81,7 +61,7 @@ func TestSlowQueryTracer_TraceQueryStart(t *testing.T) {
 	})
 
 	t.Run("does not mutate the parent context", func(t *testing.T) {
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(200 * time.Millisecond)
 		parent := context.Background()
 
 		tracer.TraceQueryStart(parent, nil, pgx.TraceQueryStartData{
@@ -99,7 +79,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		restore := captureLogger(&buf)
 		defer restore()
 
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(200 * time.Millisecond)
 		tracer.TraceQueryEnd(context.Background(), nil, pgx.TraceQueryEndData{})
 
 		assert.Empty(t, buf.String())
@@ -110,8 +90,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		restore := captureLogger(&buf)
 		defer restore()
 
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "1h")
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(time.Hour)
 
 		ctx := tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{
 			SQL: "SELECT fast",
@@ -126,8 +105,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		restore := captureLogger(&buf)
 		defer restore()
 
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "0s")
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(0)
 
 		ctx := tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{
 			SQL: "SELECT slow",
@@ -146,8 +124,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		restore := captureLogger(&buf)
 		defer restore()
 
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "0s")
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(0)
 
 		ctx := context.WithValue(
 			context.Background(),
@@ -168,8 +145,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		restore := captureLogger(&buf)
 		defer restore()
 
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "0s")
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(0)
 
 		ctx := tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{
 			SQL: "SELECT 1",
@@ -185,8 +161,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		restore := captureLogger(&buf)
 		defer restore()
 
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "0s")
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(0)
 
 		ctx := context.WithValue(
 			context.Background(),
@@ -208,8 +183,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		restore := captureLogger(&buf)
 		defer restore()
 
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "0s")
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(0)
 
 		ctx := tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{
 			SQL: "SELECT bad",
@@ -227,8 +201,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		restore := captureLogger(&buf)
 		defer restore()
 
-		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "0s")
-		tracer := postgres.NewSlowQueryTracer()
+		tracer := postgres.NewSlowQueryTracer(0)
 
 		ctx := tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{
 			SQL: "SELECT ok",

@@ -141,6 +141,50 @@ func TestLoad(t *testing.T) {
 		}, cfg.Email)
 	})
 
+	invalidValues := []struct{ name, value string }{
+		{"SESSION_MAX_AGE", "abc"},
+		{"MAX_SESSIONS_PER_USER", "abc"},
+		{"RATE_LIMIT_REQUESTS_PER_SECOND", "abc"},
+		{"RATE_LIMIT_REQUESTS_PER_SECOND", "0"},
+		{"RATE_LIMIT_REQUESTS_PER_SECOND", "-1"},
+		{"RATE_LIMIT_REQUESTS_PER_SECOND", "NaN"},
+		{"RATE_LIMIT_REQUESTS_PER_SECOND", "Inf"},
+		{"RATE_LIMIT_REQUESTS_PER_SECOND", "-Inf"},
+		{"RATE_LIMIT_BURST", "abc"},
+		{"RATE_LIMIT_BURST", "0"},
+		{"DB_STATS_LOG_INTERVAL", "abc"},
+		{"DB_STATS_LOG_INTERVAL", "0s"},
+		{"DB_MAX_CONNS", "abc"},
+		{"DB_MAX_CONNS", "0"},
+		{"DB_MIN_CONNS", "abc"},
+		{"DB_MIN_CONNS", "-1"},
+		{"DB_MAX_CONN_LIFETIME", "abc"},
+		{"DB_MAX_CONN_LIFETIME", "0s"},
+		{"DB_MAX_CONN_IDLE_TIME", "abc"},
+		{"DB_MAX_CONN_IDLE_TIME", "-1m"},
+		{"DB_HEALTH_CHECK_PERIOD", "abc"},
+		{"DB_HEALTH_CHECK_PERIOD", "0s"},
+		{"DB_CONNECT_TIMEOUT", "abc"},
+		{"DB_CONNECT_TIMEOUT", "0s"},
+		{"DB_SLOW_QUERY_THRESHOLD", "500"},
+		{"DB_SLOW_QUERY_THRESHOLD", "-1ms"},
+	}
+
+	for _, tc := range invalidValues {
+		t.Run("error - "+tc.name+" is invalid: "+tc.value, func(t *testing.T) {
+			t.Setenv("JWT_SECRET", validJWTSecret)
+			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+			t.Setenv("API_ENV", "development")
+			t.Setenv(tc.name, tc.value)
+
+			cfg, err := config.Load()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.name)
+			assert.Nil(t, cfg)
+		})
+	}
+
 	emailVars := map[string]string{
 		"RESEND_API_KEY":         "re_key",
 		"EMAIL_FROM":             "no-reply@example.com",
@@ -282,9 +326,12 @@ func TestLoadDatabaseConfig(t *testing.T) {
 		t.Setenv("DB_MAX_CONN_IDLE_TIME", "")
 		t.Setenv("DB_HEALTH_CHECK_PERIOD", "")
 		t.Setenv("DB_CONNECT_TIMEOUT", "")
+		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "")
 
-		cfg := config.LoadDatabaseConfig()
+		cfg, err := config.LoadDatabaseConfig()
 
+		require.NoError(t, err)
+		assert.Equal(t, 200*time.Millisecond, cfg.SlowQueryThreshold)
 		assert.Equal(t, int32(25), cfg.MaxConns)
 		assert.Equal(t, int32(5), cfg.MinConns)
 		assert.Equal(t, time.Hour, cfg.MaxConnLifetime)
@@ -301,9 +348,12 @@ func TestLoadDatabaseConfig(t *testing.T) {
 		t.Setenv("DB_MAX_CONN_IDLE_TIME", "15m")
 		t.Setenv("DB_HEALTH_CHECK_PERIOD", "30s")
 		t.Setenv("DB_CONNECT_TIMEOUT", "5s")
+		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "500ms")
 
-		cfg := config.LoadDatabaseConfig()
+		cfg, err := config.LoadDatabaseConfig()
 
+		require.NoError(t, err)
+		assert.Equal(t, 500*time.Millisecond, cfg.SlowQueryThreshold)
 		assert.Equal(t, int32(10), cfg.MaxConns)
 		assert.Equal(t, int32(2), cfg.MinConns)
 		assert.Equal(t, 2*time.Hour, cfg.MaxConnLifetime)
@@ -312,13 +362,40 @@ func TestLoadDatabaseConfig(t *testing.T) {
 		assert.Equal(t, 5*time.Second, cfg.ConnectTimeout)
 	})
 
-	t.Run("caps MinConns to MaxConns when MinConns exceeds it", func(t *testing.T) {
+	t.Run("accepts zero DB_SLOW_QUERY_THRESHOLD", func(t *testing.T) {
+		t.Setenv("DB_SLOW_QUERY_THRESHOLD", "0s")
+
+		cfg, err := config.LoadDatabaseConfig()
+
+		require.NoError(t, err)
+		assert.Equal(t, time.Duration(0), cfg.SlowQueryThreshold)
+	})
+
+	t.Run("error - DB_MIN_CONNS exceeds DB_MAX_CONNS", func(t *testing.T) {
 		t.Setenv("DB_MAX_CONNS", "5")
 		t.Setenv("DB_MIN_CONNS", "20")
 
-		cfg := config.LoadDatabaseConfig()
+		_, err := config.LoadDatabaseConfig()
 
-		assert.Equal(t, int32(5), cfg.MaxConns)
-		assert.Equal(t, int32(5), cfg.MinConns)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "DB_MIN_CONNS")
 	})
+
+	for _, tc := range []struct{ name, value string }{
+		{"DB_MAX_CONNS", "abc"},
+		{"DB_MAX_CONNS", "3000000000"},
+		{"DB_MAX_CONNS", "0"},
+		{"DB_CONNECT_TIMEOUT", "abc"},
+		{"DB_SLOW_QUERY_THRESHOLD", "500"},
+		{"DB_SLOW_QUERY_THRESHOLD", "-1ms"},
+	} {
+		t.Run("error - "+tc.name+" is invalid: "+tc.value, func(t *testing.T) {
+			t.Setenv(tc.name, tc.value)
+
+			_, err := config.LoadDatabaseConfig()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.name)
+		})
+	}
 }
