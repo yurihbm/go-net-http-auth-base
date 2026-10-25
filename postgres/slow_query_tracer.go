@@ -5,13 +5,10 @@ import (
 	"log/slog"
 	"time"
 
-	"go-net-http-auth-base/internal/env"
 	"go-net-http-auth-base/internal/shared"
 
 	"github.com/jackc/pgx/v5"
 )
-
-const defaultSlowQueryThreshold = 200 * time.Millisecond
 
 type QueryTracerContextKey string
 
@@ -26,12 +23,10 @@ type SlowQueryTracer struct {
 
 var _ pgx.QueryTracer = (*SlowQueryTracer)(nil)
 
-// NewSlowQueryTracer returns a new SlowQueryTracer with the threshold
-// configured from the DB_SLOW_QUERY_THRESHOLD environment variable.
-func NewSlowQueryTracer() *SlowQueryTracer {
-	return &SlowQueryTracer{
-		threshold: env.GetEnvAsDuration("DB_SLOW_QUERY_THRESHOLD", defaultSlowQueryThreshold),
-	}
+// NewSlowQueryTracer returns a new SlowQueryTracer that logs queries slower
+// than threshold.
+func NewSlowQueryTracer(threshold time.Duration) *SlowQueryTracer {
+	return &SlowQueryTracer{threshold: threshold}
 }
 
 // Threshold returns the configured slow-query threshold.

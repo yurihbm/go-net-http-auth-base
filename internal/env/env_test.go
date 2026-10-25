@@ -9,114 +9,141 @@ import (
 	"go-net-http-auth-base/internal/env"
 )
 
-func TestGetEnvAsFloat(t *testing.T) {
+func TestLookupFloat(t *testing.T) {
 	t.Run("returns default when not set", func(t *testing.T) {
-		value := env.GetEnvAsFloat("NON_EXISTENT_ENV_VAR_FLOAT", 3.14)
+		value, err := env.LookupFloat("NON_EXISTENT_ENV_VAR_FLOAT", 3.14)
 
+		assert.NoError(t, err)
 		assert.Equal(t, 3.14, value)
 	})
 
 	t.Run("returns parsed value when set", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_FLOAT", "2.71")
 
-		value := env.GetEnvAsFloat("TEST_ENV_VAR_FLOAT", 3.14)
+		value, err := env.LookupFloat("TEST_ENV_VAR_FLOAT", 3.14)
 
+		assert.NoError(t, err)
 		assert.Equal(t, 2.71, value)
 	})
 
-	t.Run("returns default when value is invalid", func(t *testing.T) {
+	t.Run("error - invalid value", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_FLOAT", "not-a-float")
 
-		value := env.GetEnvAsFloat("TEST_ENV_VAR_FLOAT", 3.14)
+		_, err := env.LookupFloat("TEST_ENV_VAR_FLOAT", 3.14)
 
-		assert.Equal(t, 3.14, value)
+		assert.ErrorContains(t, err, "TEST_ENV_VAR_FLOAT")
 	})
 }
 
-func TestGetEnvAsInt(t *testing.T) {
+func TestLookupInt(t *testing.T) {
 	t.Run("returns default when not set", func(t *testing.T) {
-		value := env.GetEnvAsInt("NON_EXISTENT_ENV_VAR_INT", 42)
+		value, err := env.LookupInt("NON_EXISTENT_ENV_VAR_INT", 42)
 
+		assert.NoError(t, err)
+		assert.Equal(t, 42, value)
+	})
+
+	t.Run("returns default when set to empty string", func(t *testing.T) {
+		t.Setenv("TEST_ENV_VAR_INT", "")
+
+		value, err := env.LookupInt("TEST_ENV_VAR_INT", 42)
+
+		assert.NoError(t, err)
 		assert.Equal(t, 42, value)
 	})
 
 	t.Run("returns parsed value when set", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_INT", "7")
 
-		value := env.GetEnvAsInt("TEST_ENV_VAR_INT", 42)
+		value, err := env.LookupInt("TEST_ENV_VAR_INT", 42)
 
+		assert.NoError(t, err)
 		assert.Equal(t, 7, value)
 	})
 
-	t.Run("returns default when value is invalid", func(t *testing.T) {
+	t.Run("error - invalid value", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_INT", "not-an-int")
 
-		value := env.GetEnvAsInt("TEST_ENV_VAR_INT", 42)
+		_, err := env.LookupInt("TEST_ENV_VAR_INT", 42)
 
-		assert.Equal(t, 42, value)
+		assert.ErrorContains(t, err, "TEST_ENV_VAR_INT")
 	})
 }
 
-func TestGetEnvAsInt32(t *testing.T) {
+func TestLookupInt32(t *testing.T) {
 	t.Run("returns default when not set", func(t *testing.T) {
-		value := env.GetEnvAsInt32("NON_EXISTENT_ENV_VAR_INT32", 10)
+		value, err := env.LookupInt32("NON_EXISTENT_ENV_VAR_INT32", 10)
 
+		assert.NoError(t, err)
 		assert.Equal(t, int32(10), value)
 	})
 
 	t.Run("returns default when set to empty string", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_INT32", "")
 
-		value := env.GetEnvAsInt32("TEST_ENV_VAR_INT32", 10)
+		value, err := env.LookupInt32("TEST_ENV_VAR_INT32", 10)
 
+		assert.NoError(t, err)
 		assert.Equal(t, int32(10), value)
+	})
+
+	t.Run("error - value overflows int32", func(t *testing.T) {
+		t.Setenv("TEST_ENV_VAR_INT32", "3000000000")
+
+		_, err := env.LookupInt32("TEST_ENV_VAR_INT32", 10)
+
+		assert.ErrorContains(t, err, "TEST_ENV_VAR_INT32")
 	})
 
 	t.Run("returns parsed value when set", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_INT32", "99")
 
-		value := env.GetEnvAsInt32("TEST_ENV_VAR_INT32", 10)
+		value, err := env.LookupInt32("TEST_ENV_VAR_INT32", 10)
 
+		assert.NoError(t, err)
 		assert.Equal(t, int32(99), value)
 	})
 
-	t.Run("returns default when value is invalid", func(t *testing.T) {
+	t.Run("error - invalid value", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_INT32", "not-an-int32")
 
-		value := env.GetEnvAsInt32("TEST_ENV_VAR_INT32", 10)
+		_, err := env.LookupInt32("TEST_ENV_VAR_INT32", 10)
 
-		assert.Equal(t, int32(10), value)
+		assert.ErrorContains(t, err, "TEST_ENV_VAR_INT32")
 	})
 }
 
-func TestGetEnvAsDuration(t *testing.T) {
+func TestLookupDuration(t *testing.T) {
 	t.Run("returns default when not set", func(t *testing.T) {
-		value := env.GetEnvAsDuration("NON_EXISTENT_ENV_VAR_DURATION", 5*time.Second)
+		value, err := env.LookupDuration("NON_EXISTENT_ENV_VAR_DURATION", 5*time.Second)
 
+		assert.NoError(t, err)
 		assert.Equal(t, 5*time.Second, value)
 	})
 
 	t.Run("returns default when set to empty string", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_DURATION", "")
 
-		value := env.GetEnvAsDuration("TEST_ENV_VAR_DURATION", 5*time.Second)
+		value, err := env.LookupDuration("TEST_ENV_VAR_DURATION", 5*time.Second)
 
+		assert.NoError(t, err)
 		assert.Equal(t, 5*time.Second, value)
 	})
 
 	t.Run("returns parsed value when set", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_DURATION", "2m30s")
 
-		value := env.GetEnvAsDuration("TEST_ENV_VAR_DURATION", 5*time.Second)
+		value, err := env.LookupDuration("TEST_ENV_VAR_DURATION", 5*time.Second)
 
+		assert.NoError(t, err)
 		assert.Equal(t, 2*time.Minute+30*time.Second, value)
 	})
 
-	t.Run("returns default when value is invalid", func(t *testing.T) {
+	t.Run("error - invalid value", func(t *testing.T) {
 		t.Setenv("TEST_ENV_VAR_DURATION", "not-a-duration")
 
-		value := env.GetEnvAsDuration("TEST_ENV_VAR_DURATION", 5*time.Second)
+		_, err := env.LookupDuration("TEST_ENV_VAR_DURATION", 5*time.Second)
 
-		assert.Equal(t, 5*time.Second, value)
+		assert.ErrorContains(t, err, "TEST_ENV_VAR_DURATION")
 	})
 }

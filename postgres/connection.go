@@ -30,7 +30,7 @@ func NewConnectionPool(ctx context.Context, dbCfg config.DatabaseConfig) (*pgxpo
 	cfg.MaxConnLifetime = dbCfg.MaxConnLifetime
 	cfg.MaxConnIdleTime = dbCfg.MaxConnIdleTime
 	cfg.HealthCheckPeriod = dbCfg.HealthCheckPeriod
-	cfg.ConnConfig.Tracer = NewSlowQueryTracer()
+	cfg.ConnConfig.Tracer = NewSlowQueryTracer(dbCfg.SlowQueryThreshold)
 	cfg.ConnConfig.ConnectTimeout = dbCfg.ConnectTimeout
 
 	slog.Info("Connecting to database",

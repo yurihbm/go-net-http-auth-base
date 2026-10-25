@@ -446,25 +446,22 @@ Env var reading is currently scattered `os.Getenv` calls across the codebase
 factory, etc.), each with its own ad-hoc parsing and no shared validation. In a
 *template* this means every bootstrap re-invents (or forgets) validation.
 
-> **Note:** `config/config.go` already centralizes env loading and fail-fast validation (JWT secret, session max age, email settings); the tasks below have not been audited against it.
+> **Resolved:** `config/config.go` (top-level `config/` package, not `internal/config/`) is the single source of truth: `config.Load()` runs once in `cmd/main.go` and each factory receives its sub-config. Malformed values (`RATE_LIMIT_BURST=abc`, `DB_MAX_CONNS=10x`, bad durations) and out-of-range ones (non-positive rate limits, pool sizes, durations) now fail at boot with the variable name, via the error-returning `env.Lookup*` helpers. Non-finite rate limits (`NaN`/`Inf`) and `DB_MIN_CONNS` above `DB_MAX_CONNS` are rejected too, and `DB_SLOW_QUERY_THRESHOLD` now lives in `DatabaseConfig` (`postgres.NewSlowQueryTracer` takes the threshold as an argument). The only remaining direct env read is `API_ENV` in `cmd/main.go`, kept so the logger works before `Load`.
 
 **Tasks**:
 
-- [ ] Create `internal/config/config.go` with a `Config` struct covering all env vars (JWT secret, CORS origins, rate limits, OAuth client IDs/secrets, `API_ENV`, DB connection, etc.)
-- [ ] Implement a single `Load()` that parses (CSV lists, durations, bools) and validates (fail-fast) at startup — refuse to boot on missing/invalid required values (e.g. empty `JWT_SECRET`)
-- [ ] Call `config.Load()` once in `cmd/main.go` and inject the relevant sub-config into each factory instead of `os.Getenv` calls
-- [ ] Remove scattered `os.Getenv` calls from `auth_controller.go`, `auth_service.go`, `config/oauth.go`, `cors_factory.go`, rate-limit factory
-- [ ] Add config validation tests (missing/invalid env vars fail fast with a clear error)
+- [x] `Config` struct covering all env vars (JWT secret, CORS origins, rate limits, OAuth client IDs/secrets, `API_ENV`, DB connection, etc.) in `config/config.go`
+- [x] Single `Load()` that parses (CSV lists, durations, bools) and validates (fail-fast) at startup — refuses to boot on missing, malformed or out-of-range values
+- [x] Call `config.Load()` once in `cmd/main.go` and inject the relevant sub-config into each factory instead of `os.Getenv` calls
+- [x] Remove scattered `os.Getenv` calls from `auth_controller.go`, `auth_service.go`, `config/oauth.go`, `cors_factory.go`, rate-limit factory
+- [x] Add config validation tests (missing/invalid env vars fail fast with a clear error)
 
 **Files to modify**:
 
-- `internal/config/config.go` (create)
+- `config/config.go`
+- `internal/env/helpers.go`
+- `postgres/test.go`
 - `cmd/main.go`
-- `internal/controllers/auth_controller.go`
-- `internal/services/auth_service.go`
-- `internal/config/oauth.go`
-- `internal/factories/cors_factory.go`
-- `internal/factories/*.go` (rate limit and others reading env vars)
 
 #### 2.6.8 Refresh token revocation
 
