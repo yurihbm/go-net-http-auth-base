@@ -19,6 +19,10 @@ func lookup[T any](key string, defaultVal T, parse func(string) (T, error)) (T, 
 	return parsed, nil
 }
 
+func LookupBool(key string, defaultVal bool) (bool, error) {
+	return lookup(key, defaultVal, strconv.ParseBool)
+}
+
 func LookupFloat(key string, defaultVal float64) (float64, error) {
 	return lookup(key, defaultVal, func(v string) (float64, error) {
 		return strconv.ParseFloat(v, 64)

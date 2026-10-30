@@ -35,6 +35,43 @@ func TestLookupFloat(t *testing.T) {
 	})
 }
 
+func TestLookupBool(t *testing.T) {
+	t.Run("returns default when not set", func(t *testing.T) {
+		value, err := env.LookupBool("NON_EXISTENT_ENV_VAR_BOOL", true)
+
+		assert.NoError(t, err)
+		assert.True(t, value)
+	})
+
+	t.Run("returns default when set to empty string", func(t *testing.T) {
+		t.Setenv("TEST_ENV_VAR_BOOL", "")
+
+		value, err := env.LookupBool("TEST_ENV_VAR_BOOL", true)
+
+		assert.NoError(t, err)
+		assert.True(t, value)
+	})
+
+	for input, expected := range map[string]bool{"true": true, "1": true, "false": false, "0": false} {
+		t.Run("returns parsed value when set to "+input, func(t *testing.T) {
+			t.Setenv("TEST_ENV_VAR_BOOL", input)
+
+			value, err := env.LookupBool("TEST_ENV_VAR_BOOL", !expected)
+
+			assert.NoError(t, err)
+			assert.Equal(t, expected, value)
+		})
+	}
+
+	t.Run("error - invalid value", func(t *testing.T) {
+		t.Setenv("TEST_ENV_VAR_BOOL", "not-a-bool")
+
+		_, err := env.LookupBool("TEST_ENV_VAR_BOOL", false)
+
+		assert.ErrorContains(t, err, "TEST_ENV_VAR_BOOL")
+	})
+}
+
 func TestLookupInt(t *testing.T) {
 	t.Run("returns default when not set", func(t *testing.T) {
 		value, err := env.LookupInt("NON_EXISTENT_ENV_VAR_INT", 42)
