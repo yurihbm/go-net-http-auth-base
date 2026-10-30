@@ -17,8 +17,6 @@ func (p *logEmailProvider) Send(ctx context.Context, msg domain.EmailMessage) er
 	slog.InfoContext(ctx, "email not sent, logging instead",
 		"to", msg.To,
 		"subject", msg.Subject,
-		"text", msg.Text,
-		"html", msg.HTML,
 	)
 	return nil
 }
