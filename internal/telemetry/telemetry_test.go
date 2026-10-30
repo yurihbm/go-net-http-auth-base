@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -83,6 +84,26 @@ func TestNew(t *testing.T) {
 		assert.Equal(t, "test-service", attrs["service.name"])
 		assert.NotEmpty(t, attrs["service.version"])
 		assert.Equal(t, "staging", attrs["deployment.environment.name"])
+	})
+
+	t.Run("enabled - exposes go runtime metrics", func(t *testing.T) {
+		restoreGlobals(t)
+		reader := sdkmetric.NewManualReader()
+		telemetry.SetExtraMetricReaders(reader)
+		t.Cleanup(func() { telemetry.SetExtraMetricReaders() })
+
+		_, err := telemetry.New(context.Background(), enabledConfig(), "test")
+		require.NoError(t, err)
+
+		var rm metricdata.ResourceMetrics
+		require.NoError(t, reader.Collect(context.Background(), &rm))
+		names := []string{}
+		for _, sm := range rm.ScopeMetrics {
+			for _, m := range sm.Metrics {
+				names = append(names, m.Name)
+			}
+		}
+		assert.Contains(t, names, "go.goroutine.count")
 	})
 
 	t.Run("error - Shutdown returns error when context is already canceled", func(t *testing.T) {
