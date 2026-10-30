@@ -7,6 +7,8 @@ import (
 
 	"go-net-http-auth-base/config"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/multitracer"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,23 +17,11 @@ import (
 // controls the initial connection and ping timeout. All structured log
 // output goes to slog.Default(), which is configured at application startup
 // via logger.Setup().
-func NewConnectionPool(ctx context.Context, dbCfg config.DatabaseConfig) (*pgxpool.Pool, error) {
-	if dbCfg.URL == "" {
-		return nil, fmt.Errorf("DATABASE_URL not set in environment")
-	}
-
-	cfg, err := pgxpool.ParseConfig(dbCfg.URL)
+func NewConnectionPool(ctx context.Context, dbCfg config.DatabaseConfig, tracers ...pgx.QueryTracer) (*pgxpool.Pool, error) {
+	cfg, err := newPoolConfig(dbCfg, tracers...)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse DATABASE_URL: %w", err)
+		return nil, err
 	}
-
-	cfg.MaxConns = dbCfg.MaxConns
-	cfg.MinConns = dbCfg.MinConns
-	cfg.MaxConnLifetime = dbCfg.MaxConnLifetime
-	cfg.MaxConnIdleTime = dbCfg.MaxConnIdleTime
-	cfg.HealthCheckPeriod = dbCfg.HealthCheckPeriod
-	cfg.ConnConfig.Tracer = NewSlowQueryTracer(dbCfg.SlowQueryThreshold)
-	cfg.ConnConfig.ConnectTimeout = dbCfg.ConnectTimeout
 
 	slog.Info("Connecting to database",
 		"max_conns", cfg.MaxConns,
@@ -61,6 +51,32 @@ func NewConnectionPool(ctx context.Context, dbCfg config.DatabaseConfig) (*pgxpo
 	)
 
 	return pool, nil
+}
+
+func newPoolConfig(dbCfg config.DatabaseConfig, tracers ...pgx.QueryTracer) (*pgxpool.Config, error) {
+	if dbCfg.URL == "" {
+		return nil, fmt.Errorf("DATABASE_URL not set in environment")
+	}
+
+	cfg, err := pgxpool.ParseConfig(dbCfg.URL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse DATABASE_URL: %w", err)
+	}
+
+	cfg.MaxConns = dbCfg.MaxConns
+	cfg.MinConns = dbCfg.MinConns
+	cfg.MaxConnLifetime = dbCfg.MaxConnLifetime
+	cfg.MaxConnIdleTime = dbCfg.MaxConnIdleTime
+	cfg.HealthCheckPeriod = dbCfg.HealthCheckPeriod
+	slow := NewSlowQueryTracer(dbCfg.SlowQueryThreshold)
+	if len(tracers) == 0 {
+		cfg.ConnConfig.Tracer = slow
+	} else {
+		cfg.ConnConfig.Tracer = multitracer.New(append([]pgx.QueryTracer{slow}, tracers...)...)
+	}
+	cfg.ConnConfig.ConnectTimeout = dbCfg.ConnectTimeout
+
+	return cfg, nil
 }
 
 // LogPoolStats emits a structured log line with current pool statistics.
