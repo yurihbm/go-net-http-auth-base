@@ -49,7 +49,7 @@ func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*d
 	}
 
 	if err := s.emailVerification.SendVerificationEmail(ctx, created); err != nil {
-		slog.Error("verification email failed", "error", err, "user_uuid", created.UUID)
+		slog.ErrorContext(ctx, "verification email failed", "error", err, "user_uuid", created.UUID)
 	}
 
 	return created, nil

@@ -71,5 +71,5 @@ func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data p
 		args = append(args, "error", data.Err)
 	}
 
-	slog.Warn("slow query detected", args...)
+	slog.WarnContext(ctx, "slow query detected", args...)
 }
