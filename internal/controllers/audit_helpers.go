@@ -22,6 +22,6 @@ func auditLog(r *http.Request, auditService domain.AuditService, dto domain.Crea
 	dto.UserAgent = ua
 
 	if err := auditService.Log(r.Context(), dto); err != nil {
-		slog.Error("audit log failed", "error", err, "action", dto.Action)
+		slog.ErrorContext(r.Context(), "audit log failed", "error", err, "action", dto.Action)
 	}
 }

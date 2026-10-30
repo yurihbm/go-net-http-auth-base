@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // captureLogger replaces slog.Default with a JSON logger writing to buf.
@@ -119,6 +120,23 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		assert.Contains(t, logOutput, `"sql":"SELECT slow"`)
 	})
 
+	t.Run("carries trace context when ctx has a span", func(t *testing.T) {
+		var buf bytes.Buffer
+		restore := captureLogger(&buf)
+		defer restore()
+		slog.SetDefault(slog.New(&spanAttrHandler{inner: slog.Default().Handler()}))
+
+		tracer := postgres.NewSlowQueryTracer(0)
+		ctx := tracer.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{SQL: "SELECT slow"})
+		ctx = trace.ContextWithSpanContext(ctx, trace.NewSpanContext(trace.SpanContextConfig{
+			TraceID: trace.TraceID{1},
+			SpanID:  trace.SpanID{1},
+		}))
+		tracer.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{})
+
+		assert.Contains(t, buf.String(), `"has_span":true`)
+	})
+
 	t.Run("includes request_uuid in log when present in context", func(t *testing.T) {
 		var buf bytes.Buffer
 		restore := captureLogger(&buf)
@@ -211,4 +229,23 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		logOutput := buf.String()
 		assert.NotContains(t, logOutput, `"error"`)
 	})
+}
+
+type spanAttrHandler struct{ inner slog.Handler }
+
+func (h *spanAttrHandler) Enabled(ctx context.Context, l slog.Level) bool {
+	return h.inner.Enabled(ctx, l)
+}
+
+func (h *spanAttrHandler) Handle(ctx context.Context, r slog.Record) error {
+	r.AddAttrs(slog.Bool("has_span", trace.SpanContextFromContext(ctx).IsValid()))
+	return h.inner.Handle(ctx, r)
+}
+
+func (h *spanAttrHandler) WithAttrs(a []slog.Attr) slog.Handler {
+	return &spanAttrHandler{inner: h.inner.WithAttrs(a)}
+}
+
+func (h *spanAttrHandler) WithGroup(n string) slog.Handler {
+	return &spanAttrHandler{inner: h.inner.WithGroup(n)}
 }
