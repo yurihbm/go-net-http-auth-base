@@ -9,8 +9,12 @@ import (
 	"go-net-http-auth-base/internal/controllers"
 	"go-net-http-auth-base/internal/factories"
 	"go-net-http-auth-base/internal/middlewares"
+	"go-net-http-auth-base/internal/telemetry"
 
 	"github.com/stretchr/testify/assert"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 // newTestConfig builds a minimal config with all required fields set.
@@ -128,4 +132,40 @@ func TestRequestUUIDFactory(t *testing.T) {
 
 	assert.NotNil(t, middleware)
 	assert.IsType(t, &middlewares.RequestUUIDMiddleware{}, middleware)
+}
+
+func TestTelemetryFactory(t *testing.T) {
+	newTelemetry := func(enabled bool) (*telemetry.Telemetry, *tracetest.SpanRecorder) {
+		recorder := tracetest.NewSpanRecorder()
+		return &telemetry.Telemetry{
+			Enabled:        enabled,
+			TracerProvider: sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)),
+			MeterProvider:  metricnoop.NewMeterProvider(),
+		}, recorder
+	}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+
+	t.Run("disabled - returns pass-through", func(t *testing.T) {
+		tel, recorder := newTelemetry(false)
+		middleware := factories.TelemetryFactory(tel, "api.test")
+		w := httptest.NewRecorder()
+
+		middleware.Use(next).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		assert.Equal(t, http.StatusTeapot, w.Code)
+		assert.Empty(t, recorder.Ended())
+	})
+
+	t.Run("enabled - wraps handler", func(t *testing.T) {
+		tel, recorder := newTelemetry(true)
+		middleware := factories.TelemetryFactory(tel, "api.test")
+		w := httptest.NewRecorder()
+
+		middleware.Use(next).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		assert.Equal(t, http.StatusTeapot, w.Code)
+		assert.Len(t, recorder.Ended(), 1)
+	})
 }
