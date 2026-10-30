@@ -14,6 +14,7 @@ import (
 	"go-net-http-auth-base/internal/factories"
 	"go-net-http-auth-base/internal/infra"
 	"go-net-http-auth-base/internal/logger"
+	"go-net-http-auth-base/internal/telemetry"
 	"go-net-http-auth-base/postgres"
 
 	"github.com/joho/godotenv"
@@ -60,6 +61,12 @@ func main() {
 		syscall.SIGTERM,
 	)
 	defer stopBackgroundTasks()
+
+	tel, err := telemetry.New(ctx, cfg.Telemetry, cfg.Env)
+	if err != nil {
+		slog.Error("Failed to initialize telemetry", "error", err)
+		os.Exit(1)
+	}
 
 	pool, err := postgres.NewConnectionPool(ctx, cfg.Database)
 	if err != nil {
@@ -169,4 +176,11 @@ func main() {
 	shutdownWg.Wait()
 
 	slog.Info("Server exited gracefully")
+
+	telemetryCtx, cancelTelemetry := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelTelemetry()
+
+	if err := tel.Shutdown(telemetryCtx); err != nil {
+		slog.Error("Failed to shutdown telemetry", "error", err)
+	}
 }
