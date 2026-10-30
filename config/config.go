@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -32,6 +33,10 @@ const (
 
 	defaultSessionMaxAge      = 30 * 24 * time.Hour
 	defaultMaxSessionsPerUser = 10
+
+	defaultOTelServiceName = "go-net-http-auth-base"
+	defaultOTelEndpoint    = "http://localhost:4318"
+	defaultOTelSampleRatio = 1.0
 )
 
 // Config is the single source of truth for every environment variable the
@@ -50,6 +55,7 @@ type Config struct {
 	CORS      CORSConfig
 	RateLimit RateLimitConfig
 	Email     EmailConfig
+	Telemetry TelemetryConfig
 
 	DBStatsLogInterval time.Duration
 }
@@ -89,6 +95,13 @@ type EmailConfig struct {
 	ResendAPIKey    string
 	From            string
 	VerificationURL string
+}
+
+type TelemetryConfig struct {
+	Enabled     bool
+	ServiceName string
+	Endpoint    string
+	SampleRatio float64
 }
 
 type RateLimitConfig struct {
@@ -179,6 +192,13 @@ func Load() (*Config, error) {
 			VerificationURL: os.Getenv("EMAIL_VERIFICATION_URL"),
 		},
 
+		Telemetry: TelemetryConfig{
+			Enabled:     read(r, env.LookupBool, "OTEL_ENABLED", false),
+			ServiceName: valueOrDefault(os.Getenv("OTEL_SERVICE_NAME"), defaultOTelServiceName),
+			Endpoint:    valueOrDefault(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"), defaultOTelEndpoint),
+			SampleRatio: read(r, env.LookupFloat, "OTEL_TRACES_SAMPLER_ARG", defaultOTelSampleRatio),
+		},
+
 		DBStatsLogInterval: read(r, env.LookupDuration, "DB_STATS_LOG_INTERVAL", defaultDBStatsLogInterval),
 	}
 
@@ -204,6 +224,17 @@ func Load() (*Config, error) {
 
 	if cfg.DBStatsLogInterval <= 0 {
 		return nil, errors.New("DB_STATS_LOG_INTERVAL must be positive")
+	}
+
+	if ratio := cfg.Telemetry.SampleRatio; !(ratio >= 0 && ratio <= 1) {
+		return nil, errors.New("OTEL_TRACES_SAMPLER_ARG must be between 0 and 1")
+	}
+
+	if cfg.Telemetry.Enabled {
+		endpoint, err := url.Parse(cfg.Telemetry.Endpoint)
+		if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" {
+			return nil, errors.New("OTEL_EXPORTER_OTLP_ENDPOINT must be a valid http or https URL")
+		}
 	}
 
 	if cfg.IsProduction() && len(cfg.OAuth.CallbackAllowList) == 0 {
@@ -287,6 +318,13 @@ func (c *Config) IsProduction() bool {
 
 func (c *Config) IsDevelopment() bool {
 	return c.Env == "development"
+}
+
+func valueOrDefault(value, defaultVal string) string {
+	if value == "" {
+		return defaultVal
+	}
+	return value
 }
 
 func parseCommaSeparated(value string) []string {
