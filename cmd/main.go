@@ -92,6 +92,19 @@ func main() {
 	}
 	defer pool.Close()
 
+	if tel.Enabled {
+		poolMetrics, err := postgres.RegisterPoolMetrics(pool, tel.MeterProvider)
+		if err != nil {
+			slog.Error("Failed to register database pool metrics", "error", err)
+			os.Exit(1)
+		}
+		defer func() {
+			if err := poolMetrics.Unregister(); err != nil {
+				slog.Error("Failed to unregister database pool metrics", "error", err)
+			}
+		}()
+	}
+
 	// Initialize and run Partition Manager
 	partitionManager := infra.NewAuditLogsPartitionManager(pool)
 	if err := partitionManager.RunMaintenance(ctx); err != nil {
