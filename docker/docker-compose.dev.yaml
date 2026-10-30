@@ -23,8 +23,21 @@ services:
     depends_on:
       - db
 
+  lgtm:
+    image: grafana/otel-lgtm:0.38.1
+    container_name: ${PROJECT_NAME:-auth-base}-lgtm-dev
+    restart: always
+    ports:
+      - "3000:3000"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - lgtm_data:/data
+
 volumes:
   postgres_data:
     name: ${PROJECT_NAME:-auth-base}_pg_data_dev
   pgadmin_data:
     name: ${PROJECT_NAME:-auth-base}_pgadmin_data_dev
+  lgtm_data:
+    name: ${PROJECT_NAME:-auth-base}_lgtm_data_dev

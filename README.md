@@ -142,12 +142,19 @@ go test ./... -cover             # Run with coverage report
 
 ### Docker for Development
 
-You may use the `docker/docker-compose.dev.yaml` file for development. It provides a local Postgres Database (localhost:5432) and the pgAdmin application (localhost:5050). You should provide a valid .env file.
+You may use the `docker/docker-compose.dev.yaml` file for development. It provides a local Postgres Database (localhost:5432) and the pgAdmin application (localhost:5050) and the Grafana LGTM stack (Grafana at http://localhost:3000, default `admin`/`admin`; OTLP gRPC on 4317 and OTLP HTTP on 4318). You should provide a valid .env file.
 
 ```bash
 docker compose --env-file .env -f docker/docker-compose.dev.yaml up -d --build  # Start services
 docker compose -f docker/docker-compose.dev.yaml down                           # Stop services
 docker compose -f docker/docker-compose.dev.yaml logs                           # View logs
+```
+
+To send traces and metrics to the LGTM stack, set these variables in your `.env`:
+
+```bash
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ```
 
 ### Docker for Production
