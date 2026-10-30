@@ -629,7 +629,7 @@ Grafana LGTM stack.
 **Tasks**:
 
 - [x] Single OTel SDK init (traces + metrics + logs exporters), gated by `OTEL_ENABLED`, with graceful shutdown — lives in one place (`internal/providers` or a small `internal/telemetry`)
-- [ ] HTTP RED metrics + spans in a dedicated `TelemetryMiddleware` (otel directly)
+- [x] HTTP RED metrics + spans in a dedicated `TelemetryMiddleware` (otel directly)
 - [ ] DB tracing + `db.query.duration` via a pgx `QueryTracer` (otel directly, co-located with `postgres`)
 - [ ] Pool gauges + Go runtime metrics (`otel ... /instrumentation/runtime`)
 - [ ] Log export to Loki: `slog` → `otelslog` bridge via a fan-out handler (keep stdout), automatic `trace_id` correlation
