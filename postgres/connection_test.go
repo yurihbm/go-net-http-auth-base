@@ -8,6 +8,7 @@ import (
 	"go-net-http-auth-base/config"
 	"go-net-http-auth-base/postgres"
 
+	"github.com/jackc/pgx/v5/multitracer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,5 +42,29 @@ func TestNewConnectionPool(t *testing.T) {
 		})
 
 		require.Error(t, err)
+	})
+
+	t.Run("no extras - slow query tracer only", func(t *testing.T) {
+		cfg, err := postgres.NewPoolConfig(config.DatabaseConfig{
+			URL: "postgres://user:pass@localhost:19999/db?sslmode=disable",
+		})
+
+		require.NoError(t, err)
+		assert.IsType(t, &postgres.SlowQueryTracer{}, cfg.ConnConfig.Tracer)
+	})
+
+	t.Run("composes extra tracers with slow query tracer", func(t *testing.T) {
+		extra := postgres.NewSlowQueryTracer(time.Second)
+
+		cfg, err := postgres.NewPoolConfig(config.DatabaseConfig{
+			URL: "postgres://user:pass@localhost:19999/db?sslmode=disable",
+		}, extra)
+
+		require.NoError(t, err)
+		multi, ok := cfg.ConnConfig.Tracer.(*multitracer.Tracer)
+		require.True(t, ok)
+		require.Len(t, multi.QueryTracers, 2)
+		assert.IsType(t, &postgres.SlowQueryTracer{}, multi.QueryTracers[0])
+		assert.Same(t, extra, multi.QueryTracers[1])
 	})
 }

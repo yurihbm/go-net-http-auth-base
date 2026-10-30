@@ -18,6 +18,7 @@ import (
 	"go-net-http-auth-base/internal/telemetry"
 	"go-net-http-auth-base/postgres"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 )
 
@@ -69,7 +70,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	pool, err := postgres.NewConnectionPool(ctx, cfg.Database)
+	var dbTracers []pgx.QueryTracer
+	if tel.Enabled {
+		otelQueryTracer, err := postgres.NewOTelQueryTracer(tel.TracerProvider, tel.MeterProvider)
+		if err != nil {
+			slog.Error("Failed to create database telemetry tracer", "error", err)
+			os.Exit(1)
+		}
+		dbTracers = append(dbTracers, otelQueryTracer)
+	}
+
+	pool, err := postgres.NewConnectionPool(ctx, cfg.Database, dbTracers...)
 	if err != nil {
 		slog.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
