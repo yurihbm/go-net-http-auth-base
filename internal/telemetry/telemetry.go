@@ -9,6 +9,7 @@ import (
 
 	"go-net-http-auth-base/config"
 
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -28,6 +29,18 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
 
+type options struct {
+	metricReaders []sdkmetric.Reader
+}
+
+type Option func(*options)
+
+func WithMetricReader(reader sdkmetric.Reader) Option {
+	return func(o *options) {
+		o.metricReaders = append(o.metricReaders, reader)
+	}
+}
+
 type Telemetry struct {
 	Enabled        bool
 	TracerProvider trace.TracerProvider
@@ -39,7 +52,12 @@ type Telemetry struct {
 	shutdownLogs    func(context.Context) error
 }
 
-func New(ctx context.Context, cfg config.TelemetryConfig, environment string) (*Telemetry, error) {
+func New(ctx context.Context, cfg config.TelemetryConfig, environment string, opts ...Option) (*Telemetry, error) {
+	var settings options
+	for _, opt := range opts {
+		opt(&settings)
+	}
+
 	if !cfg.Enabled {
 		return &Telemetry{
 			TracerProvider: tracenoop.NewTracerProvider(),
@@ -71,14 +89,22 @@ func New(ctx context.Context, cfg config.TelemetryConfig, environment string) (*
 		sdktrace.WithSampler(newSampler(cfg.SampleRatio)),
 		sdktrace.WithBatcher(traceExporter),
 	)
-	mp := sdkmetric.NewMeterProvider(
+	meterOptions := []sdkmetric.Option{
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter)),
-	)
+	}
+	for _, reader := range settings.metricReaders {
+		meterOptions = append(meterOptions, sdkmetric.WithReader(reader))
+	}
+	mp := sdkmetric.NewMeterProvider(meterOptions...)
 	lp := sdklog.NewLoggerProvider(
 		sdklog.WithResource(res),
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(logExporter)),
 	)
+
+	if err := runtime.Start(runtime.WithMeterProvider(mp)); err != nil {
+		return nil, errors.Join(err, tp.Shutdown(ctx), mp.Shutdown(ctx), lp.Shutdown(ctx))
+	}
 
 	errorLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
