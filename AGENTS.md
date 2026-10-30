@@ -456,3 +456,10 @@ func (m *UsersServiceMock) GetByUUID(uuid string) (*domain.User, error) {
 - **Interface-Driven Design**: Program to interfaces, not implementations. This allows easy mocking and testing.
 - **Zero Comments**: The code is self-documenting; avoid comments unless explaining complex business logic.
 - **Exact Errors**: Don't wrap errors unnecessarily; return them as-is unless adding valuable context.
+
+### Telemetry
+
+- **SDK used directly**: `internal/telemetry` (`telemetry.New`, `Shutdown`) bootstraps the OpenTelemetry SDK once in `cmd/main.go` (OTLP/HTTP traces, metrics and logs) and flushes it after the server shuts down.
+- **Dependency Rule**: `go.opentelemetry.io/otel*` may only be imported in `internal/telemetry`, `internal/middlewares`, `internal/logger`, `internal/factories`, `postgres` and `cmd`; never in `services`, `controllers`, `domain` or `repositories`.
+- **No Domain Abstraction**: There is deliberately no `TelemetryProvider`/`Tracer`/`Meter` interface, no NoOp provider and no telemetry mocks.
+- **Gating**: Everything is gated by `OTEL_ENABLED` (default `false`, which wires nothing and returns no-op providers). `OTEL_ENABLED`, `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_TRACES_SAMPLER_ARG` are loaded and validated in `config/config.go`.
