@@ -63,7 +63,7 @@ func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data p
 		"sql", sql,
 	}
 
-	if reqData, ok := ctx.Value(shared.RequestContextDataKey).(shared.RequestContextData); ok && reqData.RequestUUID != "" {
+	if reqData, ok := ctx.Value(shared.RequestContextDataKey).(*shared.RequestContextData); ok && reqData != nil && reqData.RequestUUID != "" {
 		args = append(args, "request_uuid", reqData.RequestUUID)
 	}
 
