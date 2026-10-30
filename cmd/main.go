@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -118,14 +119,17 @@ func main() {
 	rateLimitMiddleware := factories.RateLimitFactory(cfg.RateLimit)
 	corsMiddleware := factories.CORSFactory(cfg.CORS)
 	loggerMiddleware := factories.LoggerFactory()
+	telemetryMiddleware := factories.TelemetryFactory(tel, net.JoinHostPort(cfg.Telemetry.ServiceName, cfg.Port))
 	requestIDMiddleware := factories.RequestUUIDFactory()
 	requestContextDataMiddleware := factories.RequestContextDataFactory()
 	handler := requestContextDataMiddleware.Use(
 		requestIDMiddleware.Use(
-			loggerMiddleware.Use(
-				corsMiddleware.Use(
-					rateLimitMiddleware.Use(
-						mux,
+			telemetryMiddleware.Use(
+				loggerMiddleware.Use(
+					corsMiddleware.Use(
+						rateLimitMiddleware.Use(
+							mux,
+						),
 					),
 				),
 			),
