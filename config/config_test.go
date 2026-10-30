@@ -141,6 +141,98 @@ func TestLoad(t *testing.T) {
 		}, cfg.Email)
 	})
 
+	t.Run("applies telemetry defaults", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("OTEL_ENABLED", "")
+		t.Setenv("OTEL_SERVICE_NAME", "")
+		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+		t.Setenv("OTEL_TRACES_SAMPLER_ARG", "")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Equal(t, config.TelemetryConfig{
+			Enabled:     false,
+			ServiceName: "go-net-http-auth-base",
+			Endpoint:    "http://localhost:4318",
+			SampleRatio: 1,
+		}, cfg.Telemetry)
+	})
+
+	t.Run("reads and parses telemetry vars", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("OTEL_ENABLED", "true")
+		t.Setenv("OTEL_SERVICE_NAME", "my-service")
+		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://collector.example.com:4318")
+		t.Setenv("OTEL_TRACES_SAMPLER_ARG", "0.25")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Equal(t, config.TelemetryConfig{
+			Enabled:     true,
+			ServiceName: "my-service",
+			Endpoint:    "https://collector.example.com:4318",
+			SampleRatio: 0.25,
+		}, cfg.Telemetry)
+	})
+
+	telemetryErrors := []struct{ name, value, errVar string }{
+		{"OTEL_ENABLED", "maybe", "OTEL_ENABLED"},
+		{"OTEL_TRACES_SAMPLER_ARG", "abc", "OTEL_TRACES_SAMPLER_ARG"},
+		{"OTEL_TRACES_SAMPLER_ARG", "-0.1", "OTEL_TRACES_SAMPLER_ARG"},
+		{"OTEL_TRACES_SAMPLER_ARG", "1.1", "OTEL_TRACES_SAMPLER_ARG"},
+		{"OTEL_TRACES_SAMPLER_ARG", "NaN", "OTEL_TRACES_SAMPLER_ARG"},
+	}
+
+	for _, tc := range telemetryErrors {
+		t.Run("error - "+tc.name+" is invalid: "+tc.value, func(t *testing.T) {
+			t.Setenv("JWT_SECRET", validJWTSecret)
+			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+			t.Setenv("API_ENV", "development")
+			t.Setenv(tc.name, tc.value)
+
+			cfg, err := config.Load()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.errVar)
+			assert.Nil(t, cfg)
+		})
+	}
+
+	for _, endpoint := range []string{"collector:4318", "ftp://collector:4318", "http://", "://bad"} {
+		t.Run("error - OTEL_EXPORTER_OTLP_ENDPOINT is invalid when enabled: "+endpoint, func(t *testing.T) {
+			t.Setenv("JWT_SECRET", validJWTSecret)
+			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+			t.Setenv("API_ENV", "development")
+			t.Setenv("OTEL_ENABLED", "true")
+			t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", endpoint)
+
+			cfg, err := config.Load()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "OTEL_EXPORTER_OTLP_ENDPOINT")
+			assert.Nil(t, cfg)
+		})
+	}
+
+	t.Run("ignores invalid OTEL_EXPORTER_OTLP_ENDPOINT when disabled", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("OTEL_ENABLED", "false")
+		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "collector:4318")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Equal(t, "collector:4318", cfg.Telemetry.Endpoint)
+	})
+
 	invalidValues := []struct{ name, value string }{
 		{"SESSION_MAX_AGE", "abc"},
 		{"MAX_SESSIONS_PER_USER", "abc"},
