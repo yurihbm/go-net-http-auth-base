@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: "go-net-http-auth-base"
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /otel-lgtm/custom-dashboards
+      foldersFromFilesStructure: false

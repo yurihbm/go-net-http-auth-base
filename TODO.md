@@ -374,7 +374,7 @@ re-introduces them.
 - [x] Document the real validation approach (after 2.6.2)
 - [x] Document the composition-root wiring (after 2.6.3)
 - [x] Document the `OAuthLogin` service pattern — controllers stay thin (after 2.6.9)
-- [ ] Add the dependency rule for telemetry: `otel` only in infra/adapters, never in `services`/`controllers` (after 2.7)
+- [x] Add the dependency rule for telemetry: `otel` only in infra/adapters, never in `services`/`controllers` (after 2.7)
 
 **Files to modify**:
 
@@ -633,7 +633,7 @@ Grafana LGTM stack.
 - [x] DB tracing + `db.client.operation.duration` via a pgx `QueryTracer` (otel directly, co-located with `postgres`)
 - [x] Pool gauges + Go runtime metrics (`otel ... /instrumentation/runtime`)
 - [x] Log export to Loki: `slog` → `otelslog` bridge via a fan-out handler (keep stdout), automatic `trace_id` correlation
-- [ ] Grafana LGTM in the **dev** compose + starter dashboards (API RED, Go runtime, Database)
+- [x] Grafana LGTM in the **dev** compose + starter dashboards (API RED, Go runtime, Database)
 - [x] **Explicitly NOT building:** `domain.{TelemetryProvider,Tracer,Meter,Span,Counter,Histogram,Gauge}` interfaces, a NoOp provider, or telemetry mocks
 
 ---
@@ -646,7 +646,7 @@ Grafana LGTM stack.
 - [x] Request IDs appear in all logs
 - [x] `context.Context` propagated uniformly across all layers (2.6.1)
 - [x] Input validation is real and tested (2.6.2)
-- [ ] Telemetry & observability operational (lean approach — see 2.7)
+- [x] Telemetry & observability operational (lean approach — see 2.7)
 - [ ] Test coverage remains >85%
 - [ ] All Phase 2 features are tested
 
