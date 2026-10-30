@@ -129,7 +129,7 @@ func TestSlowQueryTracer_TraceQueryEnd(t *testing.T) {
 		ctx := context.WithValue(
 			context.Background(),
 			shared.RequestContextDataKey,
-			shared.RequestContextData{RequestUUID: "test-req-uuid"},
+			&shared.RequestContextData{RequestUUID: "test-req-uuid"},
 		)
 		ctx = tracer.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{
 			SQL: "SELECT 1",
