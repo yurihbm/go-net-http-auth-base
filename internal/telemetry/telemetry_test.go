@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -78,7 +77,6 @@ func TestNew(t *testing.T) {
 		assert.Same(t, tel.MeterProvider, otel.GetMeterProvider())
 		assert.Contains(t, otel.GetTextMapPropagator().Fields(), "traceparent")
 		assert.Contains(t, otel.GetTextMapPropagator().Fields(), "baggage")
-		var _ propagation.TextMapPropagator = otel.GetTextMapPropagator()
 	})
 
 	t.Run("enabled - resource has service.name, service.version and deployment.environment.name", func(t *testing.T) {
@@ -93,7 +91,7 @@ func TestNew(t *testing.T) {
 		require.True(t, ok)
 		attrs := map[string]string{}
 		for _, kv := range readable.Resource().Attributes() {
-			attrs[string(kv.Key)] = kv.Value.Emit()
+			attrs[string(kv.Key)] = kv.Value.String()
 		}
 		assert.Equal(t, "test-service", attrs["service.name"])
 		assert.NotEmpty(t, attrs["service.version"])
