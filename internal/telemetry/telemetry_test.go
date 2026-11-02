@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -144,6 +145,24 @@ func TestNew(t *testing.T) {
 		defer span.End()
 
 		assert.False(t, span.SpanContext().IsSampled())
+	})
+
+	t.Run("enabled - exposes go runtime metrics", func(t *testing.T) {
+		restoreGlobals(t)
+		reader := sdkmetric.NewManualReader()
+
+		_, err := telemetry.New(context.Background(), enabledConfig(), "test", telemetry.WithMetricReader(reader))
+		require.NoError(t, err)
+
+		var rm metricdata.ResourceMetrics
+		require.NoError(t, reader.Collect(context.Background(), &rm))
+		names := []string{}
+		for _, sm := range rm.ScopeMetrics {
+			for _, m := range sm.Metrics {
+				names = append(names, m.Name)
+			}
+		}
+		assert.Contains(t, names, "go.goroutine.count")
 	})
 
 	t.Run("error - Shutdown returns error when context is already canceled", func(t *testing.T) {
