@@ -292,7 +292,7 @@ func (c *AuthController) redirectOAuthProviderError(
 		errorCode = providerError
 	}
 
-	slog.Warn("oauth provider returned an error",
+	slog.WarnContext(r.Context(), "oauth provider returned an error",
 		"provider", providerName,
 		"error", errorCode,
 		"error_description_length", len(providerErrorDescription),

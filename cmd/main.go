@@ -20,6 +20,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
 )
 
 // runEvery runs fn on every interval tick until ctx is cancelled.
@@ -72,6 +73,11 @@ func main() {
 
 	var dbTracers []pgx.QueryTracer
 	if tel.Enabled {
+		logger.Setup(
+			cfg.IsProduction(),
+			otelslog.NewHandler(cfg.Telemetry.ServiceName, otelslog.WithLoggerProvider(tel.LoggerProvider)),
+		)
+
 		otelQueryTracer, err := postgres.NewOTelQueryTracer(tel.TracerProvider, tel.MeterProvider)
 		if err != nil {
 			slog.Error("Failed to create database telemetry tracer", "error", err)
