@@ -271,6 +271,25 @@ All API responses follow a standardized format defined in `internal/api/response
 }
 ```
 
+## 📈 Observability
+
+Traces, metrics and logs are exported with OpenTelemetry (OTLP/HTTP) and are disabled by default.
+
+1. Start the Grafana LGTM stack with the dev compose (`docker compose --env-file .env -f docker/docker-compose.dev.yaml up -d lgtm`).
+2. Set `OTEL_ENABLED=true` in `.env` (the default endpoint `http://localhost:4318` points at LGTM) and start the API.
+3. Open Grafana at http://localhost:3000 (`admin`/`admin`).
+
+Three dashboards are provisioned from `docker/grafana/dashboards/`: **API RED** (rate, errors, duration), **Go runtime** and **Database** (query latency and connection pool). Use the `service` variable to pick the service.
+
+Logs carry `trace_id`/`span_id`, so a trace in Tempo links to its logs in Loki (and a log line links back to its trace).
+
+| Variable                      | Default                     | Description                                   |
+| ----------------------------- | --------------------------- | --------------------------------------------- |
+| `OTEL_ENABLED`                | `false`                     | Turns on traces, metrics and log export       |
+| `OTEL_SERVICE_NAME`           | `go-net-http-auth-base`     | `service.name` reported to the backend        |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318`     | OTLP/HTTP endpoint                            |
+| `OTEL_TRACES_SAMPLER_ARG`     | `1.0`                       | Trace sampling ratio, between 0 and 1         |
+
 ## 🔐 Security
 
 - Passwords are hashed using bcrypt
