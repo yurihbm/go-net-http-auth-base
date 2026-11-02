@@ -17,9 +17,8 @@ import (
 const (
 	resendUserAgent        = "go-net-http-auth-base/1.0"
 	resendErrorBodyMaxSize = 4096
+	resendHTTPTimeout      = 10 * time.Second
 )
-
-var resendHTTPTimeout = 10 * time.Second
 
 type resendErrorResponse struct {
 	Name    string `json:"name"`

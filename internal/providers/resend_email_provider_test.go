@@ -130,8 +130,7 @@ func TestResendEmailProvider_Send(t *testing.T) {
 		assert.Contains(t, err.Error(), "422")
 	})
 
-	t.Run("returns an error when the request times out", func(t *testing.T) {
-		t.Cleanup(providers.SetResendHTTPTimeout(50 * time.Millisecond))
+	t.Run("returns an error when the context deadline passes", func(t *testing.T) {
 		release := make(chan struct{})
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			select {
@@ -144,7 +143,10 @@ func TestResendEmailProvider_Send(t *testing.T) {
 
 		provider := providers.NewResendEmailProvider("re_key", "from@example.com", server.URL)
 
-		err := provider.Send(context.Background(), msg)
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		err := provider.Send(ctx, msg)
 
 		require.Error(t, err)
 	})
