@@ -72,6 +72,33 @@ func TestLookupBool(t *testing.T) {
 	})
 }
 
+func TestLookupString(t *testing.T) {
+	t.Run("returns default when not set", func(t *testing.T) {
+		value, err := env.LookupString("NON_EXISTENT_ENV_VAR_STRING", "fallback")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "fallback", value)
+	})
+
+	t.Run("returns default when set to empty string", func(t *testing.T) {
+		t.Setenv("TEST_ENV_VAR_STRING", "")
+
+		value, err := env.LookupString("TEST_ENV_VAR_STRING", "fallback")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "fallback", value)
+	})
+
+	t.Run("returns value when set", func(t *testing.T) {
+		t.Setenv("TEST_ENV_VAR_STRING", "custom")
+
+		value, err := env.LookupString("TEST_ENV_VAR_STRING", "fallback")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "custom", value)
+	})
+}
+
 func TestLookupInt(t *testing.T) {
 	t.Run("returns default when not set", func(t *testing.T) {
 		value, err := env.LookupInt("NON_EXISTENT_ENV_VAR_INT", 42)

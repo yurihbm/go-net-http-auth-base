@@ -194,8 +194,8 @@ func Load() (*Config, error) {
 
 		Telemetry: TelemetryConfig{
 			Enabled:     read(r, env.LookupBool, "OTEL_ENABLED", false),
-			ServiceName: valueOrDefault(os.Getenv("OTEL_SERVICE_NAME"), defaultOTelServiceName),
-			Endpoint:    valueOrDefault(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"), defaultOTelEndpoint),
+			ServiceName: read(r, env.LookupString, "OTEL_SERVICE_NAME", defaultOTelServiceName),
+			Endpoint:    read(r, env.LookupString, "OTEL_EXPORTER_OTLP_ENDPOINT", defaultOTelEndpoint),
 			SampleRatio: read(r, env.LookupFloat, "OTEL_TRACES_SAMPLER_ARG", defaultOTelSampleRatio),
 		},
 
@@ -318,13 +318,6 @@ func (c *Config) IsProduction() bool {
 
 func (c *Config) IsDevelopment() bool {
 	return c.Env == "development"
-}
-
-func valueOrDefault(value, defaultVal string) string {
-	if value == "" {
-		return defaultVal
-	}
-	return value
 }
 
 func parseCommaSeparated(value string) []string {
