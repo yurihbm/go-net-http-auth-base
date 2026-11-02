@@ -240,11 +240,14 @@ func TestMicrosoftOAuthProvider_GetUserInfo(t *testing.T) {
 		assert.Nil(t, userInfo)
 	})
 
-	t.Run("exchange times out", func(t *testing.T) {
+	t.Run("exchange stops when the context deadline passes", func(t *testing.T) {
 		provider := providers.NewMicrosoftOAuthProvider(newHangingTokenConfig(t), "http://example.com/user")
 
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
 		start := time.Now()
-		userInfo, err := provider.GetUserInfo(context.Background(), "test-auth-code", testCodeVerifier)
+		userInfo, err := provider.GetUserInfo(ctx, "test-auth-code", testCodeVerifier)
 
 		assert.Error(t, err)
 		assert.Nil(t, userInfo)
