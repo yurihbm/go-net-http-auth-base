@@ -6,9 +6,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
-
-	"go-net-http-auth-base/internal/providers"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,8 +21,6 @@ func encodeJSON(t *testing.T, w http.ResponseWriter, v any) {
 
 func newHangingTokenConfig(t *testing.T) oauth2.Config {
 	t.Helper()
-
-	t.Cleanup(providers.SetOAuthHTTPTimeout(50 * time.Millisecond))
 
 	release := make(chan struct{})
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
