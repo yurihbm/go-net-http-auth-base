@@ -10,6 +10,7 @@ import (
 	"go-net-http-auth-base/postgres"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
@@ -153,6 +154,43 @@ func TestOTelQueryTracer_TraceQueryEnd(t *testing.T) {
 		assert.NotEmpty(t, span.Events())
 	})
 
+	t.Run("error.type", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			err            error
+			wantType       string
+			wantStatusCode bool
+		}{
+			{"pg error uses SQLSTATE", &pgconn.PgError{Code: "23505"}, "23505", true},
+			{"wrapped pg error uses SQLSTATE", fmt.Errorf("wrapped: %w", &pgconn.PgError{Code: "40001"}), "40001", true},
+			{"context canceled", fmt.Errorf("wrapped: %w", context.Canceled), "canceled", false},
+			{"other error uses type name", errors.New("boom"), "*errors.errorString", false},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				tracer, recorder, _, reader := newTestOTelTracer(t)
+
+				runQuery(tracer, context.Background(), sqlcQuery, nil, tc.err)
+
+				span := recorder.Ended()[0]
+				spanAttrs := attrMap(span.Attributes())
+				assert.Equal(t, codes.Error, span.Status().Code)
+				assert.NotEmpty(t, span.Events())
+				assert.Equal(t, tc.wantType, spanAttrs["error.type"])
+				if tc.wantStatusCode {
+					assert.Equal(t, tc.wantType, spanAttrs["db.response.status_code"])
+				} else {
+					assert.NotContains(t, spanAttrs, "db.response.status_code")
+				}
+				dps := collectDuration(t, reader).DataPoints
+				require.Len(t, dps, 1)
+				assert.Equal(t, tc.wantType, attrMap(dps[0].Attributes.ToSlice())["error.type"])
+				assert.NotContains(t, attrMap(dps[0].Attributes.ToSlice()), "db.response.status_code")
+			})
+		}
+	})
+
 	t.Run("ErrNoRows is not an error", func(t *testing.T) {
 		tracer, recorder, _, reader := newTestOTelTracer(t)
 
@@ -199,4 +237,26 @@ func TestOTelQueryTracer_TraceQueryEnd(t *testing.T) {
 		assert.Len(t, recorder.Ended(), 1)
 		assert.Len(t, collectDuration(t, reader).DataPoints, 1)
 	})
+}
+
+func BenchmarkOTelQueryTracer_TraceQuery(b *testing.B) {
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(sdkmetric.NewManualReader()))
+	variants := map[string]sdktrace.Sampler{
+		"sampled":   sdktrace.AlwaysSample(),
+		"unsampled": sdktrace.NeverSample(),
+	}
+
+	for name, sampler := range variants {
+		b.Run(name, func(b *testing.B) {
+			tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sampler))
+			tracer, err := postgres.NewOTelQueryTracer(tp, mp)
+			require.NoError(b, err)
+			ctx := context.Background()
+
+			b.ReportAllocs()
+			for b.Loop() {
+				runQuery(tracer, ctx, sqlcQuery, nil, nil)
+			}
+		})
+	}
 }
