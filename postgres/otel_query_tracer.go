@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
@@ -104,15 +105,28 @@ func (t *OTelQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data p
 	}
 
 	if data.Err != nil && !errors.Is(data.Err, pgx.ErrNoRows) {
-		errType := semconv.ErrorType(data.Err)
+		errType, sqlState := errorType(data.Err)
 		state.span.RecordError(data.Err)
 		state.span.SetStatus(codes.Error, data.Err.Error())
 		state.span.SetAttributes(errType)
+		if sqlState != "" {
+			state.span.SetAttributes(semconv.DBResponseStatusCode(sqlState))
+		}
 		attrs = append(attrs, errType)
 	}
 	state.span.End()
 
 	t.duration.Record(ctx, time.Since(state.startedAt).Seconds(), metric.WithAttributes(attrs...))
+}
+
+func errorType(err error) (attribute.KeyValue, string) {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+		return semconv.ErrorTypeKey.String(pgErr.Code), pgErr.Code
+	}
+	if errors.Is(err, context.Canceled) {
+		return semconv.ErrorTypeKey.String("canceled"), ""
+	}
+	return semconv.ErrorType(err), ""
 }
 
 func sqlcQueryName(sql string) string {
