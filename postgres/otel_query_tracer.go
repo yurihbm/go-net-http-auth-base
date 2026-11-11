@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,8 +23,14 @@ type otelQueryContextKey struct{}
 type otelQueryState struct {
 	span      trace.Span
 	startedAt time.Time
-	name      string
-	operation string
+	query     *parsedQuery
+}
+
+type parsedQuery struct {
+	name       string
+	text       string
+	baseAttrs  []attribute.KeyValue
+	metricAttr metric.MeasurementOption
 }
 
 var (
@@ -34,6 +42,7 @@ var (
 type OTelQueryTracer struct {
 	tracer   trace.Tracer
 	duration metric.Float64Histogram
+	parsed   sync.Map
 }
 
 var _ pgx.QueryTracer = (*OTelQueryTracer)(nil)
@@ -56,8 +65,70 @@ func NewOTelQueryTracer(tp trace.TracerProvider, mp metric.MeterProvider) (*OTel
 }
 
 func (t *OTelQueryTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	operation := sqlOperation(data.SQL)
-	name := sqlcQueryName(data.SQL)
+	query := t.parse(data.SQL)
+
+	attrs := make([]attribute.KeyValue, 0, len(query.baseAttrs)+1)
+	attrs = append(attrs, query.baseAttrs...)
+	if conn != nil {
+		attrs = append(attrs, semconv.DBNamespace(conn.Config().Database))
+	}
+
+	ctx, span := t.tracer.Start(ctx, query.name,
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(attrs...),
+	)
+	if span.IsRecording() {
+		text := query.text
+		if text == "" {
+			text = normalizeSQL(data.SQL)
+		}
+		span.SetAttributes(semconv.DBQueryText(text))
+	}
+
+	return context.WithValue(ctx, otelQueryContextKey{}, &otelQueryState{
+		span:      span,
+		startedAt: time.Now(),
+		query:     query,
+	})
+}
+
+func (t *OTelQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
+	state, ok := ctx.Value(otelQueryContextKey{}).(*otelQueryState)
+	if !ok {
+		return
+	}
+
+	measurement := state.query.metricAttr
+	if data.Err != nil && !errors.Is(data.Err, pgx.ErrNoRows) {
+		errType, sqlState := errorType(data.Err)
+		state.span.RecordError(data.Err)
+		state.span.SetStatus(codes.Error, data.Err.Error())
+		state.span.SetAttributes(errType)
+		if sqlState != "" {
+			state.span.SetAttributes(semconv.DBResponseStatusCode(sqlState))
+		}
+		attrs := append(slices.Clone(state.query.baseAttrs), errType)
+		measurement = metric.WithAttributeSet(attribute.NewSet(attrs...))
+	}
+	state.span.End()
+
+	t.duration.Record(ctx, time.Since(state.startedAt).Seconds(), measurement)
+}
+
+func (t *OTelQueryTracer) parse(sql string) *parsedQuery {
+	if !strings.HasPrefix(sql, "--") {
+		return parseQuery(sql, "")
+	}
+	if cached, ok := t.parsed.Load(sql); ok {
+		return cached.(*parsedQuery)
+	}
+	cached, _ := t.parsed.LoadOrStore(sql, parseQuery(sql, normalizeSQL(sql)))
+	return cached.(*parsedQuery)
+}
+
+func parseQuery(sql, text string) *parsedQuery {
+	operation := sqlOperation(sql)
+	name := sqlcQueryName(sql)
 	if name == "" {
 		name = operation
 	}
@@ -68,55 +139,21 @@ func (t *OTelQueryTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, d
 	attrs := []attribute.KeyValue{
 		semconv.DBSystemNamePostgreSQL,
 		semconv.DBQuerySummary(name),
-		semconv.DBQueryText(strings.Join(strings.Fields(data.SQL), " ")),
 	}
 	if operation != "" {
 		attrs = append(attrs, semconv.DBOperationName(operation))
 	}
-	if conn != nil {
-		attrs = append(attrs, semconv.DBNamespace(conn.Config().Database))
+
+	return &parsedQuery{
+		name:       name,
+		text:       text,
+		baseAttrs:  attrs,
+		metricAttr: metric.WithAttributeSet(attribute.NewSet(attrs...)),
 	}
-
-	ctx, span := t.tracer.Start(ctx, name,
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attrs...),
-	)
-
-	return context.WithValue(ctx, otelQueryContextKey{}, &otelQueryState{
-		span:      span,
-		startedAt: time.Now(),
-		name:      name,
-		operation: operation,
-	})
 }
 
-func (t *OTelQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
-	state, ok := ctx.Value(otelQueryContextKey{}).(*otelQueryState)
-	if !ok {
-		return
-	}
-
-	attrs := []attribute.KeyValue{
-		semconv.DBSystemNamePostgreSQL,
-		semconv.DBQuerySummary(state.name),
-	}
-	if state.operation != "" {
-		attrs = append(attrs, semconv.DBOperationName(state.operation))
-	}
-
-	if data.Err != nil && !errors.Is(data.Err, pgx.ErrNoRows) {
-		errType, sqlState := errorType(data.Err)
-		state.span.RecordError(data.Err)
-		state.span.SetStatus(codes.Error, data.Err.Error())
-		state.span.SetAttributes(errType)
-		if sqlState != "" {
-			state.span.SetAttributes(semconv.DBResponseStatusCode(sqlState))
-		}
-		attrs = append(attrs, errType)
-	}
-	state.span.End()
-
-	t.duration.Record(ctx, time.Since(state.startedAt).Seconds(), metric.WithAttributes(attrs...))
+func normalizeSQL(sql string) string {
+	return strings.Join(strings.Fields(sql), " ")
 }
 
 func errorType(err error) (attribute.KeyValue, string) {
