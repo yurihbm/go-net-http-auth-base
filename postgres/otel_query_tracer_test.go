@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const sqlcQuery = "-- name: GetUserByEmail :one\nSELECT uuid,\n    email\nFROM users\nWHERE email = $1"
@@ -61,6 +62,40 @@ func collectDuration(t *testing.T, reader *sdkmetric.ManualReader) metricdata.Hi
 	return metricdata.Histogram[float64]{}
 }
 
+type attributeCollectingTracerProvider struct {
+	trace.TracerProvider
+	recording bool
+	attrs     []attribute.KeyValue
+}
+
+type attributeCollectingTracer struct {
+	trace.Tracer
+	provider *attributeCollectingTracerProvider
+}
+
+type attributeCollectingSpan struct {
+	trace.Span
+	provider *attributeCollectingTracerProvider
+}
+
+func (p *attributeCollectingTracerProvider) Tracer(name string, opts ...trace.TracerOption) trace.Tracer {
+	return &attributeCollectingTracer{Tracer: p.TracerProvider.Tracer(name, opts...), provider: p}
+}
+
+func (t *attributeCollectingTracer) Start(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+	ctx, span := t.Tracer.Start(ctx, name, opts...)
+	return ctx, &attributeCollectingSpan{Span: span, provider: t.provider}
+}
+
+func (s *attributeCollectingSpan) IsRecording() bool {
+	return s.provider.recording
+}
+
+func (s *attributeCollectingSpan) SetAttributes(kv ...attribute.KeyValue) {
+	s.provider.attrs = append(s.provider.attrs, kv...)
+	s.Span.SetAttributes(kv...)
+}
+
 func runQuery(tracer *postgres.OTelQueryTracer, ctx context.Context, sql string, args []any, err error) {
 	ctx = tracer.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{SQL: sql, Args: args})
 	tracer.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{Err: err})
@@ -98,6 +133,62 @@ func TestOTelQueryTracer_TraceQueryStart(t *testing.T) {
 
 		require.Len(t, recorder.Ended(), 1)
 		assert.Equal(t, "query", recorder.Ended()[0].Name())
+	})
+
+	t.Run("same sql twice yields identical spans", func(t *testing.T) {
+		tracer, recorder, _, _ := newTestOTelTracer(t)
+
+		runQuery(tracer, context.Background(), sqlcQuery, nil, nil)
+		runQuery(tracer, context.Background(), sqlcQuery, nil, nil)
+
+		spans := recorder.Ended()
+		require.Len(t, spans, 2)
+		assert.Equal(t, spans[0].Name(), spans[1].Name())
+		assert.Equal(t, attrMap(spans[0].Attributes()), attrMap(spans[1].Attributes()))
+	})
+
+	t.Run("dynamic sql is traced per call", func(t *testing.T) {
+		tracer, recorder, _, _ := newTestOTelTracer(t)
+
+		runQuery(tracer, context.Background(), "CREATE TABLE audit_logs_2026_01 (id int)", nil, nil)
+		runQuery(tracer, context.Background(), "CREATE TABLE audit_logs_2026_02 (id int)", nil, nil)
+
+		spans := recorder.Ended()
+		require.Len(t, spans, 2)
+		assert.Equal(t, "CREATE", spans[0].Name())
+		assert.Contains(t, attrMap(spans[0].Attributes())["db.query.text"], "audit_logs_2026_01")
+		assert.Contains(t, attrMap(spans[1].Attributes())["db.query.text"], "audit_logs_2026_02")
+	})
+
+	t.Run("sets db.query.text only when span is recording", func(t *testing.T) {
+		for _, recording := range []bool{true, false} {
+			recorder := tracetest.NewSpanRecorder()
+			provider := &attributeCollectingTracerProvider{
+				TracerProvider: sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)),
+				recording:      recording,
+			}
+			tracer, err := postgres.NewOTelQueryTracer(provider, sdkmetric.NewMeterProvider())
+			require.NoError(t, err)
+
+			runQuery(tracer, context.Background(), sqlcQuery, nil, nil)
+
+			var texts []string
+			for _, kv := range provider.attrs {
+				if kv.Key == "db.query.text" {
+					texts = append(texts, kv.Value.String())
+				}
+			}
+			for _, s := range recorder.Ended() {
+				if text, ok := attrMap(s.Attributes())["db.query.text"]; ok && !recording {
+					texts = append(texts, text)
+				}
+			}
+			if recording {
+				assert.Equal(t, []string{"-- name: GetUserByEmail :one SELECT uuid, email FROM users WHERE email = $1"}, texts)
+			} else {
+				assert.Empty(t, texts)
+			}
+		}
 	})
 
 	t.Run("nests under parent span", func(t *testing.T) {
