@@ -72,7 +72,12 @@ func main() {
 
 	var dbTracers []pgx.QueryTracer
 	if tel.Enabled {
-		otelQueryTracer, err := postgres.NewOTelQueryTracer(tel.TracerProvider, tel.MeterProvider)
+		dbConfig, err := pgx.ParseConfig(cfg.Database.URL)
+		if err != nil {
+			slog.Error("Failed to parse database URL", "error", err)
+			os.Exit(1)
+		}
+		otelQueryTracer, err := postgres.NewOTelQueryTracer(tel.TracerProvider, tel.MeterProvider, dbConfig.Database)
 		if err != nil {
 			slog.Error("Failed to create database telemetry tracer", "error", err)
 			os.Exit(1)
