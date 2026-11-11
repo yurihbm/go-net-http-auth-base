@@ -40,14 +40,15 @@ var (
 )
 
 type OTelQueryTracer struct {
-	tracer   trace.Tracer
-	duration metric.Float64Histogram
-	parsed   sync.Map
+	tracer    trace.Tracer
+	duration  metric.Float64Histogram
+	parsed    sync.Map
+	namespace []attribute.KeyValue
 }
 
 var _ pgx.QueryTracer = (*OTelQueryTracer)(nil)
 
-func NewOTelQueryTracer(tp trace.TracerProvider, mp metric.MeterProvider) (*OTelQueryTracer, error) {
+func NewOTelQueryTracer(tp trace.TracerProvider, mp metric.MeterProvider, database string) (*OTelQueryTracer, error) {
 	duration, err := mp.Meter("go-net-http-auth-base/postgres").Float64Histogram(
 		"db.client.operation.duration",
 		metric.WithUnit("s"),
@@ -58,24 +59,24 @@ func NewOTelQueryTracer(tp trace.TracerProvider, mp metric.MeterProvider) (*OTel
 		return nil, err
 	}
 
-	return &OTelQueryTracer{
+	tracer := &OTelQueryTracer{
 		tracer:   tp.Tracer("go-net-http-auth-base/postgres"),
 		duration: duration,
-	}, nil
+	}
+	if database != "" {
+		tracer.namespace = []attribute.KeyValue{semconv.DBNamespace(database)}
+	}
+
+	return tracer, nil
 }
 
-func (t *OTelQueryTracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+func (t *OTelQueryTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	query := t.parse(data.SQL)
-
-	attrs := make([]attribute.KeyValue, 0, len(query.baseAttrs)+1)
-	attrs = append(attrs, query.baseAttrs...)
-	if conn != nil {
-		attrs = append(attrs, semconv.DBNamespace(conn.Config().Database))
-	}
 
 	ctx, span := t.tracer.Start(ctx, query.name,
 		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attrs...),
+		trace.WithAttributes(query.baseAttrs...),
+		trace.WithAttributes(t.namespace...),
 	)
 	if span.IsRecording() {
 		text := query.text
