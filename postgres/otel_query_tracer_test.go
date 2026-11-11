@@ -31,7 +31,7 @@ func newTestOTelTracer(t *testing.T) (*postgres.OTelQueryTracer, *tracetest.Span
 	reader := sdkmetric.NewManualReader()
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 
-	tracer, err := postgres.NewOTelQueryTracer(tp, mp)
+	tracer, err := postgres.NewOTelQueryTracer(tp, mp, "testdb")
 	require.NoError(t, err)
 	return tracer, recorder, tp, reader
 }
@@ -167,7 +167,7 @@ func TestOTelQueryTracer_TraceQueryStart(t *testing.T) {
 				TracerProvider: sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)),
 				recording:      recording,
 			}
-			tracer, err := postgres.NewOTelQueryTracer(provider, sdkmetric.NewMeterProvider())
+			tracer, err := postgres.NewOTelQueryTracer(provider, sdkmetric.NewMeterProvider(), "testdb")
 			require.NoError(t, err)
 
 			runQuery(tracer, context.Background(), sqlcQuery, nil, nil)
@@ -189,6 +189,14 @@ func TestOTelQueryTracer_TraceQueryStart(t *testing.T) {
 				assert.Empty(t, texts)
 			}
 		}
+	})
+
+	t.Run("sets db.namespace from constructor without a connection", func(t *testing.T) {
+		tracer, recorder, _, _ := newTestOTelTracer(t)
+
+		runQuery(tracer, context.Background(), sqlcQuery, nil, nil)
+
+		assert.Equal(t, "testdb", attrMap(recorder.Ended()[0].Attributes())["db.namespace"])
 	})
 
 	t.Run("nests under parent span", func(t *testing.T) {
@@ -340,7 +348,7 @@ func BenchmarkOTelQueryTracer_TraceQuery(b *testing.B) {
 	for name, sampler := range variants {
 		b.Run(name, func(b *testing.B) {
 			tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sampler))
-			tracer, err := postgres.NewOTelQueryTracer(tp, mp)
+			tracer, err := postgres.NewOTelQueryTracer(tp, mp, "testdb")
 			require.NoError(b, err)
 			ctx := context.Background()
 
