@@ -279,7 +279,7 @@ Traces, metrics and logs are exported with OpenTelemetry (OTLP/HTTP) and are dis
 2. Set `OTEL_ENABLED=true` in `.env` (the default endpoint `http://localhost:4318` points at LGTM) and start the API.
 3. Open Grafana at http://localhost:3000 (`admin`/`admin`).
 
-Three dashboards are provisioned from `docker/grafana/dashboards/`: **API RED** (rate, errors, duration), **Go runtime** and **Database** (query latency and connection pool). Use the `service` variable to pick the service.
+Four dashboards are provisioned from `docker/grafana/dashboards/`: **API RED** (rate, errors, duration), **Go runtime**, **Database** (query latency and connection pool) and **Logs** (volume by level, HTTP requests by status and filterable log panels; the `trace_id` of a log line links to Tempo). Use the `service` variable to pick the service. The sample dashboards bundled with the `lgtm` image are disabled by overriding its `grafana-dashboards.yaml` provider with `docker/grafana/provisioning/empty.yaml`.
 
 Logs carry `trace_id`/`span_id`, so a trace in Tempo links to its logs in Loki (and a log line links back to its trace).
 
