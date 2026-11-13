@@ -37,7 +37,8 @@ func (h *traceContextHandler) WithGroup(name string) slog.Handler {
 
 func newHandler(w io.Writer, isProduction bool, extra ...slog.Handler) slog.Handler {
 	opts := &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level:     slog.LevelInfo,
+		AddSource: true,
 	}
 
 	var stdout slog.Handler

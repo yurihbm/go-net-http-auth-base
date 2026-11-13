@@ -103,6 +103,17 @@ func TestSetup(t *testing.T) {
 		assert.Equal(t, "hello", extra.records[0].Message)
 	})
 
+	t.Run("stdout records the source of the log call", func(t *testing.T) {
+		var buf bytes.Buffer
+		slog.New(newHandler(&buf, true)).Info("hello")
+
+		source, ok := decode(t, &buf)["source"].(map[string]any)
+		require.True(t, ok)
+		assert.Contains(t, source["file"], "logger_test.go")
+		assert.NotZero(t, source["line"])
+		assert.Contains(t, source["function"], "TestSetup")
+	})
+
 	t.Run("stdout only without extra", func(t *testing.T) {
 		var buf bytes.Buffer
 		h := newHandler(&buf, false)
