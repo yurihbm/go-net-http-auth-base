@@ -34,6 +34,7 @@ services:
     volumes:
       - lgtm_data:/data
       - ./grafana/provisioning/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/go-net-http-auth-base.yaml:ro
+      - ./grafana/provisioning/empty.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml:ro
       - ./grafana/dashboards:/otel-lgtm/custom-dashboards:ro
 
 volumes:
