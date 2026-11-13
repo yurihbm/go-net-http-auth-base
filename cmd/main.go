@@ -75,7 +75,7 @@ func main() {
 	if tel.Enabled {
 		logger.Setup(
 			cfg.IsProduction(),
-			otelslog.NewHandler(cfg.Telemetry.ServiceName, otelslog.WithLoggerProvider(tel.LoggerProvider)),
+			otelslog.NewHandler(cfg.Telemetry.ServiceName, otelslog.WithLoggerProvider(tel.LoggerProvider), otelslog.WithSource(true)),
 		)
 
 		dbConfig, err := pgx.ParseConfig(cfg.Database.URL)
