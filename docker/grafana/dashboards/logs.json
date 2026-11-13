@@ -802,6 +802,23 @@
               "detected_level": "level"
             }
           }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "method",
+                "path",
+                "status",
+                "duration",
+                "level",
+                "trace_id",
+                "requestUUID"
+              ]
+            }
+          }
         }
       ],
       "targets": [
