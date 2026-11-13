@@ -2,11 +2,13 @@ package middlewares_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"go-net-http-auth-base/internal/middlewares"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,6 +38,11 @@ func newTelemetryTestEnv() *telemetryTestEnv {
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("GET /boom", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	mux.HandleFunc("GET /fail", func(w http.ResponseWriter, r *http.Request) {
+		data := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData)
+		data.Error = errors.New("db down")
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -197,5 +204,30 @@ func TestTelemetryMiddleware_Use(t *testing.T) {
 		spans := env.recorder.Ended()
 		require.Len(t, spans, 1)
 		assert.Equal(t, codes.Error, spans[0].Status().Code)
+	})
+
+	t.Run("handler error is recorded on the span as an exception event", func(t *testing.T) {
+		env := newTelemetryTestEnv()
+
+		env.serve(httptest.NewRequest(http.MethodGet, "/fail", nil))
+
+		spans := env.recorder.Ended()
+		require.Len(t, spans, 1)
+		require.Len(t, spans[0].Events(), 1)
+		event := spans[0].Events()[0]
+		assert.Equal(t, "exception", event.Name)
+		message, ok := spanAttr(event.Attributes, "exception.message")
+		assert.True(t, ok)
+		assert.Equal(t, "db down", message.AsString())
+	})
+
+	t.Run("no exception event without a handler error", func(t *testing.T) {
+		env := newTelemetryTestEnv()
+
+		env.serve(httptest.NewRequest(http.MethodGet, "/users/abc", nil))
+
+		spans := env.recorder.Ended()
+		require.Len(t, spans, 1)
+		assert.Empty(t, spans[0].Events())
 	})
 }

@@ -51,8 +51,13 @@ func routeHook(next http.Handler) http.Handler {
 		if i := strings.Index(r.Pattern, "/"); i >= 0 {
 			span.SetAttributes(semconv.HTTPRoute(r.Pattern[i:]))
 		}
-		if data, ok := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData); ok && data.RequestUUID != "" {
-			span.SetAttributes(attribute.String("app.request.uuid", data.RequestUUID))
+		if data, ok := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData); ok {
+			if data.RequestUUID != "" {
+				span.SetAttributes(attribute.String("app.request.uuid", data.RequestUUID))
+			}
+			if data.Error != nil {
+				span.RecordError(data.Error)
+			}
 		}
 	})
 }
