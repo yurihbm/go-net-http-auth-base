@@ -2,6 +2,9 @@ package telemetry_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"go-net-http-auth-base/config"
@@ -10,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	otellog "go.opentelemetry.io/otel/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -163,6 +167,36 @@ func TestNew(t *testing.T) {
 			}
 		}
 		assert.Contains(t, names, "go.goroutine.count")
+	})
+
+	t.Run("enabled - exports each signal to its OTLP path under the endpoint", func(t *testing.T) {
+		restoreGlobals(t)
+		var mu sync.Mutex
+		paths := map[string]bool{}
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			paths[r.URL.Path] = true
+			mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(server.Close)
+		cfg := enabledConfig()
+		cfg.Endpoint = server.URL
+
+		tel, err := telemetry.New(context.Background(), cfg, "test")
+		require.NoError(t, err)
+		_, span := tel.TracerProvider.Tracer("test").Start(context.Background(), "op")
+		span.End()
+		var record otellog.Record
+		record.SetBody(otellog.StringValue("hello"))
+		tel.LoggerProvider.Logger("test").Emit(context.Background(), record)
+		require.NoError(t, tel.Shutdown(context.Background()))
+
+		mu.Lock()
+		defer mu.Unlock()
+		assert.True(t, paths["/v1/traces"], "paths: %v", paths)
+		assert.True(t, paths["/v1/metrics"], "paths: %v", paths)
+		assert.True(t, paths["/v1/logs"], "paths: %v", paths)
 	})
 
 	t.Run("error - Shutdown returns error when context is already canceled", func(t *testing.T) {

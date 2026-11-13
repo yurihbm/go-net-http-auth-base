@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"go-net-http-auth-base/config"
 
@@ -79,7 +80,7 @@ func New(ctx context.Context, cfg config.TelemetryConfig, environment string, op
 	if err != nil {
 		return nil, err
 	}
-	logExporter, err := otlploghttp.New(ctx, otlploghttp.WithEndpointURL(cfg.Endpoint))
+	logExporter, err := otlploghttp.New(ctx, otlploghttp.WithEndpointURL(strings.TrimRight(cfg.Endpoint, "/")+"/v1/logs"))
 	if err != nil {
 		return nil, err
 	}
