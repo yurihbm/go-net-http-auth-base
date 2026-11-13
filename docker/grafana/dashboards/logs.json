@@ -44,23 +44,6 @@
         }
       },
       {
-        "name": "request_uuid",
-        "label": "Request UUID",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "text": "",
-          "value": ""
-        },
-        "options": [
-          {
-            "selected": true,
-            "text": "",
-            "value": ""
-          }
-        ]
-      },
-      {
         "name": "level",
         "label": "Level",
         "type": "custom",
@@ -172,7 +155,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 6
+        "y": 0
       },
       "fieldConfig": {
         "defaults": {
@@ -205,7 +188,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({service_name=\"$service\"} | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" | status=~\"$status\" |~ \"(?i)$search\" | detected_level=~\"$level\" [$__range]))",
+          "expr": "sum(count_over_time({service_name=\"$service\"} | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\" | detected_level=~\"$level\" [$__range]))",
           "queryType": "instant",
           "instant": true
         }
@@ -224,7 +207,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 6
+        "y": 0
       },
       "fieldConfig": {
         "defaults": {
@@ -257,7 +240,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({service_name=\"$service\"} | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" | status=~\"$status\" |~ \"(?i)$search\" | detected_level=\"error\" [$__range])) or vector(0)",
+          "expr": "sum(count_over_time({service_name=\"$service\"} | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\" | detected_level=\"error\" [$__range])) or vector(0)",
           "queryType": "instant",
           "instant": true
         }
@@ -276,7 +259,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 6
+        "y": 0
       },
       "fieldConfig": {
         "defaults": {
@@ -309,7 +292,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({service_name=\"$service\"} | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" | status=~\"$status\" |~ \"(?i)$search\" | detected_level=\"warn\" [$__range])) or vector(0)",
+          "expr": "sum(count_over_time({service_name=\"$service\"} | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\" | detected_level=\"warn\" [$__range])) or vector(0)",
           "queryType": "instant",
           "instant": true
         }
@@ -328,7 +311,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 6
+        "y": 0
       },
       "fieldConfig": {
         "defaults": {
@@ -361,38 +344,9 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({service_name=\"$service\"} | status=~\".+\" | status=~\"$status\" | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" [$__range])) or vector(0)",
+          "expr": "sum(count_over_time({service_name=\"$service\"} | status=~\".+\" | status=~\"$status\" | path=~\"$path\" [$__range])) or vector(0)",
           "queryType": "instant",
           "instant": true
-        }
-      ]
-    },
-    {
-      "id": 7,
-      "type": "table",
-      "title": "Trace for request UUID",
-      "description": "Paste the X-Request-UUID of a response in the Request UUID box above to find its trace. The logs below are filtered by the same UUID (a prefix is enough for logs). Traces can take about a minute to become searchable.",
-      "datasource": {
-        "type": "tempo",
-        "uid": "tempo"
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 24,
-        "x": 0,
-        "y": 4
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "tempo",
-            "uid": "tempo"
-          },
-          "queryType": "traceql",
-          "query": "{ span.app.request.uuid = \"$request_uuid\" }",
-          "limit": 20,
-          "tableType": "traces"
         }
       ]
     },
@@ -408,7 +362,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 10
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
@@ -476,7 +430,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (detected_level) (count_over_time({service_name=\"$service\"} | detected_level=~\"$level\" | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" | status=~\"$status\" |~ \"(?i)$search\" [$__auto]))",
+          "expr": "sum by (detected_level) (count_over_time({service_name=\"$service\"} | detected_level=~\"$level\" | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\" [$__auto]))",
           "legendFormat": "{{detected_level}}"
         }
       ]
@@ -493,7 +447,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 4
       },
       "fieldConfig": {
         "defaults": {
@@ -591,7 +545,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (status) (count_over_time({service_name=\"$service\"} | status=~\".+\" | status=~\"$status\" | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" [$__auto]))",
+          "expr": "sum by (status) (count_over_time({service_name=\"$service\"} | status=~\".+\" | status=~\"$status\" | path=~\"$path\" [$__auto]))",
           "legendFormat": "{{status}}"
         }
       ]
@@ -608,7 +562,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 13
       },
       "options": {
         "showTime": true,
@@ -624,7 +578,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{service_name=\"$service\"} | detected_level=~\"error|warn\" | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" | status=~\"$status\" |~ \"(?i)$search\" | line_format \"{{__line__}}{{if .method}} {{.method}} {{.path}} status={{.status}}{{end}}{{if .error}} error={{.error}}{{end}}{{if and .code_function_name (not .method)}} [{{.code_function_name}} {{.code_line_number}}]{{end}}\""
+          "expr": "{service_name=\"$service\"} | detected_level=~\"error|warn\" | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\" | line_format \"{{__line__}}{{if .method}} {{.method}} {{.path}} status={{.status}}{{end}}{{if .error}} error={{.error}}{{end}}{{if and .code_function_name (not .method)}} [{{.code_function_name}} {{.code_line_number}}]{{end}}\""
         }
       ],
       "description": "Message plus method, path, status, error and, for non-request logs, the function and line that logged it. Expand a line for every field."
@@ -641,7 +595,7 @@
         "h": 14,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 22
       },
       "options": {
         "showTime": true,
@@ -657,7 +611,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{service_name=\"$service\"} | detected_level=~\"$level\" | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" | status=~\"$status\" |~ \"(?i)$search\" | line_format \"{{__line__}}{{if .method}} {{.method}} {{.path}} status={{.status}}{{end}}{{if .error}} error={{.error}}{{end}}{{if and .code_function_name (not .method)}} [{{.code_function_name}} {{.code_line_number}}]{{end}}\""
+          "expr": "{service_name=\"$service\"} | detected_level=~\"$level\" | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\" | line_format \"{{__line__}}{{if .method}} {{.method}} {{.path}} status={{.status}}{{end}}{{if .error}} error={{.error}}{{end}}{{if and .code_function_name (not .method)}} [{{.code_function_name}} {{.code_line_number}}]{{end}}\""
         }
       ],
       "description": "Message plus method, path, status, error and, for non-request logs, the function and line that logged it. Expand a line for every field."
@@ -666,7 +620,7 @@
       "id": 5,
       "type": "table",
       "title": "HTTP requests",
-      "description": "Request log lines as a table. Click a trace_id to open the trace in Tempo.",
+      "description": "Request log lines as a table. Click a trace_id to investigate that request (trace, logs and database queries).",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -675,7 +629,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -789,8 +743,8 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open trace in Tempo",
-                    "url": "/explore?orgId=1&left=%7B%22datasource%22:%22tempo%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22queryType%22:%22traceql%22,%22query%22:%22${__value.raw}%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D"
+                    "title": "Investigate this request",
+                    "url": "/d/request-investigation?var-trace_id=${__value.raw}&${__url_time_range}&var-service=${service}"
                   }
                 ]
               }
@@ -892,7 +846,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{service_name=\"$service\"} | status=~\".+\" | detected_level=~\"$level\" | status=~\"$status\" | path=~\"$path\" | requestUUID=~\"$request_uuid.*\" |~ \"(?i)$search\"",
+          "expr": "{service_name=\"$service\"} | status=~\".+\" | detected_level=~\"$level\" | status=~\"$status\" | path=~\"$path\" |~ \"(?i)$search\"",
           "queryType": "range",
           "maxLines": 200
         }
@@ -902,7 +856,7 @@
       "id": 6,
       "type": "table",
       "title": "Application logs",
-      "description": "Logs emitted outside the request logger, with the function, file and line that logged them. Click a trace_id to open the trace in Tempo.",
+      "description": "Logs emitted outside the request logger, with the function, file and line that logged them. Click a trace_id to investigate it.",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -911,7 +865,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
@@ -934,8 +888,8 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Open trace in Tempo",
-                    "url": "/explore?orgId=1&left=%7B%22datasource%22:%22tempo%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22queryType%22:%22traceql%22,%22query%22:%22${__value.raw}%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D"
+                    "title": "Investigate this request",
+                    "url": "/d/request-investigation?var-trace_id=${__value.raw}&${__url_time_range}&var-service=${service}"
                   }
                 ]
               }
