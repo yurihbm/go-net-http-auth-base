@@ -578,9 +578,10 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{service_name=\"$service\"} | detected_level=~\"error|warn\" | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\""
+          "expr": "{service_name=\"$service\"} | detected_level=~\"error|warn\" | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\" | line_format \"{{__line__}}{{if .method}} {{.method}} {{.path}} status={{.status}}{{end}}{{if .error}} error={{.error}}{{end}}{{if and .code_function_name (not .method)}} [{{.code_function_name}} {{.code_line_number}}]{{end}}\""
         }
-      ]
+      ],
+      "description": "Message plus method, path, status, error and, for non-request logs, the function and line that logged it. Expand a line for every field."
     },
     {
       "id": 4,
@@ -610,9 +611,10 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{service_name=\"$service\"} | detected_level=~\"$level\" | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\""
+          "expr": "{service_name=\"$service\"} | detected_level=~\"$level\" | path=~\"$path\" | status=~\"$status\" |~ \"(?i)$search\" | line_format \"{{__line__}}{{if .method}} {{.method}} {{.path}} status={{.status}}{{end}}{{if .error}} error={{.error}}{{end}}{{if and .code_function_name (not .method)}} [{{.code_function_name}} {{.code_line_number}}]{{end}}\""
         }
-      ]
+      ],
+      "description": "Message plus method, path, status, error and, for non-request logs, the function and line that logged it. Expand a line for every field."
     },
     {
       "id": 5,
@@ -747,6 +749,18 @@
                 ]
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 260
+              }
+            ]
           }
         ]
       },
@@ -794,9 +808,11 @@
               "path": 2,
               "status": 3,
               "duration": 4,
-              "detected_level": 5,
-              "trace_id": 6,
-              "requestUUID": 7
+              "level": 5,
+              "error": 6,
+              "userUUID": 7,
+              "trace_id": 8,
+              "requestUUID": 9
             },
             "renameByName": {
               "detected_level": "level"
@@ -814,6 +830,8 @@
                 "status",
                 "duration",
                 "level",
+                "error",
+                "userUUID",
                 "trace_id",
                 "requestUUID"
               ]
@@ -831,6 +849,155 @@
           "expr": "{service_name=\"$service\"} | status=~\".+\" | detected_level=~\"$level\" | status=~\"$status\" | path=~\"$path\" |~ \"(?i)$search\"",
           "queryType": "range",
           "maxLines": 200
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Application logs",
+      "description": "Logs emitted outside the request logger, with the function, file and line that logged them. Click a trace_id to open the trace in Tempo.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "trace_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open trace in Tempo",
+                    "url": "/explore?orgId=1&left=%7B%22datasource%22:%22tempo%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22queryType%22:%22traceql%22,%22query%22:%22${__value.raw}%22%7D%5D,%22range%22:%7B%22from%22:%22now-1h%22,%22to%22:%22now%22%7D%7D"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "message"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 260
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 260
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Time",
+            "desc": true
+          }
+        ],
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "json"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "labels": true,
+              "labelTypes": true,
+              "tsNs": true,
+              "id": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "level": 1,
+              "Line": 2,
+              "error": 3,
+              "code_function_name": 4,
+              "code_line_number": 5,
+              "code_file_path": 6,
+              "trace_id": 7
+            },
+            "renameByName": {
+              "detected_level": "level",
+              "Line": "message",
+              "code_function_name": "function",
+              "code_line_number": "line",
+              "code_file_path": "file"
+            }
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "level",
+                "message",
+                "error",
+                "function",
+                "line",
+                "file",
+                "trace_id"
+              ]
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range",
+          "maxLines": 200,
+          "expr": "{service_name=\"$service\"} | status=\"\" | detected_level=~\"$level\" |~ \"(?i)$search\""
         }
       ]
     }
