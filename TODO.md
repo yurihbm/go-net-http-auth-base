@@ -633,7 +633,9 @@ Grafana LGTM stack.
 - [x] DB tracing + `db.client.operation.duration` via a pgx `QueryTracer` (otel directly, co-located with `postgres`)
 - [x] Pool gauges + Go runtime metrics (`otel ... /instrumentation/runtime`)
 - [x] Log export to Loki: `slog` → `otelslog` bridge via a fan-out handler (keep stdout), automatic `trace_id` correlation
-- [x] Grafana LGTM in the **dev** compose + starter dashboards (API RED, Go runtime, Database)
+- [x] Grafana LGTM in the **dev** compose + provisioned dashboards (API RED, Go runtime, Database, Logs, Request investigation)
+- [x] Record the error a handler stored in `RequestContextData.Error` as an `exception` event on the request span
+- [x] Keep `GET /health` and `GET /ready` out of spans and metrics
 - [x] **Explicitly NOT building:** `domain.{TelemetryProvider,Tracer,Meter,Span,Counter,Histogram,Gauge}` interfaces, a NoOp provider, or telemetry mocks
 
 ---
@@ -647,7 +649,7 @@ Grafana LGTM stack.
 - [x] `context.Context` propagated uniformly across all layers (2.6.1)
 - [x] Input validation is real and tested (2.6.2)
 - [x] Telemetry & observability operational (lean approach — see 2.7)
-- [ ] Test coverage remains >85%
+- [x] Test coverage remains >85%
 - [ ] All Phase 2 features are tested
 
 ---
