@@ -36,6 +36,24 @@ func (c *AuditController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("GET /audit-logs", c.authMiddleware.Use(c.roleMiddleware.Use(c.ListAuditLogs)))
 }
 
+// @Summary		List audit logs
+// @Description	Lists audit logs with cursor pagination. Requires the `access_token` cookie set by POST /auth/login and the admin role.
+// @Tags			audit-logs
+// @Produce		json
+// @Param			action			query		string								false	"Filter by action"
+// @Param			resource_type	query		string								false	"Filter by resource type"
+// @Param			status			query		string								false	"Filter by status"
+// @Param			actor_uuid		query		string								false	"Filter by actor UUID"
+// @Param			cursor			query		string								false	"Cursor from meta.next_cursor"
+// @Param			limit			query		int									false	"Page size"				minimum(1)	maximum(100)	default(20)
+// @Param			start_date		query		string								false	"Start date (RFC3339)"	format(date-time)
+// @Param			end_date		query		string								false	"End date (RFC3339)"	format(date-time)
+// @Success		200				{object}	api.ResponseBody[[]domain.AuditLog]	"Audit log page"
+// @Failure		400				{object}	api.ResponseBody[any]				"Validation error"
+// @Failure		401				{object}	api.ResponseBody[any]				"Unauthorized"
+// @Failure		403				{object}	api.ResponseBody[any]				"Forbidden"
+// @Failure		500				{object}	api.ResponseBody[any]				"Internal server error"
+// @Router			/audit-logs [get]
 func (c *AuditController) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 

@@ -69,6 +69,12 @@ func TestAuditFactory(t *testing.T) {
 	assert.IsType(t, &controllers.AuditController{}, controller)
 }
 
+func TestDocsFactory(t *testing.T) {
+	controller := factories.DocsFactory(newTestDependencies(t))
+	assert.NotNil(t, controller)
+	assert.IsType(t, &controllers.DocsController{}, controller)
+}
+
 func TestLoggerFactory(t *testing.T) {
 	middleware := factories.LoggerFactory()
 	assert.NotNil(t, middleware)

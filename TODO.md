@@ -662,22 +662,25 @@ Professional documentation and comprehensive testing.
 
 **Tasks**:
 
-- [ ] Install Swag: `go install github.com/swaggo/swag/cmd/swag@latest`
-- [ ] Add doc comments to all handlers
-- [ ] Generate Swagger spec: `swag init`
-- [ ] Serve Swagger UI at `/swagger/index.html`
-- [ ] Document all endpoints with:
-  - [ ] Request parameters and body
-  - [ ] Response schemas
-  - [ ] Status codes and error messages
-- [ ] Add Swagger configuration to `cmd/main.go`
-- [ ] Test Swagger UI works
+- [x] Install Swag: pinned `SWAG_VERSION` (v1.16.6) in the Makefile, `make install-swag`
+- [x] Add doc comments to all handlers
+- [x] Generate Swagger spec: `make swagger-gen` (output in `docs/swagger/`, committed, CI checks drift)
+- [x] Serve Swagger UI at `/swagger/index.html`
+- [x] Document all endpoints with:
+  - [x] Request parameters and body
+  - [x] Response schemas
+  - [x] Status codes and error messages
+- [x] Add Swagger configuration to `cmd/main.go`
+- [x] Test Swagger UI works
 
 **Files to create/modify**:
 
-- `cmd/main.go` (add Swagger handler)
+- `cmd/main.go` (general API annotations, `DocsFactory` registration)
 - `internal/controllers/*.go` (add doc comments)
-- `docs/swagger.json` (auto-generated)
+- `internal/controllers/docs_controller.go`, `internal/controllers/assets/swagger_login.html` and `internal/factories/docs_factory.go` (serve Swagger UI and its login gate)
+- `docs/swagger/` (`docs.go`, `swagger.json`, `swagger.yaml`, auto-generated)
+
+> **Resolved:** swag v1 (Swagger 2.0) is pinned in the Makefile; `make swagger-gen` writes `docs/swagger/` (committed) and a CI step fails on drift. `DocsController` serves Swagger UI in every environment: `GET /swagger/{$}` is a public login gate (embedded `internal/controllers/assets/swagger_login.html`, same-origin `fetch` to `/users/me`, `/auth/refresh` and `/auth/login`, sent with `X-Frame-Options: DENY` and `frame-ancestors 'none'`; it redirects only to `/swagger/index.html` and checks `data.role === 'admin'`), and the rest of `/swagger/` is wrapped by the auth and admin role middlewares (same as `GET /audit-logs`). Auth is cookie-only, which Swagger 2.0 cannot express, so there are no `securityDefinitions`; the general description explains the `access_token` cookie flow. The UI top bar has a Logout button (embedded `assets/swagger_ui_logout.js` via `AfterScript`) and a `responseInterceptor` returns to the gate after a successful `POST /auth/logout`. The generated package is excluded from `make test-cover`.
 
 ---
 
