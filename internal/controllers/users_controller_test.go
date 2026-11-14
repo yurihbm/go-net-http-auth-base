@@ -316,7 +316,8 @@ func TestUsersController_UpdateUser(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		serviceMock.On("Update", actor, uuid, dto).Return(nil)
+		updatedUser := &domain.User{UUID: uuid, Name: name}
+		serviceMock.On("Update", actor, uuid, dto).Return(updatedUser, nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionUserUpdate &&
 				d.ResourceType == domain.AuditResourceUser &&
@@ -329,7 +330,12 @@ func TestUsersController_UpdateUser(t *testing.T) {
 
 		controller.UpdateUser(w, req)
 
+		var response api.ResponseBody[domain.User]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, *updatedUser, response.Data)
 		serviceMock.AssertCalled(t, "Update", actor, uuid, dto)
 		auditMock.AssertExpectations(t)
 	})
@@ -352,7 +358,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 	t.Run("service error", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		serviceMock.On("Update", actor, uuid, dto).Return(assert.AnError)
+		serviceMock.On("Update", actor, uuid, dto).Return(nil, assert.AnError)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionUserUpdate &&
 				d.Status == domain.AuditStatusFailure &&
@@ -371,7 +377,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 
 	t.Run("forbidden", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
-		serviceMock.On("Update", actor, uuid, dto).Return(domain.NewForbiddenError("users.forbidden"))
+		serviceMock.On("Update", actor, uuid, dto).Return(nil, domain.NewForbiddenError("users.forbidden"))
 		auditMock.On("Log", mock.Anything).Return(nil)
 
 		w, req := getActorControllerArgs("PUT", "/users/", dto)

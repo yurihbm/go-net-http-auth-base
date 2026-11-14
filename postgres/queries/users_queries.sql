@@ -29,7 +29,7 @@ ORDER BY
     created_at DESC
 LIMIT $1 OFFSET $2;
 
--- name: UpdateUser :exec
+-- name: UpdateUser :one
 UPDATE
     users
 SET
@@ -37,7 +37,9 @@ SET
     email = COALESCE($3, email),
     password_hash = COALESCE($4, password_hash)
 WHERE
-    uuid = $1;
+    uuid = $1
+RETURNING
+    *;
 
 -- name: MarkUserEmailVerified :exec
 UPDATE

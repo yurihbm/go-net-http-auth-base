@@ -42,6 +42,11 @@ func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, f
 	}()
 }
 
+// @title			Go net/http Auth Base API
+// @version		1.0
+// @description	REST API for user authentication and user management.
+// @description	Authenticated endpoints need the `access_token` cookie set by `POST /auth/login`. Swagger 2.0 cannot describe cookie auth, so endpoints are not marked as secured here; "Try it out" works because the browser sends the cookie.
+// @BasePath		/
 func main() {
 	err := godotenv.Load()
 
@@ -150,6 +155,7 @@ func main() {
 	factories.AuthFactory(deps, cfg).RegisterRoutes(mux)
 	factories.HealthFactory(deps).RegisterRoutes(mux)
 	factories.AuditFactory(deps).RegisterRoutes(mux)
+	factories.DocsFactory(deps).RegisterRoutes(mux)
 
 	rateLimitMiddleware := factories.RateLimitFactory(cfg.RateLimit)
 	corsMiddleware := factories.CORSFactory(cfg.CORS)

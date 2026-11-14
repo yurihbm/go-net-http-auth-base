@@ -21,6 +21,13 @@ jobs:
         with:
           go-version: "1.26.4"
 
+      - name: Check Swagger docs are up to date
+        run: |
+          SWAG_VERSION=$(sed -n 's/^SWAG_VERSION = //p' Makefile)
+          go install github.com/swaggo/swag/cmd/swag@$SWAG_VERSION
+          make swagger-gen
+          test -z "$(git status --porcelain docs/swagger)" || { git status --porcelain docs/swagger; git diff docs/swagger; exit 1; }
+
       - name: Run tests
         run: |
           make show-cover > coverage_summary.txt

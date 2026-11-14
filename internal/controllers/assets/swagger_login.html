@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API docs - sign in</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a;
+    --input-bg: #171717;
+    --card-bg: #262626;
+    --border: #262626;
+    --border-strong: #404040;
+    --fg: #fafafa;
+    --muted: #d4d4d4;
+    --placeholder: #a3a3a3;
+    --primary: oklch(54.6% 0.245 262.881);
+    --primary-hover: oklch(62.3% 0.214 259.815);
+    --primary-active: oklch(48.8% 0.243 264.376);
+    --primary-fg: #fff;
+    --ring: oklch(70.7% 0.165 254.624);
+    --danger: oklch(64.5% 0.246 16.439);
+    --danger-subtle: oklch(27.1% 0.105 12.094);
+    --danger-subtle-fg: oklch(89.2% 0.058 10.001);
+    --secondary-hover: #404040;
+    --secondary-active: #525252;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #fff;
+      --input-bg: #f5f5f5;
+      --card-bg: #e5e5e5;
+      --border: #e5e5e5;
+      --border-strong: #d4d4d4;
+      --fg: #0a0a0a;
+      --muted: #525252;
+      --placeholder: #737373;
+      --primary: oklch(54.6% 0.245 262.881);
+      --primary-hover: oklch(48.8% 0.243 264.376);
+      --primary-active: oklch(42.4% 0.199 265.638);
+      --ring: oklch(62.3% 0.214 259.815);
+      --danger: oklch(58.6% 0.253 17.585);
+      --danger-subtle: oklch(96.9% 0.015 12.422);
+      --danger-subtle-fg: oklch(51.4% 0.222 16.935);
+      --secondary-hover: #d4d4d4;
+      --secondary-active: #a3a3a3;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 400 16px/24px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'Noto Sans', Arial, sans-serif;
+  }
+  [hidden] { display: none !important; }
+  .card {
+    width: 100%;
+    max-width: 400px;
+    padding: 24px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--card-bg);
+  }
+  .card-header {
+    margin: 0 0 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-strong);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+  }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  label { font-size: 14px; line-height: 20px; font-weight: 500; }
+  input {
+    padding: 8px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--fg);
+    font: inherit;
+    outline: none;
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  input::placeholder { color: var(--placeholder); }
+  input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+  input[aria-invalid="true"] {
+    border-color: var(--danger);
+    background: color-mix(in oklab, var(--danger-subtle) 20%, var(--input-bg));
+  }
+  button {
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 200ms, border-color 200ms, color 200ms;
+  }
+  button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .primary { background: var(--primary); color: var(--primary-fg); }
+  .primary:not(:disabled):hover { background: var(--primary-hover); }
+  .primary:not(:disabled):active { background: var(--primary-active); }
+  .secondary { background: var(--input-bg); color: var(--fg); border-color: var(--border-strong); }
+  .secondary:not(:disabled):hover { background: var(--secondary-hover); }
+  .secondary:not(:disabled):active { background: var(--secondary-active); }
+  .alert {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--danger);
+    border-radius: 8px;
+    background: var(--danger-subtle);
+    color: var(--danger-subtle-fg);
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .alert-title { margin: 0; font-weight: 600; }
+  .alert-description { margin: 0; opacity: 0.9; }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1 class="card-header">API docs</h1>
+  <div class="stack">
+    <div id="alert" class="alert" role="alert" hidden>
+      <div>
+        <p id="alert-title" class="alert-title"></p>
+        <p id="alert-description" class="alert-description"></p>
+      </div>
+    </div>
+    <form id="login" class="stack" hidden>
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button id="submit" class="primary" type="submit">Sign in</button>
+    </form>
+    <button id="switch" class="secondary" type="button" hidden>Sign in as another user</button>
+  </div>
+</main>
+<script>
+const form = document.getElementById('login');
+const submit = document.getElementById('submit');
+const alertBox = document.getElementById('alert');
+const alertTitle = document.getElementById('alert-title');
+const alertDescription = document.getElementById('alert-description');
+const switchUser = document.getElementById('switch');
+const inputs = [document.getElementById('email'), document.getElementById('password')];
+
+function show(title, description, showForm, showSwitch) {
+  alertTitle.textContent = title;
+  alertDescription.textContent = description;
+  alertBox.hidden = !title;
+  form.hidden = !showForm;
+  switchUser.hidden = !showSwitch;
+  inputs.forEach((input) => input.setAttribute('aria-invalid', String(Boolean(title && showForm))));
+}
+
+function showError(description) {
+  show(description ? 'Error' : '', description, true, false);
+}
+
+async function request(path, options) {
+  return fetch(path, Object.assign({ credentials: 'same-origin' }, options));
+}
+
+const errorMessages = {
+  'auth.authenticate.invalidCredentials': 'Invalid email or password.',
+  'request.validation_failed': 'Check the email and password.',
+  'request.invalid': 'Invalid request.',
+};
+
+async function errorText(res) {
+  if (res.status === 429) {
+    return 'Too many attempts. Wait a moment and try again.';
+  }
+  let body = {};
+  try {
+    body = await res.json();
+  } catch (e) {}
+  const message = errorMessages[body.error] || errorMessages[body.message];
+  if (message) {
+    return message;
+  }
+  if (res.status >= 500) {
+    return 'Something went wrong on the server. Try again later.';
+  }
+  return 'Request failed (' + res.status + ').';
+}
+
+async function check(canRefresh, afterLogin) {
+  const res = await request('/users/me');
+  if (res.ok) {
+    const body = await res.json();
+    if (body.data && body.data.role === 'admin') {
+      location.replace('/swagger/index.html');
+      return;
+    }
+    if (afterLogin) {
+      show('Access denied', 'This area is restricted to administrators.', false, true);
+    } else {
+      showError('');
+    }
+    return;
+  }
+  if (res.status === 401 && canRefresh) {
+    const refreshed = await request('/auth/refresh', { method: 'POST' });
+    if (refreshed.ok) {
+      return check(false, false);
+    }
+  }
+  if (afterLogin) {
+    showError('Signed in, but the session cookie was not stored (HTTPS is required outside development).');
+    return;
+  }
+  showError(res.status === 401 ? '' : await errorText(res));
+}
+
+switchUser.addEventListener('click', async () => {
+  try {
+    await request('/auth/logout', { method: 'POST' });
+  } catch (e) {}
+  form.reset();
+  showError('');
+});
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  submit.disabled = true;
+  showError('');
+  try {
+    const res = await request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: inputs[0].value,
+        password: inputs[1].value,
+      }),
+    });
+    if (!res.ok) {
+      showError(await errorText(res));
+      return;
+    }
+    await check(false, true);
+  } catch (e) {
+    showError('Network error, try again.');
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+check(true).catch(() => showError('Network error, try again.'));
+</script>
+</body>
+</html>

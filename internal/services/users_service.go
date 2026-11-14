@@ -65,14 +65,14 @@ func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUs
 	return s.repo.Create(ctx, user)
 }
 
-func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid string, dto domain.UserUpdateDTO) error {
+func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid string, dto domain.UserUpdateDTO) (*domain.User, error) {
 	if !actor.CanAccess(uuid) {
-		return errForbiddenUserAccess
+		return nil, errForbiddenUserAccess
 	}
 
 	user, err := s.repo.FindByUUID(ctx, uuid)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if dto.Name != nil {

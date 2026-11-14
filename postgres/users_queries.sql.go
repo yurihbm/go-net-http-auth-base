@@ -166,7 +166,7 @@ func (q *Queries) MarkUserEmailVerified(ctx context.Context, uuid pgtype.UUID) e
 	return err
 }
 
-const updateUser = `-- name: UpdateUser :exec
+const updateUser = `-- name: UpdateUser :one
 UPDATE
     users
 SET
@@ -175,6 +175,8 @@ SET
     password_hash = COALESCE($4, password_hash)
 WHERE
     uuid = $1
+RETURNING
+    uuid, name, email, password_hash, role, email_verified, created_at, updated_at
 `
 
 type UpdateUserParams struct {
@@ -184,12 +186,23 @@ type UpdateUserParams struct {
 	PasswordHash pgtype.Text
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
-	_, err := q.db.Exec(ctx, updateUser,
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUser,
 		arg.Uuid,
 		arg.Name,
 		arg.Email,
 		arg.PasswordHash,
 	)
-	return err
+	var i User
+	err := row.Scan(
+		&i.Uuid,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.EmailVerified,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
