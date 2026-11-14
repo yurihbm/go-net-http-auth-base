@@ -7,46 +7,41 @@ Thank you for your interest in contributing to this project! I welcome contribut
 This project follows a clean, layered architecture. Understanding this structure is crucial for contributing effectively.
 
 ```ascii
-+-------------------------------------------------------------------------+
-|                               HTTP Layer                                |
-|                                                                         |
-|   +-------------------+                                                 |
-|   |    Middlewares    |                                                 |
-|   | (Auth, Logger...) |                                                 |
-|   +--------+----------+                                                 |
-|            |                                                            |
-|            v                                                            |
-|   +------------------+      +------------------+   +------------------+ |
-|   |  AuthController  |      | UsersController  |   | HealthController | |
-|   +--------+---------+      +--------+---------+   +------------------+ |
-|            |    |                    |                                  |
-+------------|----|--------------------|----------------------------------+
-             |    |                    |
-             |    v                    v
-+------------|------------------------------------------------------------+
-|            |               Service Layer                                |
-|            |                                                            |
-|   +--------v---------+      +------------------+                        |
-|   |   AuthService    |----->|   UsersService   |                        |
-|   +--------+---------+      +--------+---------+                        |
-|            |                         |                                  |
-+------------|-------------------------|----------------------------------+
-             |                         |
-             v                         v
-+-------------------------------------------------------------------------+
-|                          Data Access Layer                              |
-|                                                                         |
-|   +------------------+      +------------------+   +------------------+ |
-|   |  OAuthProviders  |      |  AuthRepository  |   | UsersRepository  | |
-|   +--------+---------+      +--------+---------+   +--------+---------+ |
-|            |                         |                      |           |
-+------------|-------------------------|----------------------|-----------+
-             |                         |                      |
-             v                         v                      v
-    +------------------+      +---------------------------------------+
-    |  External OAuth  |      |              PostgreSQL               |
-    |  (Google, etc.)  |      |               Database                |
-    +------------------+      +---------------------------------------+
++---------------------------------------------------------------------------+
+|                                HTTP Layer                                 |
+|                                                                           |
+|  Global chain: requestContextData -> requestUUID -> telemetry -> logger   |
+|                -> cors -> rateLimit -> mux                                |
+|  Per route:    auth (access token) -> role (admin)                        |
+|                                                                           |
+|  +-----------------+ +-----------------+ +-----------------+              |
+|  | UsersController | | AuthController  | | AuditController |              |
+|  +--------+--------+ +--------+--------+ +--------+--------+              |
+|  (+ DocsController: Swagger UI, HealthController: /health, /ready)        |
++-----------|-------------------|-------------------|-----------------------+
+            |                   |                   |
++-----------v-------------------v-------------------v-----------------------+
+|                               Service Layer                               |
+|                                                                           |
+|  UsersService <------------ AuthService           AuditService            |
+|       |                        |                                          |
+|       v                        v                                          |
+|  EmailVerificationService -> TokenService (JWT)                           |
++-----------|-------------------|-------------------|-----------------------+
+            |                   |                   |
++-----------v-------------------v-------------------v-----------------------+
+|                      Data Access Layer (Repositories & Providers)         |
+|                                                                           |
+|  UsersRepository  AuthRepository  SessionsRepository  AuditRepository     |
+|  Transactor (WithinTx)            OAuthProviders      EmailProvider       |
++-----------|---------------------------|-------------------|---------------+
+            v                           v                   v
+   +-----------------+        +------------------+   +-----------------+
+   |   PostgreSQL    |        |  OAuth providers |   |  Resend (email) |
+   +-----------------+        +------------------+   +-----------------+
+
+All of the above is built once by factories.NewDependencies (composition root)
+and wired into the controllers by thin per-controller factories.
 ```
 
 ### Architecture Overview
@@ -64,17 +59,19 @@ The project implements a **Clean Architecture** inspired pattern, structured int
 
 3.  **Data Access Layer (Repositories & Providers)**:
     - **Repositories**: Abstract the database interactions. We use `sqlc` to generate type-safe Go code from SQL queries.
-    - **Providers**: Handle interactions with external services (e.g., OAuth providers like Google, GitHub).
+    - **Providers**: Handle interactions with external services (OAuth providers like Google, GitHub and Microsoft; email through Resend).
 
 **Key Principles**:
 
 - **Dependency Inversion**: High-level modules (Controllers) depend on abstractions (Interfaces defined in `internal/domain`), not concrete implementations.
 - **Domain-Centric**: The `internal/domain` package defines the core entities and interfaces, serving as the contract between layers.
-- **Dependency Injection**: Dependencies are wired up in the `internal/factories` package, ensuring loose coupling and testability.
+- **Dependency Injection**: `factories.NewDependencies` builds the shared repositories, services and middlewares once, and `cmd/main.go` passes them to thin per-controller factories, ensuring loose coupling and testability.
+
+The reasoning behind these choices is recorded in the [Architecture Decision Records](docs/adr/README.md). [AGENTS.md](AGENTS.md) is the most detailed description of the conventions (written for AI agents, but useful for humans too).
 
 ## 💻 Code Standards and Conventions
 
-- **Language**: Go 1.24+
+- **Language**: Go 1.26+
 - **Style**: Follow standard Go formatting (`gofmt`).
 - **Linter**: We use `golangci-lint`. Ensure your code passes all lint checks.
 - **Architecture**: Respect the layered architecture.
@@ -83,6 +80,15 @@ The project implements a **Clean Architecture** inspired pattern, structured int
   - **Repositories**: Handle database interactions.
   - **Domain**: Define interfaces and core entities.
 - **Dependency Injection**: Use the `factories` package to wire dependencies.
+- **Errors**: Return the typed domain errors and let `api.HandleError` pick the status code (see [docs/ERRORS.md](docs/ERRORS.md)).
+- **Context**: `context.Context` is the first argument of every service and repository method, from `r.Context()` down to the database.
+- **Comments**: Only swag annotations on handlers and comments that explain complex business logic.
+- **API Docs**: After changing handler annotations, run `make swagger-gen` and commit `docs/swagger/` (CI fails on drift).
+- **Schema**: While this is still a template, schema changes go into `000001_init_db.up.sql`/`.down.sql` instead of new migration files.
+
+## 🧭 Architecture Decision Records
+
+Write an ADR in `docs/adr/` in the same PR when a decision changes or adds a convention, adds or replaces an infrastructure dependency, changes the security model, or is hard to reverse. Local choices (naming, a helper, a behavior-preserving refactor) do not need one. See [docs/adr/README.md](docs/adr/README.md) for the format and the rules (accepted ADRs are never rewritten, only superseded).
 
 ## 🛠️ Scaffolding Tools
 
@@ -123,10 +129,13 @@ Examples:
 
 - **Coverage**: We aim for **80%+ test coverage**.
 - **Unit Tests**: Write unit tests for all new services and controllers.
-- **Integration Tests**: Repository tests should run against a real database (using Docker).
+- **Integration Tests**: Repository tests run against a real PostgreSQL started by testcontainers (`postgres.NewTestPool`), so a running Docker daemon is required. Each transactional flow needs a test that forces a failure and asserts nothing was persisted.
+- **Naming**: One `Test<Type>_<Method>` per method, with scenarios as `t.Run` subtests.
 - **Running Tests**:
   ```bash
-  go test ./... -cover
+  go test ./...          # all tests
+  go test -short ./...   # skip integration tests
+  make show-cover        # coverage report, as posted by CI
   ```
 
 ## 🔄 Pull Request Process
@@ -136,10 +145,11 @@ Examples:
 3.  **Make your changes** following the code standards.
 4.  **Add tests** for your changes.
 5.  **Run tests** to ensure everything is working: `go test ./...`.
-6.  **Run linter** (if available locally) or check CI status.
-7.  **Commit your changes** using the conventional commit format.
-8.  **Push to your fork** and submit a Pull Request.
-9.  **Description**: Provide a clear description of your changes and link to any relevant issues.
+6.  **Run linter** (`golangci-lint run`, if available locally) or check CI status.
+7.  **Update docs**: `make swagger-gen` for handler changes, an ADR for architectural decisions, and README/AGENTS.md when a convention or command changes.
+8.  **Commit your changes** using the conventional commit format.
+9.  **Push to your fork** and submit a Pull Request.
+10. **Description**: Provide a clear description of your changes and link to any relevant issues.
 
 ## ⚙️ Development Setup
 
