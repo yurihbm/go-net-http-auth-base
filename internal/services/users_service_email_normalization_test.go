@@ -64,9 +64,9 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
 		email := messyEmail
 		repo.On("FindByUUID", "some-uuid").Return(&domain.User{UUID: "some-uuid", Email: "old@example.com"}, nil).Once()
-		repo.On("Update", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).Return(nil).Once()
+		repo.On("Update", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).Return(&domain.User{UUID: "some-uuid", Email: normalizedEmail}, nil).Once()
 
-		err := service.Update(context.Background(), selfActor, "some-uuid", domain.UserUpdateDTO{Email: &email})
+		_, err := service.Update(context.Background(), selfActor, "some-uuid", domain.UserUpdateDTO{Email: &email})
 
 		require.NoError(t, err)
 		repo.AssertExpectations(t)

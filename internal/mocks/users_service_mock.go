@@ -46,9 +46,12 @@ func (m *UsersServiceMock) CreateOAuth(ctx context.Context, dto domain.CreateOAu
 	return nil, args.Error(1)
 }
 
-func (m *UsersServiceMock) Update(ctx context.Context, actor domain.Actor, uuid string, dto domain.UserUpdateDTO) error {
+func (m *UsersServiceMock) Update(ctx context.Context, actor domain.Actor, uuid string, dto domain.UserUpdateDTO) (*domain.User, error) {
 	args := m.Called(actor, uuid, dto)
-	return args.Error(0)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 func (m *UsersServiceMock) Delete(ctx context.Context, actor domain.Actor, uuid string) error {
