@@ -97,9 +97,10 @@ func TestHealthController_Ready(t *testing.T) {
 
 		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 
-		var response api.ResponseBody[string]
+		var response api.ResponseBody[any]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
+		assert.Nil(t, response.Data)
 		assert.Equal(t, "Database not ready", response.Error)
 		mockDb.AssertExpectations(t)
 	})

@@ -162,7 +162,8 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.userService.Update(r.Context(), actorFromRequest(r), uuid, dto); err != nil {
+	updatedUser, err := c.userService.Update(r.Context(), actorFromRequest(r), uuid, dto)
+	if err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 			ActorUUID:     actorUUID(r),
@@ -187,6 +188,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	api.WriteJSONResponse(w, http.StatusOK,
 		api.ResponseBody[domain.User]{
+			Data:    *updatedUser,
 			Message: "user.update.success",
 		},
 	)
