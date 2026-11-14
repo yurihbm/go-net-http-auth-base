@@ -119,6 +119,14 @@ To generate Go code from SQL queries using `sqlc`, run:
 make sqlc-gen
 ```
 
+### API Docs
+
+To regenerate the Swagger spec (`docs/swagger/`) from the handler annotations, run:
+
+```bash
+make swagger-gen
+```
+
 ## Development Conventions
 
 - **Testing:** The project has a suite of tests for controllers, services, and repositories. Tests are located in the same package as the code they are testing, with the `_test.go` suffix.
@@ -151,6 +159,7 @@ Controllers handle HTTP requests and responses. Key patterns:
   - Use message keys (e.g., `"user.create.success"`) for i18n support.
   - Return error details in the `Error` field of the response body.
 - **Error Handling**: Map service errors to appropriate HTTP status codes (400 for bad request, 404 for not found, 500 for internal errors).
+- **API Docs (Swagger)**: Every handler carries swaggo/swag annotations (Swagger 2.0, general info in `cmd/main.go`). Run `make swagger-gen` after changing them: it regenerates `docs/swagger/` (committed), and CI fails on drift. `DocsController` serves Swagger UI in every environment: `/swagger/` (exact) is a public login gate (embedded static page that checks `GET /users/me`, refreshes once, or signs in via `POST /auth/login`, then goes to `/swagger/index.html`), and everything else under `/swagger/` (UI, `doc.json`) is behind the auth and admin role middlewares. Auth is cookie-only, which Swagger 2.0 cannot express, so there are no `securityDefinitions`; "Try it out" works because the browser sends the `access_token` cookie. The UI top bar has a Logout button, and a successful "Try it out" `POST /auth/logout` also returns to the gate (injected via `httpSwagger.AfterScript`/`UIConfig` from `assets/swagger_ui_*.js`).
 
 **Example Structure**:
 
@@ -454,7 +463,7 @@ func (m *UsersServiceMock) GetByUUID(uuid string) (*domain.User, error) {
 - **Pointer Usage**: Services and repositories accept and return pointers to avoid unnecessary copying.
 - **Dependency Injection**: All dependencies are injected via constructors, never created inside the dependent struct. Shared instances are built once in the composition root (`internal/factories/dependencies.go`), not re-created per factory.
 - **Interface-Driven Design**: Program to interfaces, not implementations. This allows easy mocking and testing.
-- **Zero Comments**: The code is self-documenting; avoid comments unless explaining complex business logic.
+- **Comments**: The code is self-documenting. Comments are allowed only for swag annotations on controller handlers (and the general API info above `main` in `cmd/main.go`) and for explaining complex business logic. No decorative godoc.
 - **Exact Errors**: Don't wrap errors unnecessarily; return them as-is unless adding valuable context.
 
 ### Telemetry

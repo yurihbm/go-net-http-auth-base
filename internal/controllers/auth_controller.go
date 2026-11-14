@@ -71,6 +71,17 @@ func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("GET /auth/{provider}/callback", c.OAuthProviderCallback)
 }
 
+// @Summary		Log in with credentials
+// @Description	Authenticates with email and password. Sets the `access_token` and `refresh_token` cookies.
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.CredentialsLoginDTO	true	"Credentials"
+// @Success		200		{object}	api.ResponseBody[any]		"Logged in"
+// @Failure		400		{object}	api.ResponseBody[any]		"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]		"Unauthorized"
+// @Failure		500		{object}	api.ResponseBody[any]		"Internal server error"
+// @Router			/auth/login [post]
 func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 	dto, err := api.DecodeAndValidate[domain.CredentialsLoginDTO](r)
 	if err != nil {
@@ -106,6 +117,14 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary		Log out
+// @Description	Deletes the current session and clears the auth cookies. Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			auth
+// @Produce		json
+// @Success		200	{object}	api.ResponseBody[any]	"Logged out"
+// @Failure		401	{object}	api.ResponseBody[any]	"Unauthorized"
+// @Failure		500	{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/auth/logout [post]
 func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 	userUUID, sessionUUID := sessionFromRequest(r)
 	err := c.authService.Logout(r.Context(), userUUID, sessionUUID)
@@ -137,6 +156,14 @@ func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary		Refresh the session tokens
+// @Description	Rotates the refresh token. Requires the `refresh_token` cookie (path /auth/refresh) and sets new `access_token` and `refresh_token` cookies.
+// @Tags			auth
+// @Produce		json
+// @Success		200	{object}	api.ResponseBody[any]	"Tokens refreshed"
+// @Failure		401	{object}	api.ResponseBody[any]	"Unauthorized"
+// @Failure		500	{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/auth/refresh [post]
 func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	refreshToken, err := r.Cookie(api.RefreshTokenCookieName)
 	if err != nil {
@@ -163,6 +190,17 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary		Start an OAuth login
+// @Description	Redirects to the OAuth provider and sets the OAuth flow cookies (nonce and PKCE verifier). The redirect_uri must be in the allow list.
+// @Tags			auth
+// @Produce		json
+// @Param			provider		path	string	true	"OAuth provider"	Enums(google, microsoft, github)
+// @Param			redirect_uri	query	string	true	"Allowed URI to return to after the login"
+// @Success		302				"Redirect to the OAuth provider"
+// @Header			302				{string}	Location				"Provider authorization URL"
+// @Failure		400				{object}	api.ResponseBody[any]	"Validation error"
+// @Failure		500				{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/auth/{provider}/login [get]
 func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.Request) {
 	providerName, err := oauthProviderFromRequest(r)
 	if err != nil {
@@ -190,6 +228,23 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 	http.Redirect(w, r, result.AuthURL, http.StatusFound)
 }
 
+// @Summary		Finish an OAuth login
+// @Description	Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the `access_token` and `refresh_token` cookies and redirects to the redirect_uri. If the provider returned an error, redirects to the redirect_uri with `?error=<code>`.
+// @Tags			auth
+// @Produce		json
+// @Param			provider			path	string	true	"OAuth provider"	Enums(google, microsoft, github)
+// @Param			state				query	string	true	"State token issued by the login step"
+// @Param			code				query	string	false	"Authorization code (required unless error is set)"
+// @Param			error				query	string	false	"Error code returned by the provider"
+// @Param			error_description	query	string	false	"Error description returned by the provider"
+// @Success		302					"Redirect to the redirect_uri"
+// @Header			302					{string}	Location				"redirect_uri, with ?error=<code> on provider error"
+// @Failure		400					{object}	api.ResponseBody[any]	"Validation error"
+// @Failure		401					{object}	api.ResponseBody[any]	"Unauthorized"
+// @Failure		404					{object}	api.ResponseBody[any]	"Not found"
+// @Failure		409					{object}	api.ResponseBody[any]	"Conflict"
+// @Failure		500					{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/auth/{provider}/callback [get]
 func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Request) {
 	providerName, err := oauthProviderFromRequest(r)
 	if err != nil {

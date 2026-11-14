@@ -6,11 +6,13 @@ endif
 AIR_VERSION = v1.65.3
 SQLC_VERSION = v1.31.1
 GOLANG_MIGRATE_VERSION = v4.19.1
+SWAG_VERSION = v1.16.6
 
 .PHONY: install-tools \
 	install-air \
 	install-migrate \
 	install-sqlc \
+	install-swag \
 	tidy \
 	setup \
 	build \
@@ -18,10 +20,11 @@ GOLANG_MIGRATE_VERSION = v4.19.1
 	migrate-up \
 	migrate-down \
 	sqlc-gen \
+	swagger-gen \
 	test-cover \
 	show-cover
 
-install-tools: install-air install-migrate install-sqlc
+install-tools: install-air install-migrate install-sqlc install-swag
 
 install-air:
 	go install github.com/air-verse/air@$(AIR_VERSION)
@@ -32,11 +35,14 @@ install-migrate:
 install-sqlc:
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
 
+install-swag:
+	go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
+
 tidy:
 	go mod tidy
 
 # Filters out packages that should be excluded from coverage
-PACKAGES=$(shell go list ./... | grep -v -E 'postgres|domain|mocks|config|logger|cmd')
+PACKAGES=$(shell go list ./... | grep -v -E 'postgres|domain|mocks|config|logger|cmd|docs')
 
 test-cover:
 	@echo "Running tests with coverage exclusions..."
@@ -77,3 +83,7 @@ sqlc-gen:
 	@echo "Generating code with sqlc..."
 	DATABASE_URL=$(DATABASE_URL) sqlc generate
 
+# Generate the Swagger spec from the handler annotations
+swagger-gen:
+	@echo "Generating Swagger docs..."
+	swag init -g cmd/main.go -o docs/swagger --parseInternal --parseDependency

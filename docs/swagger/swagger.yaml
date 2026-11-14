@@ -1,0 +1,710 @@
+basePath: /
+definitions:
+  go-net-http-auth-base_internal_api.ResponseBody-any:
+    properties:
+      data: {}
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
+    type: object
+  go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_AuditLog:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.AuditLog'
+        type: array
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
+    type: object
+  go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User:
+    properties:
+      data:
+        $ref: '#/definitions/go-net-http-auth-base_internal_domain.User'
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
+    type: object
+  go-net-http-auth-base_internal_api.ResponseBody-string:
+    properties:
+      data:
+        type: string
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
+    type: object
+  go-net-http-auth-base_internal_api.ResponseMeta:
+    properties:
+      limit:
+        type: integer
+      next_cursor:
+        type: string
+      total:
+        type: integer
+    type: object
+  go-net-http-auth-base_internal_domain.AuditLog:
+    properties:
+      action:
+        type: string
+      actor_uuid:
+        type: string
+      changes: {}
+      created_at:
+        type: string
+      failure_reason:
+        type: string
+      ip_address:
+        type: string
+      request_uuid:
+        type: string
+      resource_type:
+        type: string
+      resource_uuid:
+        type: string
+      status:
+        type: string
+      user_agent:
+        type: string
+      uuid:
+        type: string
+    type: object
+  go-net-http-auth-base_internal_domain.CreateUserDTO:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  go-net-http-auth-base_internal_domain.CredentialsLoginDTO:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  go-net-http-auth-base_internal_domain.ResendVerificationDTO:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  go-net-http-auth-base_internal_domain.User:
+    properties:
+      created_at:
+        type: integer
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      name:
+        type: string
+      role:
+        $ref: '#/definitions/go-net-http-auth-base_internal_domain.UserRole'
+      updated_at:
+        type: integer
+      uuid:
+        type: string
+    type: object
+  go-net-http-auth-base_internal_domain.UserRole:
+    enum:
+    - admin
+    - user
+    type: string
+    x-enum-varnames:
+    - RoleAdmin
+    - RoleUser
+  go-net-http-auth-base_internal_domain.UserUpdateDTO:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+    type: object
+  go-net-http-auth-base_internal_domain.VerifyEmailDTO:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
+info:
+  contact: {}
+  description: |-
+    REST API for user authentication and user management.
+    Authenticated endpoints need the `access_token` cookie set by `POST /auth/login`. Swagger 2.0 cannot describe cookie auth, so endpoints are not marked as secured here; "Try it out" works because the browser sends the cookie.
+  title: Go net/http Auth Base API
+  version: "1.0"
+paths:
+  /audit-logs:
+    get:
+      description: Lists audit logs with cursor pagination. Requires the `access_token`
+        cookie set by POST /auth/login and the admin role.
+      parameters:
+      - description: Filter by action
+        in: query
+        name: action
+        type: string
+      - description: Filter by resource type
+        in: query
+        name: resource_type
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by actor UUID
+        in: query
+        name: actor_uuid
+        type: string
+      - description: Cursor from meta.next_cursor
+        in: query
+        name: cursor
+        type: string
+      - default: 20
+        description: Page size
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Start date (RFC3339)
+        format: date-time
+        in: query
+        name: start_date
+        type: string
+      - description: End date (RFC3339)
+        format: date-time
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Audit log page
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_AuditLog'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: List audit logs
+      tags:
+      - audit-logs
+  /auth/{provider}/callback:
+    get:
+      description: Handles the provider callback and requires the OAuth flow cookies
+        set by the login step. On success sets the `access_token` and `refresh_token`
+        cookies and redirects to the redirect_uri. If the provider returned an error,
+        redirects to the redirect_uri with `?error=<code>`.
+      parameters:
+      - description: OAuth provider
+        enum:
+        - google
+        - microsoft
+        - github
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: State token issued by the login step
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: Authorization code (required unless error is set)
+        in: query
+        name: code
+        type: string
+      - description: Error code returned by the provider
+        in: query
+        name: error
+        type: string
+      - description: Error description returned by the provider
+        in: query
+        name: error_description
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to the redirect_uri
+          headers:
+            Location:
+              description: redirect_uri, with ?error=<code> on provider error
+              type: string
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Finish an OAuth login
+      tags:
+      - auth
+  /auth/{provider}/login:
+    get:
+      description: Redirects to the OAuth provider and sets the OAuth flow cookies
+        (nonce and PKCE verifier). The redirect_uri must be in the allow list.
+      parameters:
+      - description: OAuth provider
+        enum:
+        - google
+        - microsoft
+        - github
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: Allowed URI to return to after the login
+        in: query
+        name: redirect_uri
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to the OAuth provider
+          headers:
+            Location:
+              description: Provider authorization URL
+              type: string
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Start an OAuth login
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates with email and password. Sets the `access_token`
+        and `refresh_token` cookies.
+      parameters:
+      - description: Credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.CredentialsLoginDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logged in
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Log in with credentials
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      description: Deletes the current session and clears the auth cookies. Requires
+        the `access_token` cookie set by POST /auth/login.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logged out
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Log out
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      description: Rotates the refresh token. Requires the `refresh_token` cookie
+        (path /auth/refresh) and sets new `access_token` and `refresh_token` cookies.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tokens refreshed
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Refresh the session tokens
+      tags:
+      - auth
+  /health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-string'
+      summary: Liveness check
+      tags:
+      - health
+  /ready:
+    get:
+      description: Pings the database.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-string'
+        "503":
+          description: Database not ready
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Readiness check
+      tags:
+      - health
+  /users:
+    post:
+      consumes:
+      - application/json
+      description: Creates a user and sends the verification email.
+      parameters:
+      - description: User data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.CreateUserDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User created
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Create a user
+      tags:
+      - users
+  /users/{uuid}:
+    delete:
+      description: Requires the `access_token` cookie set by POST /auth/login.
+      parameters:
+      - description: User UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: User deleted
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Delete a user
+      tags:
+      - users
+    get:
+      description: Requires the `access_token` cookie set by POST /auth/login.
+      parameters:
+      - description: User UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Get a user by UUID
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Partially updates a user. Requires the `access_token` cookie set
+        by POST /auth/login.
+      parameters:
+      - description: User UUID
+        in: path
+        name: uuid
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.UserUpdateDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User updated
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Update a user
+      tags:
+      - users
+  /users/me:
+    get:
+      description: Requires the `access_token` cookie set by POST /auth/login.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authenticated user
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Get the authenticated user
+      tags:
+      - users
+  /users/resend-verification:
+    post:
+      consumes:
+      - application/json
+      description: Always succeeds for unknown or already verified emails.
+      parameters:
+      - description: Email address
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.ResendVerificationDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Request accepted
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Resend the verification email
+      tags:
+      - users
+  /users/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: Confirms the email using the token from the verification link.
+      parameters:
+      - description: Verification token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.VerifyEmailDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email verified
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Verify an email address
+      tags:
+      - users
+swagger: "2.0"
