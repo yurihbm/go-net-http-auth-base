@@ -688,13 +688,13 @@ Professional documentation and comprehensive testing.
 
 **Tasks**:
 
-- [ ] Create `docs/adr/` directory
-- [ ] Write ADR-001: Layered Architecture Pattern
-- [ ] Write ADR-002: Error Handling Strategy
-- [ ] Write ADR-003: Database Strategy (PostgreSQL + sqlc)
-- [ ] Write ADR-004: Logging & Observability
-- [ ] Write ADR-005: Security Approach (CORS, rate limiting)
-- [ ] Update README to link to ADRs
+- [x] Create `docs/adr/` directory
+- [x] Write ADR-001: Layered Architecture Pattern
+- [x] Write ADR-002: Error Handling Strategy
+- [x] Write ADR-003: Database Strategy (PostgreSQL + sqlc)
+- [x] Write ADR-004: Logging & Observability
+- [x] Write ADR-005: Security Approach (CORS, rate limiting)
+- [x] Update README to link to ADRs
 
 **Files to create**:
 
@@ -703,6 +703,9 @@ Professional documentation and comprehensive testing.
 - `docs/adr/ADR-003-database-strategy.md` (create)
 - `docs/adr/ADR-004-logging-observability.md` (create)
 - `docs/adr/ADR-005-security-approach.md` (create)
+- `docs/adr/README.md` (index) and `docs/adr/diagrams/` (Archify JSON sources and SVG exports)
+
+> **Resolved:** Five Nygard-format ADRs (Status, Date, Context, Decision, Consequences) with an index in `docs/adr/README.md`, linked from the README. ADR-001, ADR-004 and ADR-005 embed Archify diagrams (layers + composition root, telemetry pipeline, refresh token rotation); each diagram is committed as its JSON source (with source citations pinned to a commit) and a theme-aware SVG export. The interactive HTML is not committed: it is rendered locally into the git-ignored `.archify/` (see `docs/adr/README.md`). Serving the diagrams from an admin route was rejected: the app's admin role is not the engineering team, ADR-005 lists accepted residual risks, and every bootstrapped binary would ship docs about the template.
 
 ---
 

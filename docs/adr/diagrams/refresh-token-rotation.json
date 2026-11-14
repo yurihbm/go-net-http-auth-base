@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Refresh token rotation and reuse detection",
+    "output": ".archify/refresh-token-rotation.html",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/yurihbm/go-net-http-auth-base.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "1dea67196c033b1de646f7921ec99b40ddd8da7a"
+    }
+  },
+  "participants": [
+    {
+      "id": "client",
+      "type": "external",
+      "label": "Client",
+      "sublabel": "one device"
+    },
+    {
+      "id": "controller",
+      "type": "backend",
+      "label": "AuthController",
+      "sublabel": "POST /auth/refresh",
+      "sources": [
+        {
+          "path": "internal/controllers/auth_controller.go",
+          "line": 167,
+          "end_line": 202
+        },
+        {
+          "path": "internal/controllers/auth_controller.go",
+          "line": 415,
+          "end_line": 437,
+          "label": "setAuthCookies"
+        }
+      ]
+    },
+    {
+      "id": "service",
+      "type": "backend",
+      "label": "AuthService",
+      "sublabel": "RefreshToken",
+      "sources": [
+        {
+          "path": "internal/services/auth_service.go",
+          "line": 82,
+          "end_line": 139
+        }
+      ]
+    },
+    {
+      "id": "token",
+      "type": "security",
+      "label": "TokenService",
+      "sublabel": "HS256 JWT",
+      "sources": [
+        {
+          "path": "internal/services/token_service.go",
+          "line": 1,
+          "end_line": 105
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "user_sessions",
+      "sublabel": "PostgreSQL",
+      "sources": [
+        {
+          "path": "postgres/queries/sessions_queries.sql",
+          "line": 16,
+          "end_line": 25,
+          "label": "RotateUserSessionJTI"
+        },
+        {
+          "path": "internal/repositories/sessions_repository.go",
+          "line": 69,
+          "end_line": 103
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 458,
+      "label": "Valid token: rotate"
+    },
+    {
+      "from": 474,
+      "to": 728,
+      "label": "Reused or stale token: revoke"
+    }
+  ],
+  "messages": [
+    {
+      "id": "refresh-request",
+      "from": "client",
+      "to": "controller",
+      "y": 160,
+      "label": "POST /auth/refresh + cookie",
+      "variant": "emphasis"
+    },
+    {
+      "id": "refresh-call",
+      "from": "controller",
+      "to": "service",
+      "y": 188,
+      "label": "RefreshToken"
+    },
+    {
+      "id": "verify",
+      "from": "service",
+      "to": "token",
+      "y": 216,
+      "label": "verify aud=refresh",
+      "variant": "security"
+    },
+    {
+      "id": "claims",
+      "from": "token",
+      "to": "service",
+      "y": 244,
+      "label": "sub, sid, jti",
+      "variant": "return"
+    },
+    {
+      "id": "find",
+      "from": "service",
+      "to": "db",
+      "y": 272,
+      "label": "find by sid + sub"
+    },
+    {
+      "id": "session-row",
+      "from": "db",
+      "to": "service",
+      "y": 300,
+      "label": "current_jti, expires_at",
+      "variant": "return"
+    },
+    {
+      "id": "rotate",
+      "from": "service",
+      "to": "db",
+      "y": 328,
+      "label": "rotate jti (compare-and-set)",
+      "variant": "emphasis",
+      "note": "UPDATE ... WHERE current_jti = presented jti"
+    },
+    {
+      "id": "rotated",
+      "from": "db",
+      "to": "service",
+      "y": 388,
+      "label": "1 row updated",
+      "variant": "return"
+    },
+    {
+      "id": "pair",
+      "from": "service",
+      "to": "controller",
+      "y": 416,
+      "label": "new access + refresh",
+      "variant": "return"
+    },
+    {
+      "id": "cookies",
+      "from": "controller",
+      "to": "client",
+      "y": 444,
+      "label": "Set-Cookie HttpOnly Strict",
+      "variant": "return"
+    },
+    {
+      "id": "replay",
+      "from": "client",
+      "to": "controller",
+      "y": 488,
+      "label": "POST /auth/refresh (old jti)",
+      "variant": "security"
+    },
+    {
+      "id": "replay-call",
+      "from": "controller",
+      "to": "service",
+      "y": 516,
+      "label": "RefreshToken"
+    },
+    {
+      "id": "replay-find",
+      "from": "service",
+      "to": "db",
+      "y": 544,
+      "label": "find by sid + sub"
+    },
+    {
+      "id": "mismatch",
+      "from": "db",
+      "to": "service",
+      "y": 572,
+      "label": "jti mismatch or expired",
+      "variant": "return",
+      "note": "also: 0 rows from rotate (lost race)"
+    },
+    {
+      "id": "revoke",
+      "from": "service",
+      "to": "db",
+      "y": 632,
+      "label": "DELETE this session",
+      "variant": "security",
+      "note": "other devices stay signed in"
+    },
+    {
+      "id": "invalid",
+      "from": "service",
+      "to": "controller",
+      "y": 684,
+      "label": "ErrInvalidToken",
+      "variant": "return"
+    },
+    {
+      "id": "unauthorized",
+      "from": "controller",
+      "to": "client",
+      "y": 712,
+      "label": "401",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "controller",
+      "from": 160,
+      "to": 444,
+      "type": "backend"
+    },
+    {
+      "participant": "service",
+      "from": 188,
+      "to": 416,
+      "type": "backend"
+    },
+    {
+      "participant": "token",
+      "from": 216,
+      "to": 244,
+      "type": "security"
+    },
+    {
+      "participant": "db",
+      "from": 272,
+      "to": 300,
+      "type": "database"
+    },
+    {
+      "participant": "db",
+      "from": 328,
+      "to": 388,
+      "type": "database"
+    },
+    {
+      "participant": "controller",
+      "from": 488,
+      "to": 712,
+      "type": "backend"
+    },
+    {
+      "participant": "service",
+      "from": 516,
+      "to": 684,
+      "type": "backend"
+    },
+    {
+      "participant": "db",
+      "from": 544,
+      "to": 572,
+      "type": "database"
+    },
+    {
+      "participant": "db",
+      "from": 632,
+      "to": 656,
+      "type": "database"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Sessions",
+      "items": [
+        "One user_sessions row per login (multi-device)",
+        "expires_at = login + SESSION_MAX_AGE, never extended",
+        "Login keeps at most MAX_SESSIONS_PER_USER (LRU evicted)"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Reuse detection",
+      "items": [
+        "A stale jti, an expired session or a lost concurrent refresh deletes that session",
+        "No grace window: clients must send one refresh at a time"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Residual risk",
+      "items": [
+        "Access tokens are stateless and live up to 15 min after logout",
+        "Refresh also re-checks that the user still exists"
+      ]
+    }
+  ]
+}
