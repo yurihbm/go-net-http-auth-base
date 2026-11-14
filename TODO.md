@@ -650,7 +650,7 @@ Grafana LGTM stack.
 - [x] Input validation is real and tested (2.6.2)
 - [x] Telemetry & observability operational (lean approach — see 2.7)
 - [x] Test coverage remains >85%
-- [ ] All Phase 2 features are tested
+- [x] All Phase 2 features are tested
 
 ---
 
