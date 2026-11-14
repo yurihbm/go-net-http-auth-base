@@ -134,6 +134,22 @@ make swagger-gen
 - **JSON Responses:** The `internal/api/response.go` file defines a standardized JSON response format for all API endpoints.
 - **Dependency Injection:** `internal/factories/dependencies.go` builds the app's shared dependency graph once (`NewDependencies`), and `cmd/main.go` passes the resulting `*Dependencies` into thin per-controller factories, which promotes loose coupling and testability.
 
+## Architecture Decision Records
+
+Architectural decisions are recorded in `docs/adr/` (index and rules in `docs/adr/README.md`). When a decision made while building a feature meets any of the criteria below, write an ADR in the same PR as the feature:
+
+- It changes or adds a convention described in this file (layers, errors, transactions, telemetry, testing).
+- It adds or replaces an infrastructure dependency (database, queue, external provider, core library).
+- It changes the security model (tokens, sessions, authorization) or accepts a residual risk.
+- It is hard to reverse, or real alternatives were weighed.
+
+Local choices (naming, a new helper, a refactor that keeps behavior) do not need an ADR. When in doubt, ask the user.
+
+- **Format:** Nygard (Status, Date, Context, Decision, Consequences), in English, as `docs/adr/ADR-00N-short-title.md` with the next number. Add it to the index table.
+- **Immutability:** Never rewrite the decision of an accepted ADR. Write a new ADR and set the old one's status to `Superseded by ADR-00N`.
+- **Diagrams (optional):** Add one only when the decision has a structure or flow that text does not explain well. Install the pinned Archify with `make install-archify` (Node 18+), follow `.tools/archify/SKILL.md`, and commit only the JSON source and the SVG export to `docs/adr/diagrams/` (see `docs/adr/README.md`). If Archify is unavailable, ship the ADR without the diagram.
+- **Keep this file in sync:** If the ADR changes a convention, update the matching section of this file in the same PR.
+
 ## Code Patterns and Conventions
 
 ### Layered Architecture Pattern
