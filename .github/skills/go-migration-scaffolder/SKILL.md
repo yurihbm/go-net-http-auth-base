@@ -13,6 +13,16 @@ This skill streamlines the workflow for modifying the database schema and adding
 - Scaffolds new query files (`postgres/queries/`)
 - Automates the `make` commands for creating and applying migrations
 
+## Template Phase
+
+While this repository is still a template, schema changes go into `postgres/migrations/000001_init_db.up.sql` and `000001_init_db.down.sql`, never into a new migration file (see `docs/adr/ADR-003-database-strategy.md`). In that phase, **do not run the script** (it always creates a new migration):
+
+1.  Edit `000001_init_db.up.sql` (DDL) and `000001_init_db.down.sql` (the matching `DROP`, in reverse dependency order).
+2.  Create or edit the query file in `postgres/queries/` (see step 2 below for the format).
+3.  Re-apply the schema with `make migrate-down && make migrate-up` (this drops the local data), then run `make sqlc-gen`.
+
+Use the script below only once a real service has been bootstrapped from the template.
+
 ## Usage
 
 ### 1. Scaffold Migration and Query Files
@@ -42,7 +52,11 @@ After running the script, the Agent (you) should:
     ```sql
     -- name: CreateProduct :one
     INSERT INTO products (...) VALUES (...) RETURNING *;
+
+    -- name: GetProductByUUID :one
+    SELECT * FROM products WHERE uuid = @uuid;
     ```
+    Tables use a `uuid uuid DEFAULT uuidv7()` primary key and `created_at`/`updated_at` timestamps, like `users` in `000001_init_db.up.sql`.
 
 ### 3. Apply and Generate
 

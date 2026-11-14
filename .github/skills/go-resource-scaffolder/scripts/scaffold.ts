@@ -144,10 +144,15 @@ try {
     });
 
     console.log("\nScaffolding complete!");
-    console.log("Remember to:");
-    console.log("1. Add the SQL migration.");
-    console.log("2. Generate SQLC queries.");
-    console.log(`3. Register the factory in cmd/main.go: factories.${Resources}Factory(conn).RegisterRoutes(mux)`);
+    console.log("Next steps:");
+    console.log(`1. Wire the service in internal/factories/dependencies.go:`);
+    console.log(`     - field:        ${Resources}Service domain.${Resources}Service`);
+    console.log(`     - construction: ${resources}Service := services.New${Resources}Service(repositories.New${Resources}PostgresRepository(db))`);
+    console.log(`     - literal:      ${Resources}Service: ${resources}Service,`);
+    console.log(`2. Register the routes in cmd/main.go: factories.${Resources}Factory(deps).RegisterRoutes(mux)`);
+    console.log(`3. Add the ${resources} table to postgres/migrations/000001_init_db.up.sql/.down.sql and "${resources}" to truncateTables in internal/repositories/repositories_test.go.`);
+    console.log(`4. Write postgres/queries/${resources}.sql, run make sqlc-gen and replace the placeholders in ${resources}_repository.go (its integration tests fail until then).`);
+    console.log("5. Add the fields to the domain model and DTOs (with validate tags), then run make swagger-gen.");
 
 } catch (error: any) {
     console.error("Error generating files:", error.message);

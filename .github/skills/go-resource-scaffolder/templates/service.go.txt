@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+
 	"go-net-http-auth-base/internal/domain"
 )
 
@@ -12,38 +14,27 @@ func New{{Resources}}Service(repo domain.{{Resources}}Repository) domain.{{Resou
 	return &{{resources}}Service{repo: repo}
 }
 
-func (s *{{resources}}Service) GetByUUID(uuid string) (*domain.{{Resource}}, error) {
-	return s.repo.FindByUUID(uuid)
+func (s *{{resources}}Service) GetByUUID(ctx context.Context, uuid string) (*domain.{{Resource}}, error) {
+	return s.repo.FindByUUID(ctx, uuid)
 }
 
-func (s *{{resources}}Service) Create(dto domain.Create{{Resource}}DTO) (*domain.{{Resource}}, error) {
-	entity := domain.{{Resource}}{
-        // Map DTO to entity
-	}
+func (s *{{resources}}Service) Create(ctx context.Context, dto domain.Create{{Resource}}DTO) (*domain.{{Resource}}, error) {
+	// TODO: Map the DTO fields and apply the business rules.
+	entity := domain.{{Resource}}{}
 
-	created, err := s.repo.Create(entity)
+	return s.repo.Create(ctx, entity)
+}
+
+func (s *{{resources}}Service) Update(ctx context.Context, uuid string, dto domain.{{Resource}}UpdateDTO) (*domain.{{Resource}}, error) {
+	entity, err := s.repo.FindByUUID(ctx, uuid)
 	if err != nil {
 		return nil, err
 	}
-	return created, nil
+
+	// TODO: Apply only the fields set in the DTO (pointer fields).
+	return s.repo.Update(ctx, *entity)
 }
 
-func (s *{{resources}}Service) Update(uuid string, dto domain.{{Resource}}UpdateDTO) error {
-	entity, err := s.repo.FindByUUID(uuid)
-	if err != nil {
-		return err
-	}
-
-    // Update fields
-    _ = dto
-    _ = entity
-
-	if err = s.repo.Update(*entity); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s *{{resources}}Service) Delete(uuid string) error {
-	return s.repo.Delete(uuid)
+func (s *{{resources}}Service) Delete(ctx context.Context, uuid string) error {
+	return s.repo.Delete(ctx, uuid)
 }
