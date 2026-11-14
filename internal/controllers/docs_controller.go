@@ -2,6 +2,7 @@ package controllers
 
 import (
 	_ "embed"
+	"log/slog"
 	"net/http"
 
 	_ "go-net-http-auth-base/docs/swagger"
@@ -45,7 +46,9 @@ func (c *DocsController) LoginGate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
-	w.Write(swaggerLoginPage)
+	if _, err := w.Write(swaggerLoginPage); err != nil {
+		slog.ErrorContext(r.Context(), "LoginGate write failed", "error", err)
+	}
 }
 
 func (c *DocsController) swaggerUI() http.HandlerFunc {
