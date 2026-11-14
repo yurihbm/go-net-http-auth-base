@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Layered architecture and composition root",
+    "output": ".archify/layered-architecture.html",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/yurihbm/go-net-http-auth-base.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "1dea67196c033b1de646f7921ec99b40ddd8da7a"
+    }
+  },
+  "components": [
+    {
+      "id": "root",
+      "type": "backend",
+      "icon": "backend",
+      "label": "Composition root",
+      "sublabel": "cmd/main.go + factories",
+      "tag": "built once",
+      "pos": [
+        770,
+        40
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/factories/dependencies.go",
+          "line": 27,
+          "end_line": 77,
+          "label": "NewDependencies"
+        },
+        {
+          "path": "cmd/main.go",
+          "line": 147,
+          "end_line": 158,
+          "label": "factories register routes"
+        }
+      ]
+    },
+    {
+      "id": "client",
+      "type": "external",
+      "label": "Client",
+      "sublabel": "browser / mobile",
+      "pos": [
+        40,
+        220
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "chain",
+      "type": "backend",
+      "icon": "security",
+      "label": "Global middlewares",
+      "sublabel": "context, UUID, OTel, log, CORS, rate",
+      "pos": [
+        250,
+        220
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "sources": [
+        {
+          "path": "cmd/main.go",
+          "line": 160,
+          "end_line": 178,
+          "label": "middleware chain"
+        }
+      ]
+    },
+    {
+      "id": "controllers",
+      "type": "backend",
+      "label": "Controllers",
+      "sublabel": "decode, validate, map errors",
+      "pos": [
+        530,
+        220
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/controllers/users_controller.go",
+          "line": 32,
+          "end_line": 39,
+          "label": "RegisterRoutes"
+        },
+        {
+          "path": "internal/api/errors.go",
+          "line": 12,
+          "end_line": 64,
+          "label": "HandleError"
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "type": "backend",
+      "label": "Services",
+      "sublabel": "business rules, WithinTx",
+      "pos": [
+        790,
+        220
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/services/users_service.go",
+          "line": 15,
+          "end_line": 57
+        },
+        {
+          "path": "internal/domain/users.go",
+          "line": 58,
+          "end_line": 76,
+          "label": "domain interfaces"
+        }
+      ]
+    },
+    {
+      "id": "repositories",
+      "type": "backend",
+      "label": "Repositories",
+      "sublabel": "sqlc Queries, TxAwareDB",
+      "pos": [
+        1050,
+        220
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/repositories/users_repository.go",
+          "line": 13,
+          "end_line": 54
+        },
+        {
+          "path": "internal/repositories/transactor.go",
+          "line": 25,
+          "end_line": 82,
+          "label": "WithinTx + TxAwareDB"
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "pgxpool",
+      "pos": [
+        1050,
+        400
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "postgres/connection.go",
+          "line": 20,
+          "end_line": 54,
+          "label": "NewConnectionPool"
+        }
+      ]
+    },
+    {
+      "id": "providers",
+      "type": "backend",
+      "icon": "external",
+      "label": "Providers",
+      "sublabel": "OAuth, email adapters",
+      "pos": [
+        790,
+        400
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/providers/oauth_provider_registry.go",
+          "line": 1,
+          "end_line": 72
+        },
+        {
+          "path": "internal/factories/dependencies.go",
+          "line": 79,
+          "end_line": 85,
+          "label": "email provider choice"
+        }
+      ]
+    },
+    {
+      "id": "external",
+      "type": "external",
+      "label": "External APIs",
+      "sublabel": "Google, GitHub, Microsoft, Resend",
+      "pos": [
+        470,
+        400
+      ],
+      "size": [
+        230,
+        64
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-chain",
+      "from": "client",
+      "to": "chain",
+      "label": "HTTP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "chain-controllers",
+      "from": "chain",
+      "to": "controllers",
+      "label": "ServeMux",
+      "variant": "emphasis"
+    },
+    {
+      "id": "controllers-services",
+      "from": "controllers",
+      "to": "services",
+      "label": "interface",
+      "variant": "emphasis"
+    },
+    {
+      "id": "services-repositories",
+      "from": "services",
+      "to": "repositories",
+      "label": "interface",
+      "variant": "emphasis"
+    },
+    {
+      "id": "repositories-db",
+      "from": "repositories",
+      "to": "db",
+      "label": "SQL",
+      "variant": "emphasis"
+    },
+    {
+      "id": "services-providers",
+      "from": "services",
+      "to": "providers",
+      "label": "interface"
+    },
+    {
+      "id": "providers-external",
+      "from": "providers",
+      "to": "external",
+      "label": "HTTPS"
+    },
+    {
+      "id": "root-controllers",
+      "from": "root",
+      "to": "controllers",
+      "label": "injects",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "id": "root-services",
+      "from": "root",
+      "to": "services",
+      "label": "injects",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "root-repositories",
+      "from": "root",
+      "to": "repositories",
+      "label": "injects",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Dependency rule",
+      "items": [
+        "Interfaces and DTOs live in internal/domain",
+        "Each layer depends on the next one's domain interface, never on a concrete type"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Composition root",
+      "items": [
+        "NewDependencies builds repositories, services and middlewares once",
+        "Thin per-controller factories pick from *Dependencies"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Transactions",
+      "items": [
+        "Services call Transactor.WithinTx",
+        "TxAwareDB makes repositories join the tx carried in ctx"
+      ]
+    }
+  ]
+}

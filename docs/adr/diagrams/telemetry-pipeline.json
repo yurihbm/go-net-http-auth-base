@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Telemetry pipeline: OpenTelemetry to Grafana LGTM",
+    "output": ".archify/telemetry-pipeline.html",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/yurihbm/go-net-http-auth-base.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "1dea67196c033b1de646f7921ec99b40ddd8da7a"
+    }
+  },
+  "stages": [
+    {
+      "label": "Instrument"
+    },
+    {
+      "label": "OTel SDK"
+    },
+    {
+      "label": "Collect"
+    },
+    {
+      "label": "Store"
+    },
+    {
+      "label": "Explore"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "http",
+      "type": "backend",
+      "label": "HTTP middleware",
+      "sublabel": "otelhttp + route",
+      "stage": 0,
+      "row": 0,
+      "sources": [
+        {
+          "path": "internal/middlewares/telemetry_middleware.go",
+          "line": 21,
+          "end_line": 54
+        }
+      ]
+    },
+    {
+      "id": "pgx",
+      "type": "backend",
+      "label": "pgx tracer",
+      "sublabel": "span per query",
+      "stage": 0,
+      "row": 1,
+      "sources": [
+        {
+          "path": "postgres/otel_query_tracer.go",
+          "line": 51,
+          "end_line": 117
+        },
+        {
+          "path": "cmd/main.go",
+          "line": 86,
+          "end_line": 99,
+          "label": "wired when enabled"
+        }
+      ]
+    },
+    {
+      "id": "gauges",
+      "type": "backend",
+      "label": "Pool + runtime",
+      "sublabel": "gauges",
+      "stage": 0,
+      "row": 2,
+      "sources": [
+        {
+          "path": "postgres/pool_metrics.go",
+          "line": 11
+        },
+        {
+          "path": "internal/telemetry/telemetry.go",
+          "line": 106,
+          "label": "runtime.Start"
+        }
+      ]
+    },
+    {
+      "id": "slog",
+      "type": "backend",
+      "label": "slog",
+      "sublabel": "stdout + otelslog",
+      "stage": 0,
+      "row": 3,
+      "sources": [
+        {
+          "path": "internal/logger/logger.go",
+          "line": 38,
+          "end_line": 64
+        },
+        {
+          "path": "cmd/main.go",
+          "line": 80,
+          "end_line": 84,
+          "label": "fan-out handler"
+        }
+      ]
+    },
+    {
+      "id": "sdk",
+      "type": "backend",
+      "label": "OTel providers",
+      "sublabel": "trace, meter, logger",
+      "tag": "OTEL_ENABLED",
+      "stage": 1,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/telemetry/telemetry.go",
+          "line": 56,
+          "end_line": 131,
+          "label": "telemetry.New"
+        }
+      ],
+      "yOffset": 69
+    },
+    {
+      "id": "collector",
+      "type": "cloud",
+      "label": "OTel Collector",
+      "sublabel": "otel-lgtm :4318",
+      "stage": 2,
+      "row": 1,
+      "sources": [
+        {
+          "path": "docker/docker-compose.dev.yaml",
+          "line": 26,
+          "end_line": 38
+        }
+      ],
+      "yOffset": 69
+    },
+    {
+      "id": "tempo",
+      "type": "database",
+      "label": "Tempo",
+      "sublabel": "traces",
+      "stage": 3,
+      "row": 0,
+      "yOffset": 69
+    },
+    {
+      "id": "prom",
+      "type": "database",
+      "label": "Prometheus",
+      "sublabel": "metrics",
+      "stage": 3,
+      "row": 1,
+      "yOffset": 69
+    },
+    {
+      "id": "loki",
+      "type": "database",
+      "label": "Loki",
+      "sublabel": "logs",
+      "stage": 3,
+      "row": 2,
+      "yOffset": 69
+    },
+    {
+      "id": "grafana",
+      "type": "frontend",
+      "label": "Grafana",
+      "sublabel": "5 dashboards",
+      "stage": 4,
+      "row": 1,
+      "sources": [
+        {
+          "path": "docker/grafana/provisioning/dashboards.yaml"
+        }
+      ],
+      "yOffset": 69
+    }
+  ],
+  "flows": [
+    {
+      "id": "http-sdk",
+      "from": "http",
+      "to": "sdk",
+      "label": "spans + RED",
+      "variant": "emphasis"
+    },
+    {
+      "id": "pgx-sdk",
+      "from": "pgx",
+      "to": "sdk",
+      "label": "query spans",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gauges-sdk",
+      "from": "gauges",
+      "to": "sdk",
+      "label": "observations"
+    },
+    {
+      "id": "slog-sdk",
+      "from": "slog",
+      "to": "sdk",
+      "label": "log records"
+    },
+    {
+      "id": "sdk-collector",
+      "from": "sdk",
+      "to": "collector",
+      "label": "OTLP/HTTP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "collector-tempo",
+      "from": "collector",
+      "to": "tempo",
+      "label": "traces"
+    },
+    {
+      "id": "collector-prom",
+      "from": "collector",
+      "to": "prom",
+      "label": "metrics",
+      "variant": "emphasis"
+    },
+    {
+      "id": "collector-loki",
+      "from": "collector",
+      "to": "loki",
+      "label": "logs"
+    },
+    {
+      "id": "tempo-grafana",
+      "from": "tempo",
+      "to": "grafana",
+      "label": "TraceQL"
+    },
+    {
+      "id": "prom-grafana",
+      "from": "prom",
+      "to": "grafana",
+      "label": "PromQL",
+      "variant": "emphasis"
+    },
+    {
+      "id": "loki-grafana",
+      "from": "loki",
+      "to": "grafana",
+      "label": "LogQL"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Lean, no wrapper",
+      "items": [
+        "OTel SDK used directly; no domain Tracer/Meter interfaces",
+        "otel imports only in telemetry, middlewares, logger, factories, postgres, cmd"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Gating",
+      "items": [
+        "OTEL_ENABLED=false wires nothing and returns no-op providers",
+        "GET /health and GET /ready produce no spans or metrics"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Cardinality and PII",
+      "items": [
+        "Metrics carry only the route pattern, never the raw path",
+        "Request UUID on spans only; query args never recorded"
+      ]
+    }
+  ]
+}
