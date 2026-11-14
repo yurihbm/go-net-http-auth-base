@@ -25,21 +25,37 @@ The project follows a clean architecture pattern:
 
 - `cmd/main.go`: The application's entry point, where the server is initialized
   and routes are registered.
+- `config/`: Loads and validates every environment variable (`config.Load`) and
+  builds the OAuth client configs.
 - `internal/`: Contains the core application logic.
-  - `api/`: Defines the JSON response structure.
+  - `api/`: Defines the JSON request decoding/validation, response structure,
+    error mapping and cookies.
   - `controllers/`: Handles HTTP requests and responses, calling services to
     perform business logic.
   - `services/`: Implements the business logic of the application.
   - `repositories/`: Provides an abstraction layer for data access, interacting
     with the database.
+  - `providers/`: Adapters for external services (OAuth providers, email).
+  - `middlewares/`: HTTP middlewares (auth, role, CORS, rate limit, logger,
+    telemetry, request UUID, request context data).
   - `domain/`: Defines the core data structures and interfaces.
   - `factories/`: Composition root. `dependencies.go` builds the shared
     dependency graph (repositories, services, middlewares) once; the other
     files are thin per-controller factories that wire pieces of `Dependencies`
     into a controller.
+  - `mocks/`: testify mocks of the domain interfaces.
+  - `infra/`: Background infrastructure tasks (`AuditLogsPartitionManager`).
+  - `logger/`, `telemetry/`: `slog` setup and the OpenTelemetry SDK bootstrap.
+  - `shared/`: Request context data (`RequestContextData`) shared by
+    middlewares, `api` and controllers.
+  - `env/`: Typed environment variable lookups used by `config`.
 - `postgres/`: Contains database-related code, including the database connection,
-  generated queries from `sqlc`, and migrations.
-- `docker/`: Contains Docker-related files for setting up the development environment.
+  generated queries from `sqlc`, migrations, query tracers and the integration
+  test helper (`NewTestPool`).
+- `docker/`: Dockerfile, the dev compose (PostgreSQL, pgAdmin, Grafana LGTM),
+  the prod compose and the Grafana dashboards.
+- `docs/`: ADRs (`adr/`), the generated Swagger spec (`swagger/`), `ERRORS.md`
+  and `AUDIT.md`.
 
 ## Available Skills
 
@@ -104,7 +120,7 @@ This will create an executable file in the `bin/` directory.
 The project uses Docker Compose to manage the PostgreSQL database. To start the database, run:
 
 ```bash
-docker-compose -f docker/docker-compose.yaml up -d
+docker compose --env-file .env -f docker/docker-compose.dev.yaml up -d
 ```
 
 To run database migrations, use the following commands:
@@ -129,7 +145,7 @@ make swagger-gen
 
 ## Development Conventions
 
-- **Testing:** The project has a suite of tests for controllers, services, and repositories. Tests are located in the same package as the code they are testing, with the `_test.go` suffix.
+- **Testing:** The project has a suite of tests for controllers, services, and repositories. Tests live next to the code they test, with the `_test.go` suffix. `go test ./...` runs everything (integration tests need Docker); `go test -short ./...` skips the integration tests; `make show-cover` prints the coverage CI reports.
 - **Styling:** The code seems to follow standard Go formatting.
 - **JSON Responses:** The `internal/api/response.go` file defines a standardized JSON response format for all API endpoints.
 - **Dependency Injection:** `internal/factories/dependencies.go` builds the app's shared dependency graph once (`NewDependencies`), and `cmd/main.go` passes the resulting `*Dependencies` into thin per-controller factories, which promotes loose coupling and testability.
@@ -182,12 +198,20 @@ Controllers handle HTTP requests and responses. Key patterns:
 ```go
 type UsersController struct {
     userService    domain.UsersService
-    authMiddleware middlewares.Middleware
+    auditService   domain.AuditService
+    authMiddleware middlewares.HandlerMiddleware
 }
 
-func NewUsersController(service domain.UsersService, authMiddleware middlewares.Middleware) *UsersController {
+var _ Controller = (*UsersController)(nil)
+
+func NewUsersController(
+    service domain.UsersService,
+    auditService domain.AuditService,
+    authMiddleware middlewares.HandlerMiddleware,
+) *UsersController {
     return &UsersController{
         userService:    service,
+        auditService:   auditService,
         authMiddleware: authMiddleware,
     }
 }
@@ -195,6 +219,11 @@ func NewUsersController(service domain.UsersService, authMiddleware middlewares.
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
     router.HandleFunc("POST /users", c.CreateUser)
     router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
+}
+
+// factories/users_factory.go
+func UsersFactory(deps *Dependencies) controllers.Controller {
+    return controllers.NewUsersController(deps.UsersService, deps.AuditService, deps.AuthMiddleware)
 }
 ```
 
@@ -208,47 +237,49 @@ Services implement business logic. Key patterns:
 - **Business Logic**:
   - Services orchestrate repository calls and apply business rules.
   - Password hashing is performed in the service layer using `bcrypt.GenerateFromPassword()`.
-  - Validation logic (e.g., checking if password is required for email auth) is handled here.
+  - Input shape is validated in the controller (`api.DecodeAndValidate`); services enforce business rules (e.g., self-or-admin access through `Actor.CanAccess`, which returns a `ForbiddenError`).
   - Services perform partial updates by fetching existing entities, modifying only provided fields, then calling repository update.
-- **Email**: `domain.EmailProvider` (`Send`) is built once in `factories.Dependencies`: `ResendEmailProvider` when `RESEND_API_KEY` is set, otherwise `LogEmailProvider` (development). `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_VERIFICATION_URL` are required outside development and `SESSION_MAX_AGE` (default 30d) is optional; all are loaded and validated in `config/config.go`.
+- **Email**: `domain.EmailProvider` (`Send`) is built once in `factories.Dependencies`: `ResendEmailProvider` when `RESEND_API_KEY` is set, otherwise `LogEmailProvider` (development). `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_VERIFICATION_URL` are required outside development; all are loaded and validated in `config/config.go`.
 - **Email Verification**: `domain.EmailVerificationService` (`services.NewEmailVerificationService`, depends only on `TokenService`, `EmailProvider` and the verification URL) sends the mail (`SendVerificationEmail`) and checks its token (`VerifyVerificationToken`). `UsersService` owns the flow: `Create` (`POST /users`) sends the mail and only logs a failure (`CreateOAuth` never sends), `VerifyEmail` backs `POST /users/verify-email` and `ResendVerification` backs `POST /users/resend-verification` (silent for unknown or already verified emails). The link carries a JWT with audience `email_verification_token` (24h). OAuth account creation requires a provider-verified email, and linking into an existing account requires both provider and local `email_verified`.
 - **Email Normalization**: Services always pass emails through the unexported `normalizeEmail` helper (`services/helpers.go`, trim + lowercase) before lookup or write; repositories receive already normalized emails; the database enforces a unique index on `lower(email)`.
 - **Refresh Sessions**: Multi-device: each login (credentials or OAuth, via `startSession`) creates a row in `user_sessions` (`current_jti`, `last_used_at`, `expires_at` = login + `SESSION_MAX_AGE`, never extended on rotation), inside one `WithinTx` that first deletes the user's expired or idle sessions and then trims the user to the newest `MAX_SESSIONS_PER_USER` (optional, default 10; least recently used evicted). Refresh tokens carry `sub`, `sid` and `jti`; access tokens carry `sub` and `sid` (`tokenService` rejects either without `sid`). Refresh loads the session by `sid` + `sub`, rejects it past `expires_at`, and rotates the `jti` through `SessionsRepository.RotateJTI` (per-session atomic compare-and-set, keeping the same `sid`); a reused or stale token, or a lost concurrent refresh, deletes only that session (the user's other devices stay signed in). There is no grace window, so clients must send one refresh at a time. `POST /auth/logout` is authenticated (`AuthMiddleware` puts `SessionUUID` in `shared.RequestContextData`) and deletes only the current session; the stateless access token stays valid for up to 15 minutes after logout, but the session can no longer be refreshed. With an expired access token, clients refresh first and then log out.
 - **Token Interfaces**: All JWTs are signed and verified by the dependency-free `tokenService` (`services.NewTokenService`, holds only the JWT secret; `domain.TokenService`), used by `AuthService` (which delegates its token methods to it) and `EmailVerificationService`. `domain.TokenVerifier` (`VerifyToken`) is what middlewares depend on; `domain.TokenGenerator` (`GenerateToken`) is separate and not part of `AuthService`. Depend on the narrowest one.
-- **Error Handling**: Services return domain-specific errors with meaningful messages (e.g., `"user.create.password_required"`).
+- **Error Handling**: Services return domain-specific errors with meaningful messages (e.g., `"users.forbidden"`). See `docs/ERRORS.md`.
 - **Multi-Step Orchestration**: Flows spanning several steps and services (e.g., `AuthService.OAuthLogin`, which verifies the state token, resolves/creates the user via `UsersService`, links the OAuth provider, and mints tokens) are implemented as a single service method. Controllers stay thin: decode input, call the one service method, then handle the HTTP concerns (cookies, redirect, audit log).
 
 **Example Structure**:
 
 ```go
 type usersService struct {
-    repo domain.UsersRepository
+    repo              domain.UsersRepository
+    emailVerification domain.EmailVerificationService
 }
 
-func NewUserService(repo domain.UsersRepository) domain.UsersService {
-    return &usersService{repo: repo}
+func NewUserService(repo domain.UsersRepository, emailVerification domain.EmailVerificationService) domain.UsersService {
+    return &usersService{repo: repo, emailVerification: emailVerification}
 }
 
-func (s *usersService) Create(dto *domain.CreateUserDTO) (*domain.User, error) {
-    // Business logic + validation
-    user := &domain.User{
-        Name:  dto.Name,
-        Email: dto.Email,
+func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*domain.User, error) {
+    hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
+    if err != nil {
+        return nil, domain.NewInternalServerError("users.create.passwordHashingFailed", err)
+    }
+    user := domain.User{
+        Name:         dto.Name,
+        Email:        normalizeEmail(dto.Email),
+        PasswordHash: string(hash),
+        Role:         domain.RoleUser,
+    }
+    created, err := s.repo.Create(ctx, user)
+    if err != nil {
+        return nil, err
     }
 
-    if dto.AuthMethod == domain.AuthMethodEmail {
-        if dto.Password == nil {
-            return nil, errors.New("user.create.password_required")
-        }
-        hash, err := bcrypt.GenerateFromPassword([]byte(*dto.Password), bcrypt.DefaultCost)
-        if err != nil {
-            return nil, err
-        }
-        user.PasswordHash = string(hash)
+    if err := s.emailVerification.SendVerificationEmail(ctx, created); err != nil {
+        slog.ErrorContext(ctx, "verification email failed", "error", err, "user_uuid", created.UUID)
     }
 
-    err := s.repo.Create(user)
-    return user, err
+    return created, nil
 }
 ```
 
@@ -260,9 +291,10 @@ Repositories handle data persistence. Key patterns:
 - **Interface Implementation**: Repositories implement domain repository interfaces.
 - **SQLC Integration**: Repositories use `postgres.Queries` generated by `sqlc` for type-safe database operations.
 - **Context Usage**: All repository methods take `context.Context` as the first argument and propagate it to `postgres.Queries` calls; controllers pass `r.Context()` through services down to repositories.
-- **UUID Handling**: UUIDs are converted between string and `pgtype.UUID` format for database operations using `uuid.Parse()`.
+- **UUID Handling**: UUIDs are converted between string and `pgtype.UUID` with the `parseUUID` helper (`repositories/helpers.go`), which returns a domain error for invalid input.
+- **Error Mapping**: Infrastructure errors are mapped to domain errors with `isNoRowsError`, `isConflictError` and `isForeignKeyViolationError`; anything else becomes an `InternalServerError` wrapping the cause (see `docs/ERRORS.md`).
 - **Data Transformation**: Use dedicated mapper functions (e.g., `toDomainUser()`) to convert between database models and domain models.
-- **Pointer Updates**: Repository `Create()` methods update the passed entity pointer with database-generated fields (UUID, timestamps).
+- **Returned Entities**: Repository `Create()`/`Update()` methods receive the entity by value and return a pointer to the persisted entity, including database-generated fields (UUID, timestamps).
 - **pgtype Usage**: Nullable database fields use `pgtype` types (e.g., `pgtype.Text`, `pgtype.UUID`).
 - **Transactions**: Services that need several repository calls to succeed or fail together depend on `domain.Transactor` and call `WithinTx(ctx, func(ctx) error)`, using the closure's `ctx` for every call inside it. Always name the closure parameter `ctx` so it shadows the outer one: using the outer context runs the query outside the transaction without any error. Cover each transactional flow with an integration test that forces a failure and asserts nothing was persisted (e.g. `oauth_login_transaction_test.go`). `repositories.PostgresTransactor` stores the `pgx.Tx` in the context, and repositories are built on `repositories.TxAwareDB` (a `postgres.DBTX`) so they join the active transaction automatically. A nested `WithinTx` joins the outer transaction.
 
@@ -281,13 +313,18 @@ func NewUsersPostgresRepository(db postgres.DBTX) domain.UsersRepository {
 
 func (r *UsersPostgresRepository) Create(ctx context.Context, user domain.User) (*domain.User, error) {
     params := postgres.CreateUserParams{
-        Name:  user.Name,
-        Email: user.Email,
+        Name:          user.Name,
+        Email:         user.Email,
+        PasswordHash:  pgtype.Text{String: user.PasswordHash, Valid: true},
+        EmailVerified: user.EmailVerified,
     }
 
     createdUser, err := r.q.CreateUser(ctx, params)
     if err != nil {
-        return nil, err
+        if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
+            return nil, conflictErr
+        }
+        return nil, domain.NewInternalServerError("users.internalServerError", err)
     }
 
     user = toDomainUser(createdUser)
@@ -297,11 +334,14 @@ func (r *UsersPostgresRepository) Create(ctx context.Context, user domain.User) 
 func toDomainUser(user postgres.User) domain.User {
     var uuidBytes = user.Uuid.Bytes
     return domain.User{
-        UUID:      uuid.UUID(uuidBytes).String(),
-        Name:      user.Name,
-        Email:     user.Email,
-        CreatedAt: user.CreatedAt.Time.Unix(),
-        UpdatedAt: user.UpdatedAt.Time.Unix(),
+        UUID:          uuid.UUID(uuidBytes).String(),
+        Name:          user.Name,
+        Email:         user.Email,
+        Role:          domain.UserRole(user.Role),
+        EmailVerified: user.EmailVerified,
+        PasswordHash:  user.PasswordHash.String,
+        CreatedAt:     user.CreatedAt.Time.Unix(),
+        UpdatedAt:     user.UpdatedAt.Time.Unix(),
     }
 }
 ```
@@ -330,10 +370,16 @@ func toDomainUser(user postgres.User) domain.User {
 **Example**:
 
 ```go
-func TestCreateUser(t *testing.T) {
+func TestUsersController_CreateUser(t *testing.T) {
+    dto := domain.CreateUserDTO{Name: "John Doe", Email: "john.doe@example.com", Password: "password123"}
+    user := &domain.User{UUID: "test-uuid", Name: dto.Name, Email: dto.Email, Role: domain.RoleUser}
+
     t.Run("success", func(t *testing.T) {
-        controller, serviceMock, _ := newTestUsersController()
-        serviceMock.On("Create", &dto).Return(user, nil)
+        controller, serviceMock, auditMock, _ := newTestUsersController()
+        serviceMock.On("Create", dto).Return(user, nil)
+        auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+            return d.Action == domain.AuditActionUserCreate && d.Status == domain.AuditStatusSuccess
+        })).Return(nil)
 
         w, req := getControllerArgs("POST", "/users/", dto)
         controller.CreateUser(w, req)
@@ -343,8 +389,8 @@ func TestCreateUser(t *testing.T) {
 
         assert.Nil(t, err)
         assert.Equal(t, http.StatusCreated, w.Code)
-        assert.Equal(t, response.Data, *user)
-        serviceMock.AssertCalled(t, "Create", &dto)
+        assert.Equal(t, *user, response.Data)
+        serviceMock.AssertCalled(t, "Create", dto)
     })
 }
 ```
@@ -355,33 +401,33 @@ func TestCreateUser(t *testing.T) {
 - **Password Testing**: Use `bcrypt.CompareHashAndPassword()` to verify password hashing.
 - **Mock Verification**: Use `.Run()` callbacks to inspect arguments passed to mocks.
 - **Matcher Functions**: Use `mock.MatchedBy()` for complex argument matching.
-- **Test Coverage**: Test all business logic branches (different auth methods, validation errors, repository errors).
+- **Test Coverage**: Test all business logic branches (authorization, validation errors, repository errors, side-effect failures).
 
 **Example**:
 
 ```go
 func TestUsersService_Create(t *testing.T) {
-    repo := new(mocks.UsersRepositoryMock)
-    service := services.NewUserService(repo)
+    dto := domain.CreateUserDTO{Name: "Test User", Email: "Test@Example.com", Password: "password123"}
+    created := &domain.User{UUID: "generated-uuid", Name: "Test User", Email: "test@example.com", Role: domain.RoleUser}
 
-    t.Run("success with email auth", func(t *testing.T) {
-        password := "password123"
-        dto := &domain.CreateUserDTO{
-            AuthMethod: domain.AuthMethodEmail,
-            Password:   &password,
-        }
+    t.Run("success", func(t *testing.T) {
+        repo := new(mocks.UsersRepositoryMock)
+        sender := new(mocks.EmailVerificationServiceMock)
+        service := services.NewUserService(repo, sender)
 
-        repo.On("Create", mock.AnythingOfType("*domain.User")).Return(nil).Once().Run(func(args mock.Arguments) {
-            userArg := args.Get(0).(*domain.User)
-            err := bcrypt.CompareHashAndPassword([]byte(userArg.PasswordHash), []byte(password))
-            assert.NoError(t, err)
+        repo.On("Create", mock.AnythingOfType("domain.User")).Return(created, nil).Once().Run(func(args mock.Arguments) {
+            userArg := args.Get(0).(domain.User)
+            assert.Equal(t, "test@example.com", userArg.Email)
+            assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(userArg.PasswordHash), []byte(dto.Password)))
         })
+        sender.On("SendVerificationEmail", mock.Anything, created).Return(nil).Once()
 
-        user, err := service.Create(dto)
+        user, err := service.Create(context.Background(), dto)
 
         assert.NoError(t, err)
-        assert.NotNil(t, user)
+        assert.Equal(t, created, user)
         repo.AssertExpectations(t)
+        sender.AssertExpectations(t)
     })
 }
 ```
@@ -390,51 +436,40 @@ func TestUsersService_Create(t *testing.T) {
 
 - **Integration Tests**: Repository tests are integration tests that connect to a real database.
 - **Scaffolding**: Use `go-resource-scaffolder` to generate the boilerplate for these tests.
-- **Test Database**: Use Docker Compose to spin up an isolated PostgreSQL instance for testing.
-- **TestMain Setup**:
-  - Start Docker container using `docker compose up -d --wait`.
-  - Run migrations using `golang-migrate`.
-  - Create database connection pool.
-  - Run tests.
-  - Teardown: close connections and stop Docker container.
-- **Test Isolation**: Truncate tables between tests using a `truncateTables()` helper function.
-- **Short Mode**: Skip integration tests when running with `-short` flag.
+- **Test Database**: `postgres.NewTestPool(ctx)` starts an ephemeral `postgres:18-alpine` container with testcontainers (only Docker is needed, no compose file or `migrate` CLI), applies `postgres/migrations` with `golang-migrate` as a library, sets `DATABASE_URL` and returns a pool plus a cleanup function. The host port is the first free one in `15432`–`15499` (override with `TEST_DB_PORT_START`/`TEST_DB_PORT_END`).
+- **TestMain Setup**: One `TestMain` per package with integration tests (`internal/repositories/repositories_test.go`, `internal/infra`) calls `NewTestPool`, runs the tests and calls the cleanup.
+- **Test Isolation**: Truncate tables between tests using a `truncateTables()` helper function; add new tables to its list.
+- **Short Mode**: `TestMain` skips the container with `-short`, and each test calls `t.Skip` when `testing.Short()`.
 - **Test Coverage**: Test success cases, constraint violations (e.g., duplicate email), invalid inputs, and not found scenarios.
 
 **Example**:
 
 ```go
 func TestMain(m *testing.M) {
-    ctx := context.Background()
+    flag.Parse()
+    if testing.Short() {
+        os.Exit(m.Run())
+    }
 
-    // Start Docker container
-    cmd := exec.Command("docker", "compose", "-f", "../../docker/docker-compose.test.yaml", "up", "-d", "--wait")
-    if err := cmd.Run(); err != nil {
+    pool, cleanup, err := postgres.NewTestPool(context.Background())
+    if err != nil {
         log.Fatalf("Could not start testing database: %v", err)
     }
+    testDB = pool
 
-    // Run migrations
-    cmd = exec.Command("migrate", "-path", "./../../postgres/migrations", "-database", connStr, "up")
-    if err := cmd.Run(); err != nil {
-        log.Fatalf("Could not migrate the database: %v", err)
-    }
-
-    // Setup database connection
-    testDB, _ = pgxpool.New(ctx, connStr)
-
-    // Run tests
     code := m.Run()
 
-    // Teardown
-    testDB.Close()
-    exec.Command("docker", "compose", "-f", "../../docker/docker-compose.test.yaml", "down").Run()
+    cleanup()
+
     os.Exit(code)
 }
 
 func truncateTables(ctx context.Context, db *pgxpool.Pool) {
-    tables := []string{"users"}
+    tables := []string{"audit_logs", "user_sessions", "user_oauth_providers", "users"}
     for _, table := range tables {
-        db.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table))
+        if _, err := db.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table)); err != nil {
+            log.Fatalf("Failed to truncate table %s: %v", table, err)
+        }
     }
 }
 ```
@@ -445,6 +480,7 @@ func truncateTables(ctx context.Context, db *pgxpool.Pool) {
 - **Interface Compliance**: Mocks verify interface compliance using `var _ InterfaceName = (*MockName)(nil)`.
 - **Testify/Mock**: Use `github.com/stretchr/testify/mock` for mock implementations.
 - **Return Handling**: Check if return value is not nil before type assertion to avoid panics.
+- **Context Argument**: Most mocks accept `ctx` but leave it out of `m.Called(...)`, so expectations match only the business arguments; follow the existing mock of the interface you extend.
 - **Naming Convention**: Mocks are named with the `Mock` suffix (e.g., `UsersServiceMock`, `UsersRepositoryMock`).
 
 **Example**:
@@ -456,8 +492,8 @@ type UsersServiceMock struct {
 
 var _ domain.UsersService = (*UsersServiceMock)(nil)
 
-func (m *UsersServiceMock) GetByUUID(uuid string) (*domain.User, error) {
-    args := m.Called(uuid)
+func (m *UsersServiceMock) GetByUUID(ctx context.Context, actor domain.Actor, uuid string) (*domain.User, error) {
+    args := m.Called(actor, uuid)
     if args.Get(0) != nil {
         return args.Get(0).(*domain.User), args.Error(1)
     }
@@ -471,12 +507,13 @@ func (m *UsersServiceMock) GetByUUID(uuid string) (*domain.User, error) {
 - **DTOs**: Data Transfer Objects are defined for create and update operations (e.g., `CreateUserDTO`, `UserUpdateDTO`).
 - **Pointer Fields**: Update DTOs use pointer fields to distinguish between "not provided" and "set to zero value".
 - **Domain Models**: Core entities (e.g., `User`) are defined in the domain package with all necessary fields.
-- **Enums**: Use typed constants for enums (e.g., `AuthMethod` with values like `AuthMethodEmail`, `AuthMethodGoogle`).
+- **Enums**: Use typed constants for enums (e.g., `UserRole` with `RoleAdmin`/`RoleUser`, `TokenAudience`, `OAuthProviderName`).
+- **Validation Tags**: Request DTOs declare their input rules with `validate:"..."` tags (e.g., `CreateUserDTO.Password` is `validate:"required,min=8"`).
 
 ### General Best Practices
 
-- **Error Messages**: Use dot-separated keys for error messages (e.g., `"user.create.failed"`) to support internationalization.
-- **Pointer Usage**: Services and repositories accept and return pointers to avoid unnecessary copying.
+- **Error Messages**: Use dot-separated keys for error messages (e.g., `"users.email.conflict"`) to support internationalization.
+- **Pointer Usage**: Services and repositories receive DTOs and entities by value and return pointers to entities (`*domain.User`), so a `nil` result pairs with an error.
 - **Dependency Injection**: All dependencies are injected via constructors, never created inside the dependent struct. Shared instances are built once in the composition root (`internal/factories/dependencies.go`), not re-created per factory.
 - **Interface-Driven Design**: Program to interfaces, not implementations. This allows easy mocking and testing.
 - **Comments**: The code is self-documenting. Comments are allowed only for swag annotations on controller handlers (and the general API info above `main` in `cmd/main.go`) and for explaining complex business logic. No decorative godoc.

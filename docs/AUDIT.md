@@ -6,7 +6,7 @@ This project implements a comprehensive audit logging system designed to track a
 
 ## Architecture
 
-The audit system follows the project's layered architecture pattern and consists of four main components:
+The audit system follows the project's layered architecture pattern and consists of these components:
 
 ### 1. Domain Layer (`internal/domain/audit.go`)
 
@@ -14,10 +14,20 @@ Defines the core audit data structures and interfaces:
 
 - **`AuditLog`**: The domain model representing a single audit log entry
 - **`CreateAuditLogDTO`**: Data Transfer Object for creating new audit logs
-- **`AuditRepository`**: Interface for persistence operations
-- **`AuditService`**: Interface for business logic (not yet implemented)
+- **`ListAuditLogsDTO`** / **`AuditLogPage`**: Filters and result page for listing audit logs
+- **`AuditRepository`**: Interface for persistence operations (`Create`, `List`)
+- **`AuditService`**: Interface for business logic (`Log`, `List`)
 
-### 2. Repository Layer (`internal/repositories/audit_repository.go`)
+### 2. Controllers (`internal/controllers/audit_helpers.go`, `audit_controller.go`)
+
+- **Writing**: `UsersController` and `AuthController` call the unexported `auditLog` helper on both the success and failure paths of each audited action. It fills `RequestUUID` from `shared.RequestContextData` and the client IP and user agent from the request, then calls `AuditService.Log`. A persistence failure is only logged (`audit log failed`) and never changes the HTTP response.
+- **Reading**: `AuditController` serves `GET /audit-logs` (see [Listing Audit Logs](#listing-audit-logs)).
+
+### 3. Service Layer (`internal/services/audit_service.go`)
+
+`auditService` maps `CreateAuditLogDTO` to an `AuditLog` for the repository, and builds the cursor page for `List`.
+
+### 4. Repository Layer (`internal/repositories/audit_repository.go`)
 
 Implements data persistence through `AuditPostgresRepository`:
 
@@ -25,15 +35,15 @@ Implements data persistence through `AuditPostgresRepository`:
 - Marshals the `Changes` field to JSONB for flexible storage
 - Uses `sqlc`-generated queries for type-safe database operations
 
-### 3. Infrastructure Layer (`internal/infra/audit_logs_partition_manager.go`)
+### 5. Infrastructure Layer (`internal/infra/audit_logs_partition_manager.go`)
 
 Manages database partitions to ensure optimal performance:
 
 - **`AuditLogsPartitionManager`**: Automatically creates and maintains monthly partitions
-- Runs maintenance on application startup and every 24 hours
+- Runs maintenance on application startup and every 24 hours (stopped on shutdown)
 - Uses PostgreSQL advisory locks to prevent race conditions
 
-### 4. Database Layer (`postgres/migrations/000001_init_db.up.sql`)
+### 6. Database Layer (`postgres/migrations/000001_init_db.up.sql`)
 
 Defines the partitioned table schema with appropriate indexes.
 
@@ -54,7 +64,7 @@ type AuditLog struct {
     Changes       any     // JSONB containing old and new values
     Status        string  // SUCCESS or FAILURE
     FailureReason *string // Description of why the action failed (nullable)
-    CreatedAt     int64   // Unix timestamp of when the log was created
+    CreatedAt     string  // RFC 3339 timestamp (UTC) of when the log was created
 }
 ```
 
@@ -69,16 +79,31 @@ The domain package defines type-safe constants for common values:
 
 **Actions:**
 
-- `AuditActionUserCreate`: User account creation
-- `AuditActionUserUpdate`: User account modification
-- `AuditActionUserDelete`: User account deletion
-- `AuditActionLogin`: User authentication
-- `AuditActionLogout`: User session termination
+- `AuditActionUserCreate` (`USER_CREATE`): User account creation (`POST /users`)
+- `AuditActionUserUpdate` (`USER_UPDATE`): User account modification (`PUT /users/{uuid}`)
+- `AuditActionUserDelete` (`USER_DELETE`): User account deletion (`DELETE /users/{uuid}`)
+- `AuditActionVerifyEmail` (`VERIFY_EMAIL`): Email verification (`POST /users/verify-email`)
+- `AuditActionLogin` (`LOGIN`): Email/password authentication (`POST /auth/login`)
+- `AuditActionOAuthLogin` (`OAUTH_LOGIN`): OAuth authentication (`GET /auth/{provider}/callback`)
+- `AuditActionLogout` (`LOGOUT`): User session termination (`POST /auth/logout`)
 
 **Resources:**
 
 - `AuditResourceUser`: User-related actions
 - `AuditResourceAuth`: Authentication-related actions
+
+## Listing Audit Logs
+
+`GET /audit-logs` requires an authenticated admin (auth and admin role middlewares) and returns the newest entries first.
+
+| Query parameter                                        | Description                                                    |
+| ------------------------------------------------------ | -------------------------------------------------------------- |
+| `action`, `resource_type`, `status`, `actor_uuid`      | Exact-match filters                                            |
+| `start_date`, `end_date`                               | RFC 3339 timestamps bounding `created_at`                      |
+| `limit`                                                | Page size, 1 to 100 (default 20)                               |
+| `cursor`                                               | `meta.next_cursor` from the previous page                      |
+
+Pagination is keyset-based on the UUIDv7 `uuid` (`uuid < cursor ORDER BY uuid DESC`), so pages stay stable while new entries arrive. `meta.total` is the number of entries matching the filters (the cursor is ignored), and `meta.next_cursor` is set while a full page is returned and more entries match. Invalid `limit` or dates return `400` with `audit.list.badRequest`.
 
 ## Database Schema
 
@@ -231,7 +256,7 @@ type AuditLogsPartitionManager struct {
 On application startup (`cmd/main.go`):
 
 ```go
-partitionManager := infra.NewAuditLogsPartitionManager(conn)
+partitionManager := infra.NewAuditLogsPartitionManager(pool)
 if err := partitionManager.RunMaintenance(ctx); err != nil {
     slog.Error("Failed to initialize audit log partitions", "error", err)
     os.Exit(1)
@@ -242,18 +267,17 @@ This ensures the current and next month's partitions exist immediately.
 
 ### Maintenance Schedule
 
-A background goroutine runs maintenance every 24 hours:
+A background goroutine (`runEvery` in `cmd/main.go`) runs maintenance every 24 hours and stops when the shutdown signal cancels `ctx`; graceful shutdown waits for it:
 
 ```go
-go func() {
-    ticker := time.NewTicker(24 * time.Hour)
-    defer ticker.Stop()
-    for range ticker.C {
-        if err := partitionManager.RunMaintenance(context.Background()); err != nil {
+runEvery(
+    ctx, &wg, 24*time.Hour,
+    func() {
+        if err := partitionManager.RunMaintenance(ctx); err != nil {
             slog.Error("Failed to maintain audit log partitions", "error", err)
         }
-    }
-}()
+    },
+)
 ```
 
 ### Maintenance Operations
@@ -297,7 +321,7 @@ func (pm *AuditLogsPartitionManager) EnsurePartition(ctx context.Context, date t
 
 - If partition creation fails, the transaction rolls back
 - The default partition (`audit_logs_default`) catches any writes that fall through
-- Errors are logged but don't crash the application (fire-and-forget for background maintenance)
+- A failure on startup stops the application; failures of the background maintenance are logged and don't crash it
 
 ## Summary
 
