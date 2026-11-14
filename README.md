@@ -9,7 +9,7 @@ principles. This project comes with basic users CRUD and authentication flow wit
 
 ## 📂 Project Structure
 
-The project follows a layered architecture pattern. For a detailed explanation of the logical architecture and design principles, please see [CONTRIBUTING.md](CONTRIBUTING.md#-architecture).
+The project follows a layered architecture pattern. For a detailed explanation of the logical architecture and design principles, please see [CONTRIBUTING.md](CONTRIBUTING.md#-architecture). The reasoning behind the key decisions (architecture, error handling, database, observability and security) is recorded in the [Architecture Decision Records](docs/adr/README.md).
 
 ### Directory Layout
 

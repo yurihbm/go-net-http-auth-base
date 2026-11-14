@@ -40,3 +40,6 @@ conductor
 
 # OpenCode specific files
 .opencode
+
+# Archify rendered diagrams (docs/adr/diagrams)
+.archify
