@@ -57,7 +57,7 @@ try {
     if (fs.existsSync(queryFilePath)) {
         console.log(`Query file already exists: ${queryFilePath}`);
     } else {
-        fs.writeFileSync(queryFilePath, "-- name: Get" + capitalize(queryFileName) + " :one\n-- SELECT * FROM " + queryFileName + " WHERE id = $1;\n");
+        fs.writeFileSync(queryFilePath, "-- name: Get" + capitalize(queryFileName) + " :one\n-- SELECT * FROM " + queryFileName + " WHERE uuid = $1;\n");
         console.log(`Created query file: ${queryFilePath}`);
     }
 

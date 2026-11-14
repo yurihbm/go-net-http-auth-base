@@ -1,6 +1,8 @@
 package mocks
 
 import (
+	"context"
+
 	"go-net-http-auth-base/internal/domain"
 
 	"github.com/stretchr/testify/mock"
@@ -12,7 +14,7 @@ type {{Resources}}ServiceMock struct {
 
 var _ domain.{{Resources}}Service = (*{{Resources}}ServiceMock)(nil)
 
-func (m *{{Resources}}ServiceMock) GetByUUID(uuid string) (*domain.{{Resource}}, error) {
+func (m *{{Resources}}ServiceMock) GetByUUID(ctx context.Context, uuid string) (*domain.{{Resource}}, error) {
 	args := m.Called(uuid)
 	if args.Get(0) != nil {
 		return args.Get(0).(*domain.{{Resource}}), args.Error(1)
@@ -20,7 +22,7 @@ func (m *{{Resources}}ServiceMock) GetByUUID(uuid string) (*domain.{{Resource}},
 	return nil, args.Error(1)
 }
 
-func (m *{{Resources}}ServiceMock) Create(dto domain.Create{{Resource}}DTO) (*domain.{{Resource}}, error) {
+func (m *{{Resources}}ServiceMock) Create(ctx context.Context, dto domain.Create{{Resource}}DTO) (*domain.{{Resource}}, error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {
 		return args.Get(0).(*domain.{{Resource}}), args.Error(1)
@@ -28,12 +30,15 @@ func (m *{{Resources}}ServiceMock) Create(dto domain.Create{{Resource}}DTO) (*do
 	return nil, args.Error(1)
 }
 
-func (m *{{Resources}}ServiceMock) Update(uuid string, dto domain.{{Resource}}UpdateDTO) error {
+func (m *{{Resources}}ServiceMock) Update(ctx context.Context, uuid string, dto domain.{{Resource}}UpdateDTO) (*domain.{{Resource}}, error) {
 	args := m.Called(uuid, dto)
-	return args.Error(0)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.{{Resource}}), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
-func (m *{{Resources}}ServiceMock) Delete(uuid string) error {
+func (m *{{Resources}}ServiceMock) Delete(ctx context.Context, uuid string) error {
 	args := m.Called(uuid)
 	return args.Error(0)
 }

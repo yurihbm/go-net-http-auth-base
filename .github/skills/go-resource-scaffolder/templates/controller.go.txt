@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"go-net-http-auth-base/internal/api"
@@ -10,44 +9,51 @@ import (
 )
 
 type {{Resources}}Controller struct {
-	service    domain.{{Resources}}Service
-	middleware middlewares.HandlerMiddleware
+	service        domain.{{Resources}}Service
+	authMiddleware middlewares.HandlerMiddleware
 }
 
 var _ Controller = (*{{Resources}}Controller)(nil)
 
-func New{{Resources}}Controller(service domain.{{Resources}}Service, middleware middlewares.HandlerMiddleware) *{{Resources}}Controller {
+func New{{Resources}}Controller(
+	service domain.{{Resources}}Service,
+	authMiddleware middlewares.HandlerMiddleware,
+) *{{Resources}}Controller {
 	return &{{Resources}}Controller{
-		service:    service,
-		middleware: middleware,
+		service:        service,
+		authMiddleware: authMiddleware,
 	}
 }
 
 func (c *{{Resources}}Controller) RegisterRoutes(router *http.ServeMux) {
-	router.HandleFunc("POST /{{resources}}", c.middleware.Use(c.Create))
-	router.HandleFunc("GET /{{resources}}/{uuid}", c.middleware.Use(c.GetByUUID))
-	router.HandleFunc("PUT /{{resources}}/{uuid}", c.middleware.Use(c.Update))
-	router.HandleFunc("DELETE /{{resources}}/{uuid}", c.middleware.Use(c.Delete))
+	router.HandleFunc("POST /{{resources}}", c.authMiddleware.Use(c.Create))
+	router.HandleFunc("GET /{{resources}}/{uuid}", c.authMiddleware.Use(c.GetByUUID))
+	router.HandleFunc("PUT /{{resources}}/{uuid}", c.authMiddleware.Use(c.Update))
+	router.HandleFunc("DELETE /{{resources}}/{uuid}", c.authMiddleware.Use(c.Delete))
 }
 
+// @Summary		Create a {{resource}}
+// @Description	Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			{{resources}}
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.Create{{Resource}}DTO				true	"{{Resource}} to create"
+// @Success		201		{object}	api.ResponseBody[domain.{{Resource}}]	"{{Resource}} created"
+// @Failure		400		{object}	api.ResponseBody[any]				"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]				"Unauthorized"
+// @Failure		409		{object}	api.ResponseBody[any]				"Conflict"
+// @Failure		500		{object}	api.ResponseBody[any]				"Internal server error"
+// @Router			/{{resources}} [post]
 func (c *{{Resources}}Controller) Create(w http.ResponseWriter, r *http.Request) {
-	var dto domain.Create{{Resource}}DTO
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&dto); err != nil {
-		api.WriteJSONResponse(w, http.StatusBadRequest, api.ResponseBody[any]{
-			Message: "{{resource}}.create.bad_request",
-			Error:   err.Error(),
-		})
+	dto, err := api.DecodeAndValidate[domain.Create{{Resource}}DTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
-	created, err := c.service.Create(dto)
+	created, err := c.service.Create(r.Context(), dto)
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "{{resource}}.create.failed",
-			Error:   err.Error(),
-		})
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -57,14 +63,21 @@ func (c *{{Resources}}Controller) Create(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// @Summary		Get a {{resource}} by UUID
+// @Description	Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			{{resources}}
+// @Produce		json
+// @Param			uuid	path		string								true	"{{Resource}} UUID"
+// @Success		200		{object}	api.ResponseBody[domain.{{Resource}}]	"{{Resource}}"
+// @Failure		400		{object}	api.ResponseBody[any]				"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]				"Unauthorized"
+// @Failure		404		{object}	api.ResponseBody[any]				"Not found"
+// @Failure		500		{object}	api.ResponseBody[any]				"Internal server error"
+// @Router			/{{resources}}/{uuid} [get]
 func (c *{{Resources}}Controller) GetByUUID(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
-	entity, err := c.service.GetByUUID(uuid)
+	entity, err := c.service.GetByUUID(r.Context(), r.PathValue("uuid"))
 	if err != nil {
-		api.WriteJSONResponse(w, http.StatusNotFound, api.ResponseBody[any]{
-			Message: "{{resource}}.get.not_found",
-			Error:   err.Error(),
-		})
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
@@ -74,47 +87,53 @@ func (c *{{Resources}}Controller) GetByUUID(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// @Summary		Update a {{resource}}
+// @Description	Partially updates a {{resource}}. Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			{{resources}}
+// @Accept			json
+// @Produce		json
+// @Param			uuid	path		string								true	"{{Resource}} UUID"
+// @Param			body	body		domain.{{Resource}}UpdateDTO			true	"Fields to update"
+// @Success		200		{object}	api.ResponseBody[domain.{{Resource}}]	"{{Resource}} updated"
+// @Failure		400		{object}	api.ResponseBody[any]				"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]				"Unauthorized"
+// @Failure		404		{object}	api.ResponseBody[any]				"Not found"
+// @Failure		409		{object}	api.ResponseBody[any]				"Conflict"
+// @Failure		500		{object}	api.ResponseBody[any]				"Internal server error"
+// @Router			/{{resources}}/{uuid} [put]
 func (c *{{Resources}}Controller) Update(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
-	var dto domain.{{Resource}}UpdateDTO
-
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(&dto); err != nil {
-		api.WriteJSONResponse(w, http.StatusBadRequest,
-			api.ResponseBody[any]{
-				Message: "{{resource}}.update.bad_request",
-				Error:   err.Error(),
-			},
-		)
+	dto, err := api.DecodeAndValidate[domain.{{Resource}}UpdateDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
-	if err := c.service.Update(uuid, dto); err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError,
-			api.ResponseBody[any]{
-				Message: "{{resource}}.update.failed",
-				Error:   err.Error(),
-			},
-		)
+	updated, err := c.service.Update(r.Context(), r.PathValue("uuid"), dto)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 
-	api.WriteJSONResponse(w, http.StatusOK,
-		api.ResponseBody[domain.{{Resource}}]{
-			Message: "{{resource}}.update.success",
-		},
-	)
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.{{Resource}}]{
+		Data:    *updated,
+		Message: "{{resource}}.update.success",
+	})
 }
 
+// @Summary		Delete a {{resource}}
+// @Description	Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			{{resources}}
+// @Produce		json
+// @Param			uuid	path	string	true	"{{Resource}} UUID"
+// @Success		204		"{{Resource}} deleted"
+// @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]	"Unauthorized"
+// @Failure		404		{object}	api.ResponseBody[any]	"Not found"
+// @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/{{resources}}/{uuid} [delete]
 func (c *{{Resources}}Controller) Delete(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
-	if err := c.service.Delete(uuid); err != nil {
-		api.WriteJSONResponse(w, http.StatusInternalServerError, api.ResponseBody[any]{
-			Message: "{{resource}}.delete.failed",
-			Error:   err.Error(),
-		})
+	if err := c.service.Delete(r.Context(), r.PathValue("uuid")); err != nil {
+		api.HandleError(r.Context(), w, err)
 		return
 	}
 

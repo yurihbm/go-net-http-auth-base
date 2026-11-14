@@ -2,12 +2,22 @@ package repositories
 
 import (
 	"context"
+	"errors"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/postgres"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+)
+
+// TODO: Replace every errNotImplemented{{Resources}} with the sqlc queries of
+// postgres/queries/{{resources}}.sql (see users_repository.go): map no rows with
+// isNoRowsError, unique violations with isConflictError, anything else with
+// domain.NewInternalServerError("{{resources}}.internalServerError", err), and
+// rows with a to{{Resource}} mapper.
+var errNotImplemented{{Resources}} = domain.NewInternalServerError(
+	"{{resources}}.internalServerError",
+	errors.New("{{resources}} repository not implemented"),
 )
 
 type {{Resources}}PostgresRepository struct {
@@ -22,37 +32,34 @@ func New{{Resources}}PostgresRepository(db postgres.DBTX) domain.{{Resources}}Re
 	}
 }
 
-func (r *{{Resources}}PostgresRepository) FindByUUID(uuidStr string) (*domain.{{Resource}}, error) {
-	uuid, err := uuid.Parse(uuidStr)
-	if err != nil {
+func (r *{{Resources}}PostgresRepository) FindByUUID(ctx context.Context, uuidStr string) (*domain.{{Resource}}, error) {
+	if _, err := parse{{Resources}}UUID(uuidStr); err != nil {
 		return nil, err
 	}
 
-    // TODO: Implement Get{{Resource}}ByUUID in postgres/queries
-    // user, err := r.q.Get{{Resource}}ByUUID(context.Background(), pgtype.UUID{Bytes: [16]byte(uuid), Valid: true})
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	return &domain.{{Resource}}{UUID: uuidStr}, nil // Placeholder
+	return nil, errNotImplemented{{Resources}}
 }
 
-func (r *{{Resources}}PostgresRepository) Create(entity domain.{{Resource}}) (*domain.{{Resource}}, error) {
-    // TODO: Implement Create{{Resource}} in postgres/queries
-	return &entity, nil // Placeholder
+func (r *{{Resources}}PostgresRepository) Create(ctx context.Context, entity domain.{{Resource}}) (*domain.{{Resource}}, error) {
+	return nil, errNotImplemented{{Resources}}
 }
 
-func (r *{{Resources}}PostgresRepository) Update(entity domain.{{Resource}}) error {
-    // TODO: Implement Update{{Resource}} in postgres/queries
-	return nil // Placeholder
+func (r *{{Resources}}PostgresRepository) Update(ctx context.Context, entity domain.{{Resource}}) (*domain.{{Resource}}, error) {
+	if _, err := parse{{Resources}}UUID(entity.UUID); err != nil {
+		return nil, err
+	}
+
+	return nil, errNotImplemented{{Resources}}
 }
 
-func (r *{{Resources}}PostgresRepository) Delete(uuidStr string) error {
-	uuid, err := uuid.Parse(uuidStr)
-	if err != nil {
+func (r *{{Resources}}PostgresRepository) Delete(ctx context.Context, uuidStr string) error {
+	if _, err := parse{{Resources}}UUID(uuidStr); err != nil {
 		return err
 	}
-    // TODO: Implement Delete{{Resource}} in postgres/queries
-    _ = uuid
-	return nil // Placeholder
+
+	return errNotImplemented{{Resources}}
+}
+
+func parse{{Resources}}UUID(uuidStr string) (*pgtype.UUID, error) {
+	return parseUUID(uuidStr, "{{resources}}.invalidUUID")
 }
