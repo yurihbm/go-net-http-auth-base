@@ -74,10 +74,10 @@ func (r *UsersPostgresRepository) Create(ctx context.Context, user domain.User) 
 	return &user, nil
 }
 
-func (r *UsersPostgresRepository) Update(ctx context.Context, user domain.User) error {
+func (r *UsersPostgresRepository) Update(ctx context.Context, user domain.User) (*domain.User, error) {
 	uuid, err := parseUsersUUID(user.UUID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	params := postgres.UpdateUserParams{
@@ -90,14 +90,19 @@ func (r *UsersPostgresRepository) Update(ctx context.Context, user domain.User) 
 		params.PasswordHash = pgtype.Text{String: user.PasswordHash, Valid: true}
 	}
 
-	if err = r.q.UpdateUser(ctx, params); err != nil {
-		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
-			return conflictErr
+	updatedUser, err := r.q.UpdateUser(ctx, params)
+	if err != nil {
+		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
+			return nil, noRowsErr
 		}
-		return domain.NewInternalServerError("users.internalServerError", err)
+		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
+			return nil, conflictErr
+		}
+		return nil, domain.NewInternalServerError("users.internalServerError", err)
 	}
 
-	return nil
+	user = toDomainUser(updatedUser)
+	return &user, nil
 }
 
 func (r *UsersPostgresRepository) MarkEmailVerified(ctx context.Context, uuidStr string) error {

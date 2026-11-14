@@ -60,7 +60,7 @@ type UsersService interface {
 	GetByEmail(context.Context, string) (*User, error)
 	Create(context.Context, CreateUserDTO) (*User, error)
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
-	Update(context.Context, Actor, string, UserUpdateDTO) error
+	Update(context.Context, Actor, string, UserUpdateDTO) (*User, error)
 	VerifyEmail(context.Context, string) error
 	ResendVerification(context.Context, string) error
 	Delete(context.Context, Actor, string) error
@@ -70,7 +70,7 @@ type UsersRepository interface {
 	FindByUUID(context.Context, string) (*User, error)
 	FindByEmail(context.Context, string) (*User, error)
 	Create(context.Context, User) (*User, error)
-	Update(context.Context, User) error
+	Update(context.Context, User) (*User, error)
 	MarkEmailVerified(context.Context, string) error
 	Delete(context.Context, string) error
 }

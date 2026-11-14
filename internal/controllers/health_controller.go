@@ -37,7 +37,7 @@ func (c *HealthController) Ready(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if err := c.db.Ping(ctx); err != nil {
-		api.WriteJSONResponse(w, http.StatusServiceUnavailable, api.ResponseBody[string]{
+		api.WriteJSONResponse(w, http.StatusServiceUnavailable, api.ResponseBody[any]{
 			Error: "Database not ready",
 		})
 		return

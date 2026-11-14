@@ -222,13 +222,15 @@ func TestUsersService_Update(t *testing.T) {
 		}
 
 		repo.On("FindByUUID", uuid).Return(originalUser, nil).Once()
+		updatedUser := &domain.User{UUID: uuid, Name: newName, Email: newEmail}
 		repo.On("Update", mock.MatchedBy(func(u domain.User) bool {
 			return u.Name == newName && u.Email == newEmail
-		})).Return(nil).Once()
+		})).Return(updatedUser, nil).Once()
 
-		err := service.Update(context.Background(), selfActor, uuid, dto)
+		user, err := service.Update(context.Background(), selfActor, uuid, dto)
 
 		assert.NoError(t, err)
+		assert.Equal(t, updatedUser, user)
 		repo.AssertExpectations(t)
 	})
 
@@ -236,9 +238,10 @@ func TestUsersService_Update(t *testing.T) {
 		dto := domain.UserUpdateDTO{}
 		repo.On("FindByUUID", "not-found").Return(nil, errors.New("not found")).Once()
 
-		err := service.Update(context.Background(), adminActor, "not-found", dto)
+		user, err := service.Update(context.Background(), adminActor, "not-found", dto)
 
 		assert.Error(t, err)
+		assert.Nil(t, user)
 		repo.AssertExpectations(t)
 	})
 
@@ -247,11 +250,12 @@ func TestUsersService_Update(t *testing.T) {
 		dto := domain.UserUpdateDTO{Name: &newName}
 
 		repo.On("FindByUUID", uuid).Return(originalUser, nil).Once()
-		repo.On("Update", mock.AnythingOfType("domain.User")).Return(errors.New("db error")).Once()
+		repo.On("Update", mock.AnythingOfType("domain.User")).Return(nil, errors.New("db error")).Once()
 
-		err := service.Update(context.Background(), selfActor, uuid, dto)
+		user, err := service.Update(context.Background(), selfActor, uuid, dto)
 
 		assert.Error(t, err)
+		assert.Nil(t, user)
 		assert.Equal(t, "db error", err.Error())
 		repo.AssertExpectations(t)
 	})
@@ -260,11 +264,12 @@ func TestUsersService_Update(t *testing.T) {
 		name := "New Name"
 		dto := domain.UserUpdateDTO{Name: &name}
 		repo.On("FindByUUID", uuid).Return(&domain.User{UUID: uuid}, nil).Once()
-		repo.On("Update", mock.AnythingOfType("domain.User")).Return(nil).Once()
+		repo.On("Update", mock.AnythingOfType("domain.User")).Return(&domain.User{UUID: uuid}, nil).Once()
 
-		err := service.Update(context.Background(), adminActor, uuid, dto)
+		user, err := service.Update(context.Background(), adminActor, uuid, dto)
 
 		assert.NoError(t, err)
+		assert.NotNil(t, user)
 		repo.AssertExpectations(t)
 	})
 
@@ -274,8 +279,9 @@ func TestUsersService_Update(t *testing.T) {
 		name := "New Name"
 		dto := domain.UserUpdateDTO{Name: &name}
 
-		err := service.Update(context.Background(), otherActor, uuid, dto)
+		user, err := service.Update(context.Background(), otherActor, uuid, dto)
 
+		assert.Nil(t, user)
 		var forbiddenErr *domain.ForbiddenError
 		assert.True(t, errors.As(err, &forbiddenErr))
 		repo.AssertNotCalled(t, "FindByUUID", uuid)

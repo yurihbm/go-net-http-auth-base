@@ -38,9 +38,12 @@ func (m *UsersRepositoryMock) Create(ctx context.Context, user domain.User) (*do
 	return nil, args.Error(1)
 }
 
-func (m *UsersRepositoryMock) Update(ctx context.Context, user domain.User) error {
+func (m *UsersRepositoryMock) Update(ctx context.Context, user domain.User) (*domain.User, error) {
 	args := m.Called(user)
-	return args.Error(0)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 func (m *UsersRepositoryMock) Delete(ctx context.Context, uuid string) error {
