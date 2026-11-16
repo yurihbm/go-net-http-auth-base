@@ -149,7 +149,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	handler := factories.NewHandler(deps, cfg, tel)
+	handler := factories.NewHandler(ctx, deps, cfg, tel)
 
 	port := cfg.Port
 

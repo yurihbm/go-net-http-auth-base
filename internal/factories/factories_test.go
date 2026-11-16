@@ -118,7 +118,7 @@ func TestCORSFactory(t *testing.T) {
 }
 
 func TestRateLimitFactory(t *testing.T) {
-	middleware := factories.RateLimitFactory(config.RateLimitConfig{
+	middleware := factories.RateLimitFactory(t.Context(), config.RateLimitConfig{
 		RequestsPerSecond: 20.0,
 		Burst:             50,
 	})
@@ -182,7 +182,7 @@ func TestNewHandler(t *testing.T) {
 	cfg.RateLimit = config.RateLimitConfig{RequestsPerSecond: 100, Burst: 100}
 	tel, err := telemetry.New(context.Background(), config.TelemetryConfig{}, "test")
 	assert.NoError(t, err)
-	handler := factories.NewHandler(newTestDependencies(t), cfg, tel)
+	handler := factories.NewHandler(t.Context(), newTestDependencies(t), cfg, tel)
 
 	t.Run("GET /health returns 200", func(t *testing.T) {
 		w := httptest.NewRecorder()

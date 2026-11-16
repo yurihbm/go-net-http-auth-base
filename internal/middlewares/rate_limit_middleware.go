@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strconv"
@@ -22,14 +23,14 @@ type visitor struct {
 	lastSeen time.Time
 }
 
-func NewRateLimitMiddleware(r rate.Limit, b int) GlobalMiddleware {
+func NewRateLimitMiddleware(ctx context.Context, r rate.Limit, b int) GlobalMiddleware {
 	m := &RateLimitMiddleware{
 		visitors: make(map[string]*visitor),
 		rate:     r,
 		burst:    b,
 	}
 
-	go m.cleanupVisitors()
+	go m.cleanupVisitors(ctx)
 
 	return m
 }
@@ -69,9 +70,16 @@ func (m *RateLimitMiddleware) getVisitor(ip string) *rate.Limiter {
 	return v.limiter
 }
 
-func (m *RateLimitMiddleware) cleanupVisitors() {
+func (m *RateLimitMiddleware) cleanupVisitors(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
 	for {
-		time.Sleep(time.Minute)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 
 		m.mu.Lock()
 		for ip, v := range m.visitors {
