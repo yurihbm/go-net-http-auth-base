@@ -1,6 +1,7 @@
 package factories
 
 import (
+	"context"
 	"net"
 	"net/http"
 
@@ -8,7 +9,7 @@ import (
 	"go-net-http-auth-base/internal/telemetry"
 )
 
-func NewHandler(deps *Dependencies, cfg *config.Config, tel *telemetry.Telemetry) http.Handler {
+func NewHandler(ctx context.Context, deps *Dependencies, cfg *config.Config, tel *telemetry.Telemetry) http.Handler {
 	mux := http.NewServeMux()
 	UsersFactory(deps).RegisterRoutes(mux)
 	AuthFactory(deps, cfg).RegisterRoutes(mux)
@@ -16,7 +17,7 @@ func NewHandler(deps *Dependencies, cfg *config.Config, tel *telemetry.Telemetry
 	AuditFactory(deps).RegisterRoutes(mux)
 	DocsFactory(deps).RegisterRoutes(mux)
 
-	rateLimitMiddleware := RateLimitFactory(cfg.RateLimit)
+	rateLimitMiddleware := RateLimitFactory(ctx, cfg.RateLimit)
 	corsMiddleware := CORSFactory(cfg.CORS)
 	loggerMiddleware := LoggerFactory()
 	telemetryMiddleware := TelemetryFactory(tel, net.JoinHostPort(cfg.Telemetry.ServiceName, cfg.Port))
