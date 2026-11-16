@@ -1,5 +1,8 @@
 ifneq (,$(wildcard .env))
 	include .env
+# make keeps quotes as part of the value, so strip them to accept VAR="x" and VAR=x alike
+ENV_VARS := $(shell sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/\2/p' .env)
+$(foreach var,$(ENV_VARS),$(eval $(var) := $(subst ',,$(subst ",,$($(var))))))
 	export
 endif
 
