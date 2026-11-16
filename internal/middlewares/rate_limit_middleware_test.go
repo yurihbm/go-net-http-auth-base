@@ -1,9 +1,11 @@
 package middlewares_test
 
 import (
+	"context"
 	"go-net-http-auth-base/internal/middlewares"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"testing"
 	"time"
 
@@ -11,8 +13,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func newRateLimitedHandler(burst int) http.Handler {
-	middleware := middlewares.NewRateLimitMiddleware(rate.Limit(0.001), burst)
+func newRateLimitedHandler(t *testing.T, burst int) http.Handler {
+	middleware := middlewares.NewRateLimitMiddleware(t.Context(), rate.Limit(0.001), burst)
 	return middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -28,7 +30,7 @@ func serveFrom(handler http.Handler, remoteAddr string) int {
 
 func TestRateLimitMiddleware(t *testing.T) {
 	// Limit: 1 req/sec, Burst: 2
-	middleware := middlewares.NewRateLimitMiddleware(rate.Limit(1), 2)
+	middleware := middlewares.NewRateLimitMiddleware(t.Context(), rate.Limit(1), 2)
 	handler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -66,23 +68,43 @@ func TestRateLimitMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	t.Run("same ip with different ports shares a bucket", func(t *testing.T) {
-		handler := newRateLimitedHandler(1)
+		handler := newRateLimitedHandler(t, 1)
 
 		assert.Equal(t, http.StatusOK, serveFrom(handler, "10.0.0.1:1111"))
 		assert.Equal(t, http.StatusTooManyRequests, serveFrom(handler, "10.0.0.1:2222"))
 	})
 
 	t.Run("different ips have independent buckets", func(t *testing.T) {
-		handler := newRateLimitedHandler(1)
+		handler := newRateLimitedHandler(t, 1)
 
 		assert.Equal(t, http.StatusOK, serveFrom(handler, "10.0.0.1:1111"))
 		assert.Equal(t, http.StatusOK, serveFrom(handler, "10.0.0.2:1111"))
 	})
 
 	t.Run("remote addr without port still works", func(t *testing.T) {
-		handler := newRateLimitedHandler(1)
+		handler := newRateLimitedHandler(t, 1)
 
 		assert.Equal(t, http.StatusOK, serveFrom(handler, "10.0.0.3"))
 		assert.Equal(t, http.StatusTooManyRequests, serveFrom(handler, "10.0.0.3"))
+	})
+}
+
+func TestNewRateLimitMiddleware(t *testing.T) {
+	t.Run("cleanup goroutine stops when the context is cancelled", func(t *testing.T) {
+		const instances = 20
+		const eventuallyOverhead = 5
+		baseline := runtime.NumGoroutine()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		for range instances {
+			middlewares.NewRateLimitMiddleware(ctx, rate.Limit(1), 1)
+		}
+		assert.GreaterOrEqual(t, runtime.NumGoroutine(), baseline+instances)
+
+		cancel()
+
+		assert.Eventually(t, func() bool {
+			return runtime.NumGoroutine() <= baseline+eventuallyOverhead
+		}, 2*time.Second, 10*time.Millisecond)
 	})
 }

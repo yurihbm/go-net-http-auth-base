@@ -32,7 +32,8 @@ func run(m *testing.M) int {
 		return m.Run()
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	pool, cleanup, err := postgres.NewTestPool(ctx)
 	if err != nil {
@@ -78,7 +79,7 @@ func run(m *testing.M) int {
 		return 1
 	}
 
-	server := httptest.NewServer(factories.NewHandler(deps, cfg, tel))
+	server := httptest.NewServer(factories.NewHandler(ctx, deps, cfg, tel))
 	defer server.Close()
 	serverURL = server.URL
 

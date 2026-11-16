@@ -153,7 +153,7 @@ make swagger-gen
 - **Testing:** The project has a suite of tests for controllers, services, and repositories. Tests live next to the code they test, with the `_test.go` suffix. `go test ./...` runs everything (integration tests need Docker); `go test -short ./...` skips the integration tests; `make test-e2e` runs only the E2E suite; `make show-cover` prints the coverage CI reports.
 - **Styling:** The code seems to follow standard Go formatting.
 - **JSON Responses:** The `internal/api/response.go` file defines a standardized JSON response format for all API endpoints.
-- **Dependency Injection:** `internal/factories/dependencies.go` builds the app's shared dependency graph once (`NewDependencies`), and `cmd/main.go` passes the resulting `*Dependencies` into thin per-controller factories, which promotes loose coupling and testability. `factories.NewHandler(deps, cfg, tel)` assembles the whole `http.Handler` (routes plus middleware chain) so tests run the production wiring.
+- **Dependency Injection:** `internal/factories/dependencies.go` builds the app's shared dependency graph once (`NewDependencies`), and `cmd/main.go` passes the resulting `*Dependencies` into thin per-controller factories, which promotes loose coupling and testability. `factories.NewHandler(ctx, deps, cfg, tel)` assembles the whole `http.Handler` (routes plus middleware chain) so tests run the production wiring.
 
 ## Architecture Decision Records
 
