@@ -1,6 +1,7 @@
 package factories_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -173,5 +174,29 @@ func TestTelemetryFactory(t *testing.T) {
 
 		assert.Equal(t, http.StatusTeapot, w.Code)
 		assert.Len(t, recorder.Ended(), 1)
+	})
+}
+
+func TestNewHandler(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.RateLimit = config.RateLimitConfig{RequestsPerSecond: 100, Burst: 100}
+	tel, err := telemetry.New(context.Background(), config.TelemetryConfig{}, "test")
+	assert.NoError(t, err)
+	handler := factories.NewHandler(newTestDependencies(t), cfg, tel)
+
+	t.Run("GET /health returns 200", func(t *testing.T) {
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("GET /users/me without cookie returns 401", func(t *testing.T) {
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/users/me", nil))
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
