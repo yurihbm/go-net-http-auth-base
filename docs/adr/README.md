@@ -11,6 +11,7 @@ Status, Context, Decision and Consequences.
 | [ADR-003](ADR-003-database-strategy.md)         | Database Strategy (PostgreSQL + sqlc) | Accepted |
 | [ADR-004](ADR-004-logging-observability.md)     | Logging & Observability               | Accepted |
 | [ADR-005](ADR-005-security-approach.md)         | Security Approach                     | Accepted |
+| [ADR-006](ADR-006-e2e-testing.md)               | End-to-End Testing Approach           | Accepted |
 
 ## Writing a new ADR
 

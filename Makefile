@@ -25,7 +25,8 @@ ARCHIFY_DIR = .tools/archify
 	sqlc-gen \
 	swagger-gen \
 	test-cover \
-	show-cover
+	show-cover \
+	test-e2e
 
 install-tools: install-air install-migrate install-sqlc install-swag
 
@@ -62,6 +63,11 @@ test-cover:
 
 show-cover: test-cover
 	go tool cover -func=coverage.out
+
+# Run the E2E suite against an ephemeral PostgreSQL container (requires Docker)
+test-e2e:
+	@echo "Running E2E tests..."
+	go test -count=1 -race ./internal/e2e/...
 
 setup: install-tools tidy
 

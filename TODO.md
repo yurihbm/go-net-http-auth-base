@@ -713,53 +713,36 @@ Professional documentation and comprehensive testing.
 
 **Tasks**:
 
-- [ ] Create `internal/e2e/` directory
-- [ ] Write E2E test for user creation flow
-- [ ] Write E2E test for user authentication flow
-- [ ] Write E2E test for error scenarios
-- [ ] Write E2E test for rate limiting
-- [ ] Write service + database composition tests: concurrent refreshes with the same token have a single winner and then revoke the session; login transaction atomicity (force a failure, assert no session persisted)
-- [ ] Setup test fixtures and database cleanup
-- [ ] Document E2E testing approach
+- [x] Create `internal/e2e/` directory
+- [x] Write E2E test for user creation flow
+- [x] Write E2E test for user authentication flow
+- [x] ~~Write E2E test for error scenarios~~ **Dropped:** validation, 404 and 409 errors stay in unit tests; repeating them over HTTP adds nothing.
+- [x] ~~Write E2E test for rate limiting~~ **Dropped:** covered by the rate limit middleware unit tests.
+- [x] Write service + database composition tests: concurrent refreshes with the same token have a single winner and then revoke the session (over HTTP in `internal/e2e`); login transaction atomicity (force a failure, assert no session persisted) in `internal/repositories`
+- [x] Write E2E tests for the session lifecycle (rotation, per-device logout) and authorization (user vs admin)
+- [x] Setup test fixtures and database cleanup
+- [x] Document E2E testing approach
 
 **Files to create**:
 
 - `internal/e2e/e2e_test.go` (create)
-- `internal/e2e/setup.go` (create)
+- `internal/e2e/helpers_test.go` (create; replaces the planned `setup.go`)
+- `internal/e2e/users_flow_test.go`, `auth_flow_test.go`, `authorization_test.go` (create)
+- `internal/factories/handler.go` (create; `NewHandler`, extracted from `cmd/main.go`)
+- `internal/repositories/credentials_login_transaction_test.go` (create)
+- `docs/adr/ADR-006-e2e-testing.md` (create)
+
+> **Resolved:** `factories.NewHandler` builds the mux, controllers and global middleware chain (covered by `TestNewHandler`), and `cmd/main.go` calls it. `internal/e2e` serves it in-process with `httptest.NewServer` over the ephemeral PostgreSQL of `NewTestPool`, with no mocks, and covers four flows: sign-up and login, session lifecycle, concurrent refresh and authorization. Fixtures are Go helpers (`seedUser`, `seedAdmin`) called after `truncateTables`; one cookie jar per simulated device. The suite sets `API_ENV=development` (cookies not `Secure` over http) and high `RATE_LIMIT_*` values (all requests share one IP bucket). Decisions and rejected alternatives are in ADR-006. Residual: email verification is not covered (no seam to capture the link); the rate limiter's `cleanupVisitors` goroutine has no stop signal, so each built handler leaks one goroutine (harmless with one handler).
 
 ---
 
 ### 3.4 Performance Benchmarks
 
-**Tasks**:
-
-- [ ] Add benchmark tests for controllers
-- [ ] Add benchmark tests for services
-- [ ] Add benchmark tests for repositories
-- [ ] Document baseline performance
-- [ ] Run benchmarks: `go test -bench=. ./...`
-- [ ] Analyze and optimize hot paths
-
-**Files to create**:
-
-- `internal/controllers/*_benchmark_test.go` (create)
-- `internal/services/*_benchmark_test.go` (create)
+> **Dropped:** there is no real hot path besides bcrypt (slow on purpose), and benchmarks over mocks measure the mocks.
 
 ### 3.5 Load Testing
 
-**Tasks**:
-
-- [ ] Install k6: `go install github.com/grafana/k6@latest`
-- [ ] Test user signup under load
-- [ ] Test user login under load
-- [ ] Test rate limiting behavior
-- [ ] Ramp up from 10 to 100 concurrent users
-- [ ] Create `test/load/spike_test.js` for spike testing:
-  - [ ] Sudden spike to 500 concurrent users
-  - [ ] Verify system recovery
-- [ ] Document load testing setup and results
-- [ ] Document baseline performance metrics
-- [ ] Create GitHub Actions workflow for load testing (optional)
+> **Dropped:** a performance baseline depends on the hardware and deployment of each derived application, so it does not belong in the template.
 
 ---
 
@@ -767,6 +750,6 @@ Professional documentation and comprehensive testing.
 
 - [x] API documentation is complete and accurate
 - [x] ADRs explain key architectural decisions
-- [ ] E2E tests cover critical user flows
-- [ ] Benchmarks show performance characteristics
-- [ ] Load tests run successfully and show performance metrics
+- [x] E2E tests cover critical user flows
+- [x] ~~Benchmarks show performance characteristics~~ Dropped (3.4)
+- [x] ~~Load tests run successfully and show performance metrics~~ Dropped (3.5)
