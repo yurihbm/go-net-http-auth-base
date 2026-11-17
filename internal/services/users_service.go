@@ -49,10 +49,6 @@ func (s *usersService) GetByEmail(ctx context.Context, email string) (*domain.Us
 }
 
 func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*domain.User, error) {
-	if err := s.ensureEmailNotReserved(ctx, normalizeEmail(dto.Email)); err != nil {
-		return nil, err
-	}
-
 	hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, domain.NewInternalServerError("users.create.passwordHashingFailed", err)
@@ -63,7 +59,7 @@ func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*d
 		PasswordHash: string(hash),
 		Role:         domain.RoleUser,
 	}
-	created, err := s.repo.Create(ctx, user)
+	created, err := s.createUnreserved(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -76,17 +72,13 @@ func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*d
 }
 
 func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUserDTO) (*domain.User, error) {
-	if err := s.ensureEmailNotReserved(ctx, normalizeEmail(dto.Email)); err != nil {
-		return nil, err
-	}
-
 	user := domain.User{
 		Name:          dto.Name,
 		Email:         normalizeEmail(dto.Email),
 		Role:          domain.RoleUser,
 		EmailVerified: dto.EmailVerified,
 	}
-	return s.repo.Create(ctx, user)
+	return s.createUnreserved(ctx, user)
 }
 
 func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid string, dto domain.UserUpdateDTO) (*domain.User, error) {
@@ -200,16 +192,15 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*d
 		return nil, domain.NewConflictError("users.emailChange.locked")
 	}
 
-	if err := s.ensureEmailNotReserved(ctx, change.NewEmail); err != nil {
-		return nil, err
-	}
-
 	now := time.Now()
 	var updated *domain.User
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
 		var err error
 		updated, err = s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail, change.Version, &now)
 		if err != nil {
+			return err
+		}
+		if err := s.ensureEmailNotReserved(ctx, change.NewEmail); err != nil {
 			return err
 		}
 		return s.sessionsRepo.DeleteAllByUser(ctx, user.UUID)
@@ -258,6 +249,25 @@ func (s *usersService) RevertEmailChange(ctx context.Context, token string) erro
 		}
 		return s.authRepo.DeleteOAuthProvidersCreatedSince(ctx, user.UUID, time.Unix(revert.ChangedAt, 0))
 	})
+}
+
+// The reservation is checked after the write, inside its transaction: a write
+// that waited on a concurrent email change only proceeds once that change is
+// committed, so the check sees the reservation it created.
+func (s *usersService) createUnreserved(ctx context.Context, user domain.User) (*domain.User, error) {
+	var created *domain.User
+	err := s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		created, err = s.repo.Create(ctx, user)
+		if err != nil {
+			return err
+		}
+		return s.ensureEmailNotReserved(ctx, user.Email)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
 }
 
 // A recently changed email stays reserved for its previous owner during the
