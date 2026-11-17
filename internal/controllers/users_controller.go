@@ -263,7 +263,8 @@ func (c *UsersController) RevertEmailChange(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := c.userService.RevertEmailChange(r.Context(), dto.Token); err != nil {
+	user, err := c.userService.RevertEmailChange(r.Context(), dto.Token)
+	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
 	}
@@ -271,6 +272,7 @@ func (c *UsersController) RevertEmailChange(w http.ResponseWriter, r *http.Reque
 	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 		Action:       domain.AuditActionEmailChangeRevert,
 		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: user.UUID,
 		Status:       domain.AuditStatusSuccess,
 	})
 
