@@ -137,16 +137,18 @@ type StepUpChallenge struct {
 }
 
 type User struct {
-	Uuid           pgtype.UUID
-	Name           string
-	Email          string
-	PasswordHash   pgtype.Text
-	Role           UserRole
-	EmailVerified  bool
-	EmailVersion   int32
-	EmailChangedAt pgtype.Timestamptz
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	Uuid                      pgtype.UUID
+	Name                      string
+	Email                     string
+	PasswordHash              pgtype.Text
+	Role                      UserRole
+	EmailVerified             bool
+	EmailVersion              int32
+	EmailChangedAt            pgtype.Timestamptz
+	StepUpFailures            int32
+	StepUpFailuresWindowStart pgtype.Timestamptz
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
 }
 
 type UserOauthProvider struct {

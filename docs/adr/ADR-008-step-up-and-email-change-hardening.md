@@ -32,6 +32,13 @@ not reliable across providers.
   no new code resets it. At 10 failures the session is deleted and the request
   answers `401 auth.stepUp.sessionRevoked`, with the auth cookies cleared. A
   successful verification does not reset the counter, to keep it simple.
+- **Per-user failure cap.** The session cap alone lets someone who knows the
+  password log in again for fresh guesses. `users.step_up_failures` and
+  `users.step_up_failures_window_start` count wrong codes across all sessions of
+  the user in a 24-hour window, updated by one atomic statement (it restarts the
+  count at 1 when the window has expired). At 20 failures, `RequestCode` and
+  `VerifyCode` answer `429 auth.stepUp.userLocked` until the window ends. A
+  successful verification does not reset it.
 - **Required on email change and account deletion.** `POST /users/me/email` and
   `DELETE /users/{uuid}` (self and admin) sit behind `StepUpMiddleware`, which
   answers `403 auth.stepUp.required` when the session is not elevated.
@@ -64,8 +71,8 @@ Rejected alternatives:
   has neither.
 - **Session lookup in `AuthMiddleware` on every request.** It would close the
   15-minute window but adds a database query to every authenticated request.
-- **Per-user hourly cap on codes.** Deferred: the per-session cooldown and the
-  attempt limit already bound guessing and mail volume per session.
+- **Per-user hourly cap on codes sent.** Not needed for guessing, which the
+  failure caps bound; mail volume stays bounded per session by the cooldown.
 
 ## Consequences
 
@@ -85,7 +92,10 @@ Rejected alternatives:
   minutes.
 - Sending the code is not best-effort: if the email provider fails, the request
   fails with `500`, since an undelivered code is useless.
-- Each user session can trigger one mail per minute; there is no per-user cap.
+- Each user session can trigger one mail per minute; there is no per-user cap
+  on mail volume.
+- Someone who already has the password can lock the owner's step-up for up to
+  24 hours by logging in and sending wrong codes.
 - A legitimate user who mistypes the code 10 times over the life of a session
   is signed out of it and logs in again; successful verifications never reset
   the counter.
