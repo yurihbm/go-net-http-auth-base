@@ -162,7 +162,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 		f := setup(t, nil, nil)
 		provider := applyChange(t, f)
 
-		err := f.service.RevertEmailChange(context.Background(), "token")
+		_, err := f.service.RevertEmailChange(context.Background(), "token")
 
 		require.NoError(t, err)
 		stored, err := f.usersRepo.FindByUUID(context.Background(), f.user.UUID)
@@ -181,7 +181,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 		f := setup(t, nil, deleteErr)
 		applyChange(t, f)
 
-		err := f.service.RevertEmailChange(context.Background(), "token")
+		_, err := f.service.RevertEmailChange(context.Background(), "token")
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, deleteErr)
@@ -206,7 +206,8 @@ func TestEmailChange_Transaction(t *testing.T) {
 		require.True(t, errors.As(err, &conflictErr))
 		assert.Equal(t, "users.email.conflict", conflictErr.Error())
 
-		require.NoError(t, f.service.RevertEmailChange(context.Background(), "token"))
+		_, err = f.service.RevertEmailChange(context.Background(), "token")
+		require.NoError(t, err)
 		stored, err := f.usersRepo.FindByUUID(context.Background(), f.user.UUID)
 		require.NoError(t, err)
 		assert.Equal(t, oldEmail, stored.Email)
@@ -255,7 +256,8 @@ func TestEmailChange_Transaction(t *testing.T) {
 			ChangedAt: time.Now().Unix(),
 		}, nil)
 		revertService := services.NewUserService(f.usersRepo, f.emailVerification, f.sessionsRepo, f.authRepo, repositories.NewPostgresTransactor(testDB))
-		require.NoError(t, revertService.RevertEmailChange(context.Background(), "revert-token"))
+		_, err := revertService.RevertEmailChange(context.Background(), "revert-token")
+		require.NoError(t, err)
 		stored, err := f.usersRepo.FindByUUID(context.Background(), f.user.UUID)
 		require.NoError(t, err)
 		assert.Equal(t, oldEmail, stored.Email)

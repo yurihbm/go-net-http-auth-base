@@ -225,23 +225,26 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*d
 
 // The revert token is single use because the revert bumps the version, and the
 // email change lock guarantees no other change happened since the token was issued.
-func (s *usersService) RevertEmailChange(ctx context.Context, token string) error {
+func (s *usersService) RevertEmailChange(ctx context.Context, token string) (*domain.User, error) {
 	revert, err := s.emailVerification.VerifyEmailChangeRevertToken(ctx, token)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	user, err := s.repo.FindByUUID(ctx, revert.UserUUID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if user.Email != revert.NewEmail || user.EmailVersion != revert.Version {
-		return domain.NewUnauthorizedError("users.emailChange.staleToken")
+		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
 	}
 
-	return s.transactor.WithinTx(ctx, func(ctx context.Context) error {
-		if _, err := s.repo.UpdateEmail(ctx, user.UUID, revert.OldEmail, revert.Version, nil); err != nil {
+	var restored *domain.User
+	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		restored, err = s.repo.UpdateEmail(ctx, user.UUID, revert.OldEmail, revert.Version, nil)
+		if err != nil {
 			return err
 		}
 		if err := s.sessionsRepo.DeleteAllByUser(ctx, user.UUID); err != nil {
@@ -249,6 +252,11 @@ func (s *usersService) RevertEmailChange(ctx context.Context, token string) erro
 		}
 		return s.authRepo.DeleteOAuthProvidersCreatedSince(ctx, user.UUID, time.Unix(revert.ChangedAt, 0))
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	return restored, nil
 }
 
 // The reservation is checked after the write, inside its transaction: a write
