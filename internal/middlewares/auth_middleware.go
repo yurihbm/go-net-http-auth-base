@@ -24,7 +24,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 				Message: "auth.unauthorized",
-				Error:   "missing authorization header",
+				Error:   "missing access token cookie",
 			})
 			return
 		}

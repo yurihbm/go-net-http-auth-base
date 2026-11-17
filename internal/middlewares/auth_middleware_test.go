@@ -86,7 +86,7 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		})
 	})
 
-	t.Run("unauthorized - missing authorization header", func(t *testing.T) {
+	t.Run("unauthorized - missing access token cookie", func(t *testing.T) {
 		middleware, serviceMock := getTestAuthMiddleware()
 
 		handlerCalled := false
@@ -109,7 +109,7 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.Equal(t, "auth.unauthorized", response.Message)
-		assert.Equal(t, "missing authorization header", response.Error)
+		assert.Equal(t, "missing access token cookie", response.Error)
 		serviceMock.AssertNotCalled(t, "VerifyToken", mock.Anything)
 	})
 

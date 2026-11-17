@@ -2,6 +2,8 @@ package middlewares_test
 
 import (
 	"context"
+	"encoding/json"
+	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/middlewares"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +55,11 @@ func TestRateLimitMiddleware(t *testing.T) {
 	handler.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	assert.Equal(t, "0", w.Header().Get("X-RateLimit-Remaining"))
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+	var response api.ResponseBody[any]
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.Equal(t, "rateLimit.exceeded", response.Message)
+	assert.Equal(t, "too many requests", response.Error)
 
 	// 4. Different IP - should pass
 	req2 := httptest.NewRequest("GET", "/", nil)
