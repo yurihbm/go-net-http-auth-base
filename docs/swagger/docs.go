@@ -210,7 +210,7 @@ const docTemplate = `{
                         "description": "Other sessions deleted"
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "Unauthorized, or the current session was revoked or expired",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }

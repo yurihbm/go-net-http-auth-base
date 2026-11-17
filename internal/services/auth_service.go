@@ -143,6 +143,18 @@ func (s *authService) Logout(ctx context.Context, userUUID string, sessionUUID s
 }
 
 func (s *authService) LogoutOthers(ctx context.Context, userUUID string, sessionUUID string) error {
+	session, err := s.sessionsRepository.FindByUUID(ctx, userUUID, sessionUUID)
+	if err != nil {
+		var notFoundErr *domain.NotFoundError
+		if errors.As(err, &notFoundErr) {
+			return ErrInvalidToken
+		}
+		return err
+	}
+	if time.Now().Unix() >= session.ExpiresAt {
+		return ErrInvalidToken
+	}
+
 	return s.sessionsRepository.DeleteOthersByUser(ctx, userUUID, sessionUUID)
 }
 
