@@ -7,8 +7,8 @@ import (
 	"go-net-http-auth-base/internal/middlewares"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -98,20 +98,14 @@ func TestRateLimitMiddleware(t *testing.T) {
 
 func TestNewRateLimitMiddleware(t *testing.T) {
 	t.Run("cleanup goroutine stops when the context is cancelled", func(t *testing.T) {
-		const instances = 20
-		const eventuallyOverhead = 5
-		baseline := runtime.NumGoroutine()
-
-		ctx, cancel := context.WithCancel(context.Background())
-		for range instances {
+		// synctest.Test fails if a goroutine started in the bubble is still
+		// blocked after the function returns, so leaks are caught without
+		// counting goroutines from other tests.
+		synctest.Test(t, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
 			middlewares.NewRateLimitMiddleware(ctx, rate.Limit(1), 1)
-		}
-		assert.GreaterOrEqual(t, runtime.NumGoroutine(), baseline+instances)
 
-		cancel()
-
-		assert.Eventually(t, func() bool {
-			return runtime.NumGoroutine() <= baseline+eventuallyOverhead
-		}, 2*time.Second, 10*time.Millisecond)
+			cancel()
+		})
 	})
 }
