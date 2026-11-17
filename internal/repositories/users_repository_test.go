@@ -449,3 +449,55 @@ func TestUsersPostgresRepository_CaseInsensitiveEmail(t *testing.T) {
 	assert.True(t, errors.As(err, &conflictErr))
 	assert.Equal(t, "users.email.conflict", conflictErr.Error())
 }
+
+func TestUsersPostgresRepository_IsEmailReserved(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	user := seedUser(t, repo)
+	ctx := context.Background()
+
+	t.Run("not reserved before any change", func(t *testing.T) {
+		reserved, err := repo.IsEmailReserved(ctx, user.Email)
+
+		require.NoError(t, err)
+		assert.False(t, reserved)
+	})
+
+	t.Run("reserved inside the lock window, case-insensitively", func(t *testing.T) {
+		changedAt := time.Now().Add(-time.Hour)
+		_, err := repo.UpdateEmail(ctx, user.UUID, "john.new@example.com", 0, &changedAt)
+		require.NoError(t, err)
+
+		reserved, err := repo.IsEmailReserved(ctx, "John.Doe@Example.com")
+
+		require.NoError(t, err)
+		assert.True(t, reserved)
+		reserved, err = repo.IsEmailReserved(ctx, "john.new@example.com")
+		require.NoError(t, err)
+		assert.False(t, reserved)
+	})
+
+	t.Run("not reserved outside the lock window", func(t *testing.T) {
+		_, err := testDB.Exec(ctx, "UPDATE users SET email_changed_at = now() - interval '73 hours' WHERE uuid = $1", user.UUID)
+		require.NoError(t, err)
+
+		reserved, err := repo.IsEmailReserved(ctx, user.Email)
+
+		require.NoError(t, err)
+		assert.False(t, reserved)
+	})
+
+	t.Run("released after a revert", func(t *testing.T) {
+		_, err := testDB.Exec(ctx, "UPDATE users SET email_changed_at = now() WHERE uuid = $1", user.UUID)
+		require.NoError(t, err)
+		reserved, err := repo.IsEmailReserved(ctx, user.Email)
+		require.NoError(t, err)
+		require.True(t, reserved)
+
+		_, err = repo.UpdateEmail(ctx, user.UUID, user.Email, 1, nil)
+		require.NoError(t, err)
+
+		reserved, err = repo.IsEmailReserved(ctx, user.Email)
+		require.NoError(t, err)
+		assert.False(t, reserved)
+	})
+}

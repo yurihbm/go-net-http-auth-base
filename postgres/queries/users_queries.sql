@@ -47,7 +47,8 @@ SET
     email = $2,
     email_verified = true,
     email_version = email_version + 1,
-    email_changed_at = sqlc.narg(changed_at)
+    email_changed_at = sqlc.narg(changed_at),
+    previous_email = CASE WHEN sqlc.narg(changed_at)::timestamptz IS NULL THEN NULL ELSE email END
 WHERE
     uuid = $1
     AND email_version = sqlc.arg(expected_version)
@@ -85,6 +86,18 @@ SET
     step_up_failures = GREATEST(step_up_failures - 1, 0)
 WHERE
     uuid = $1;
+
+-- name: IsEmailReserved :one
+SELECT
+    EXISTS (
+        SELECT
+            1
+        FROM
+            users
+        WHERE
+            lower(previous_email) = lower(sqlc.arg(email)::text)
+            AND email_changed_at > now() - make_interval(secs => sqlc.arg(lock_seconds)::float8)
+    );
 
 -- name: MarkUserEmailVerified :exec
 UPDATE

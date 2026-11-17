@@ -182,4 +182,20 @@ func TestEmailChange_Transaction(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, providers, 1)
 	})
+
+	t.Run("revert - success after a squatting sign-up on the previous email was rejected", func(t *testing.T) {
+		f := setup(t, nil, nil)
+		applyChange(t, f)
+
+		_, err := f.service.Create(context.Background(), domain.CreateUserDTO{Name: "Squatter", Email: oldEmail, Password: "password123"})
+
+		var conflictErr *domain.ConflictError
+		require.True(t, errors.As(err, &conflictErr))
+		assert.Equal(t, "users.email.conflict", conflictErr.Error())
+
+		require.NoError(t, f.service.RevertEmailChange(context.Background(), "token"))
+		stored, err := f.usersRepo.FindByUUID(context.Background(), f.user.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, oldEmail, stored.Email)
+	})
 }
