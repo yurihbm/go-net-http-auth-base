@@ -22,6 +22,15 @@ import (
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 )
 
+// The write timeout leaves room for the OAuth callback, whose provider calls
+// time out after 10 seconds.
+const (
+	serverReadHeaderTimeout = 5 * time.Second
+	serverReadTimeout       = 15 * time.Second
+	serverWriteTimeout      = 30 * time.Second
+	serverIdleTimeout       = 60 * time.Second
+)
+
 // runEvery runs fn on every interval tick until ctx is cancelled.
 // It increments wg before starting and decrements it when done.
 func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, fn func()) {
@@ -154,8 +163,12 @@ func main() {
 	port := cfg.Port
 
 	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: handler,
+		Addr:              ":" + port,
+		Handler:           handler,
+		ReadHeaderTimeout: serverReadHeaderTimeout,
+		ReadTimeout:       serverReadTimeout,
+		WriteTimeout:      serverWriteTimeout,
+		IdleTimeout:       serverIdleTimeout,
 	}
 
 	go func() {
