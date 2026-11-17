@@ -40,6 +40,34 @@ func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionPa
 	return i, err
 }
 
+const deleteExpiredUserSessionsBatch = `-- name: DeleteExpiredUserSessionsBatch :execrows
+DELETE FROM
+    user_sessions
+WHERE
+    uuid IN (
+        SELECT
+            s.uuid
+        FROM
+            user_sessions s
+        WHERE
+            s.expires_at < now()
+            OR s.last_used_at < now() - $1::interval
+        LIMIT $2::int)
+`
+
+type DeleteExpiredUserSessionsBatchParams struct {
+	IdleTimeout pgtype.Interval
+	BatchSize   int32
+}
+
+func (q *Queries) DeleteExpiredUserSessionsBatch(ctx context.Context, arg DeleteExpiredUserSessionsBatchParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredUserSessionsBatch, arg.IdleTimeout, arg.BatchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteExpiredUserSessionsByUser = `-- name: DeleteExpiredUserSessionsByUser :exec
 DELETE FROM
     user_sessions
