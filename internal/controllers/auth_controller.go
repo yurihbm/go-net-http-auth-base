@@ -167,7 +167,7 @@ func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 // @Description	Deletes every session of the user except the current one. Requires the `access_token` cookie set by POST /auth/login.
 // @Tags			auth
 // @Success		204	"Other sessions deleted"
-// @Failure		401	{object}	api.ResponseBody[any]	"Unauthorized"
+// @Failure		401	{object}	api.ResponseBody[any]	"Unauthorized, or the current session was revoked or expired"
 // @Failure		500	{object}	api.ResponseBody[any]	"Internal server error"
 // @Router			/auth/logout-others [post]
 func (c *AuthController) LogoutOthers(w http.ResponseWriter, r *http.Request) {
