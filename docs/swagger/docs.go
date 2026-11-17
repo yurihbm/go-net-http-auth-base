@@ -1104,6 +1104,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
                     },
+                    "409": {
+                        "description": "Self deletion blocked during the email change lock (users.emailChange.locked)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
                     "500": {
                         "description": "Internal server error",
                         "schema": {

@@ -16,6 +16,7 @@ CREATE TABLE users (
     email_changed_at timestamptz,
     step_up_failures int NOT NULL DEFAULT 0,
     step_up_failures_window_start timestamptz,
+    previous_email text,
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL
 );

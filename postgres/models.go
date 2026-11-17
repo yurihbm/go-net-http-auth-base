@@ -147,6 +147,7 @@ type User struct {
 	EmailChangedAt            pgtype.Timestamptz
 	StepUpFailures            int32
 	StepUpFailuresWindowStart pgtype.Timestamptz
+	PreviousEmail             pgtype.Text
 	CreatedAt                 pgtype.Timestamptz
 	UpdatedAt                 pgtype.Timestamptz
 }

@@ -55,6 +55,11 @@ func (m *UsersRepositoryMock) UpdateEmail(ctx context.Context, uuid string, emai
 	return nil, args.Error(1)
 }
 
+func (m *UsersRepositoryMock) IsEmailReserved(ctx context.Context, email string) (bool, error) {
+	args := m.Called(email)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *UsersRepositoryMock) Delete(ctx context.Context, uuid string) error {
 	args := m.Called(uuid)
 	return args.Error(0)

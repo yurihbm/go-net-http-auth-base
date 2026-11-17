@@ -49,6 +49,10 @@ func (s *usersService) GetByEmail(ctx context.Context, email string) (*domain.Us
 }
 
 func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*domain.User, error) {
+	if err := s.ensureEmailNotReserved(ctx, normalizeEmail(dto.Email)); err != nil {
+		return nil, err
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, domain.NewInternalServerError("users.create.passwordHashingFailed", err)
@@ -72,6 +76,10 @@ func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*d
 }
 
 func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUserDTO) (*domain.User, error) {
+	if err := s.ensureEmailNotReserved(ctx, normalizeEmail(dto.Email)); err != nil {
+		return nil, err
+	}
+
 	user := domain.User{
 		Name:          dto.Name,
 		Email:         normalizeEmail(dto.Email),
@@ -163,6 +171,10 @@ func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Acto
 		return domain.NewConflictError("users.email.conflict")
 	}
 
+	if err := s.ensureEmailNotReserved(ctx, newEmail); err != nil {
+		return err
+	}
+
 	return s.emailVerification.SendEmailChangeEmail(ctx, user, newEmail)
 }
 
@@ -186,6 +198,10 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*d
 
 	if isEmailChangeLocked(user) {
 		return nil, domain.NewConflictError("users.emailChange.locked")
+	}
+
+	if err := s.ensureEmailNotReserved(ctx, change.NewEmail); err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
@@ -244,6 +260,19 @@ func (s *usersService) RevertEmailChange(ctx context.Context, token string) erro
 	})
 }
 
+// A recently changed email stays reserved for its previous owner during the
+// lock window so the undo link can still restore it.
+func (s *usersService) ensureEmailNotReserved(ctx context.Context, email string) error {
+	reserved, err := s.repo.IsEmailReserved(ctx, email)
+	if err != nil {
+		return err
+	}
+	if reserved {
+		return domain.NewConflictError("users.email.conflict")
+	}
+	return nil
+}
+
 func isEmailChangeLocked(user *domain.User) bool {
 	return user.EmailChangedAt != 0 && time.Now().Before(time.Unix(user.EmailChangedAt, 0).Add(domain.EmailChangeLock))
 }
@@ -252,5 +281,16 @@ func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid stri
 	if !actor.CanAccess(uuid) {
 		return errForbiddenUserAccess
 	}
+
+	if actor.UUID == uuid {
+		user, err := s.repo.FindByUUID(ctx, uuid)
+		if err != nil {
+			return err
+		}
+		if isEmailChangeLocked(user) {
+			return domain.NewConflictError("users.emailChange.locked")
+		}
+	}
+
 	return s.repo.Delete(ctx, uuid)
 }

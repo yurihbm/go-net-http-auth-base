@@ -403,6 +403,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 // @Failure		401		{object}	api.ResponseBody[any]	"Unauthorized"
 // @Failure		403		{object}	api.ResponseBody[any]	"Forbidden, or step-up required (auth.stepUp.required)"
 // @Failure		404		{object}	api.ResponseBody[any]	"Not found"
+// @Failure		409		{object}	api.ResponseBody[any]	"Self deletion blocked during the email change lock (users.emailChange.locked)"
 // @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
 // @Router			/users/{uuid} [delete]
 func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
