@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
@@ -39,6 +40,17 @@ func TestDecodeAndValidate(t *testing.T) {
 		var valErr *domain.ValidationError
 		assert.True(t, errors.As(err, &valErr))
 		assert.NotEmpty(t, valErr.Details()["body"])
+	})
+
+	t.Run("body over 1 MiB returns ValidationError with body key", func(t *testing.T) {
+		body := []byte(`{"name":"` + strings.Repeat("a", 1<<20) + `","email":"alice@example.com"}`)
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		assert.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "request body too large", valErr.Details()["body"])
 	})
 
 	t.Run("unknown field returns ValidationError with body key", func(t *testing.T) {
