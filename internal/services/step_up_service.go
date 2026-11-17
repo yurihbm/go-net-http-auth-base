@@ -85,7 +85,7 @@ func (s *stepUpService) VerifyCode(ctx context.Context, userUUID string, session
 	}
 
 	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.hashCode(sessionUUID, code))) {
-		return 0, ErrStepUpInvalidCode
+		return 0, s.rejectWrongCode(ctx, userUUID, sessionUUID)
 	}
 
 	until := time.Now().Add(domain.StepUpElevationWindow)
@@ -113,6 +113,21 @@ func (s *stepUpService) IsElevated(ctx context.Context, userUUID string, session
 
 	now := time.Now().Unix()
 	return now < session.ExpiresAt && now < session.StepUpUntil, nil
+}
+
+func (s *stepUpService) rejectWrongCode(ctx context.Context, userUUID string, sessionUUID string) error {
+	failures, err := s.sessions.IncrementStepUpFailures(ctx, userUUID, sessionUUID)
+	if err != nil {
+		return err
+	}
+	if failures < domain.StepUpMaxSessionFailures {
+		return ErrStepUpInvalidCode
+	}
+
+	if err := s.sessions.Delete(ctx, userUUID, sessionUUID); err != nil {
+		return err
+	}
+	return domain.ErrStepUpSessionRevoked
 }
 
 func (s *stepUpService) hashCode(sessionUUID string, code string) string {

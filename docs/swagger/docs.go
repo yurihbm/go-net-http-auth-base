@@ -332,7 +332,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Invalid code (auth.stepUp.invalidCode) or no active challenge (auth.stepUp.noChallenge)",
+                        "description": "Invalid code (auth.stepUp.invalidCode), no active challenge (auth.stepUp.noChallenge) or session revoked after too many failures (auth.stepUp.sessionRevoked, clears the auth cookies)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }

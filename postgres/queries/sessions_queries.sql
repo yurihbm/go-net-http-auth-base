@@ -65,6 +65,17 @@ WHERE
     uuid = $1
     AND user_uuid = $2;
 
+-- name: IncrementUserSessionStepUpFailures :one
+UPDATE
+    user_sessions
+SET
+    step_up_failures = step_up_failures + 1
+WHERE
+    uuid = $1
+    AND user_uuid = $2
+RETURNING
+    step_up_failures;
+
 -- name: DeleteUserSessionsByUser :exec
 DELETE FROM
     user_sessions

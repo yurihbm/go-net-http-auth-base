@@ -159,11 +159,12 @@ type UserOauthProvider struct {
 }
 
 type UserSession struct {
-	Uuid        pgtype.UUID
-	UserUuid    pgtype.UUID
-	CurrentJti  string
-	CreatedAt   pgtype.Timestamptz
-	LastUsedAt  pgtype.Timestamptz
-	ExpiresAt   pgtype.Timestamptz
-	StepUpUntil pgtype.Timestamptz
+	Uuid           pgtype.UUID
+	UserUuid       pgtype.UUID
+	CurrentJti     string
+	CreatedAt      pgtype.Timestamptz
+	LastUsedAt     pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
+	StepUpUntil    pgtype.Timestamptz
+	StepUpFailures int32
 }

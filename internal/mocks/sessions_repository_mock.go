@@ -65,3 +65,8 @@ func (m *SessionsRepositoryMock) DeleteOthersByUser(ctx context.Context, userUUI
 	args := m.Called(userUUID, keepSessionUUID)
 	return args.Error(0)
 }
+
+func (m *SessionsRepositoryMock) IncrementStepUpFailures(ctx context.Context, userUUID string, sessionUUID string) (int, error) {
+	args := m.Called(userUUID, sessionUUID)
+	return args.Int(0), args.Error(1)
+}

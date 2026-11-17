@@ -6,12 +6,15 @@ import (
 )
 
 const (
-	StepUpCodeTTL         = 10 * time.Minute
-	StepUpElevationWindow = 5 * time.Minute
-	StepUpMaxAttempts     = 5
-	StepUpCooldown        = 60 * time.Second
-	EmailChangeLock       = 72 * time.Hour
+	StepUpCodeTTL            = 10 * time.Minute
+	StepUpElevationWindow    = 5 * time.Minute
+	StepUpMaxAttempts        = 5
+	StepUpMaxSessionFailures = 10
+	StepUpCooldown           = 60 * time.Second
+	EmailChangeLock          = 72 * time.Hour
 )
+
+var ErrStepUpSessionRevoked = NewUnauthorizedError("auth.stepUp.sessionRevoked")
 
 type StepUpChallenge struct {
 	UserUUID    string
