@@ -39,6 +39,7 @@ const defaultOAuthProviderErrorCode = "access_denied"
 
 type AuthController struct {
 	authService       domain.AuthService
+	stepUpService     domain.StepUpService
 	auditService      domain.AuditService
 	authMiddleware    middlewares.HandlerMiddleware
 	isSecureCookie    bool
@@ -49,6 +50,7 @@ var _ Controller = (*AuthController)(nil)
 
 func NewAuthController(
 	authService domain.AuthService,
+	stepUpService domain.StepUpService,
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	isSecureCookie bool,
@@ -56,6 +58,7 @@ func NewAuthController(
 ) *AuthController {
 	return &AuthController{
 		authService,
+		stepUpService,
 		auditService,
 		authMiddleware,
 		isSecureCookie,
@@ -67,6 +70,9 @@ func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /auth/login", c.Login)
 	router.HandleFunc("POST "+api.RefreshTokenCookiePath, c.RefreshToken)
 	router.HandleFunc("POST /auth/logout", c.authMiddleware.Use(c.Logout))
+	router.HandleFunc("POST /auth/logout-others", c.authMiddleware.Use(c.LogoutOthers))
+	router.HandleFunc("POST /auth/step-up", c.authMiddleware.Use(c.RequestStepUp))
+	router.HandleFunc("POST /auth/step-up/verify", c.authMiddleware.Use(c.VerifyStepUp))
 	router.HandleFunc("GET /auth/{provider}/login", c.LoginWithOAuthProvider)
 	router.HandleFunc("GET /auth/{provider}/callback", c.OAuthProviderCallback)
 }
@@ -153,6 +159,106 @@ func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
 		Message: "auth.logout.success",
+	})
+}
+
+// @Summary		Log out of the other devices
+// @Description	Deletes every session of the user except the current one. Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			auth
+// @Success		204	"Other sessions deleted"
+// @Failure		401	{object}	api.ResponseBody[any]	"Unauthorized"
+// @Failure		500	{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/auth/logout-others [post]
+func (c *AuthController) LogoutOthers(w http.ResponseWriter, r *http.Request) {
+	userUUID, sessionUUID := sessionFromRequest(r)
+	if err := c.authService.LogoutOthers(r.Context(), userUUID, sessionUUID); err != nil {
+		c.auditAuthFailure(r, domain.AuditActionLogoutOthers, err)
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	c.auditAuthSuccess(r, domain.AuditActionLogoutOthers)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// @Summary		Request a step-up code
+// @Description	Emails a 6-digit code to the current email address of the user. Valid for 10 minutes, one request per 60 seconds per session. Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			auth
+// @Produce		json
+// @Success		202	{object}	api.ResponseBody[any]	"Code sent"
+// @Failure		401	{object}	api.ResponseBody[any]	"Unauthorized"
+// @Failure		429	{object}	api.ResponseBody[any]	"Cooldown (auth.stepUp.cooldown)"
+// @Failure		500	{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/auth/step-up [post]
+func (c *AuthController) RequestStepUp(w http.ResponseWriter, r *http.Request) {
+	userUUID, sessionUUID := sessionFromRequest(r)
+	if err := c.stepUpService.RequestCode(r.Context(), userUUID, sessionUUID); err != nil {
+		c.auditAuthFailure(r, domain.AuditActionStepUpRequest, err)
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	c.auditAuthSuccess(r, domain.AuditActionStepUpRequest)
+
+	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
+		Message: "auth.stepUp.codeSent",
+	})
+}
+
+// @Summary		Verify a step-up code
+// @Description	Elevates the current session for 5 minutes. A code allows 5 attempts. Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.StepUpVerifyDTO					true	"Code"
+// @Success		200		{object}	api.ResponseBody[map[string]int64]	"Session elevated; step_up_until is a unix timestamp"
+// @Failure		400		{object}	api.ResponseBody[any]					"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]					"Invalid code (auth.stepUp.invalidCode) or no active challenge (auth.stepUp.noChallenge)"
+// @Failure		500		{object}	api.ResponseBody[any]					"Internal server error"
+// @Router			/auth/step-up/verify [post]
+func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.StepUpVerifyDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	userUUID, sessionUUID := sessionFromRequest(r)
+	until, err := c.stepUpService.VerifyCode(r.Context(), userUUID, sessionUUID, dto.Code)
+	if err != nil {
+		c.auditAuthFailure(r, domain.AuditActionStepUpVerify, err)
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	c.auditAuthSuccess(r, domain.AuditActionStepUpVerify)
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[map[string]int64]{
+		Data:    map[string]int64{"step_up_until": until},
+		Message: "auth.stepUp.verified",
+	})
+}
+
+func (c *AuthController) auditAuthSuccess(r *http.Request, action string) {
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    actorUUID(r),
+		Action:       action,
+		ResourceType: domain.AuditResourceAuth,
+		ResourceUUID: "",
+		Status:       domain.AuditStatusSuccess,
+	})
+}
+
+func (c *AuthController) auditAuthFailure(r *http.Request, action string, err error) {
+	reason := err.Error()
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:     actorUUID(r),
+		Action:        action,
+		ResourceType:  domain.AuditResourceAuth,
+		ResourceUUID:  "",
+		Status:        domain.AuditStatusFailure,
+		FailureReason: &reason,
 	})
 }
 

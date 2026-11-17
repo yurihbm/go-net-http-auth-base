@@ -41,3 +41,8 @@ func (m *EmailVerificationServiceMock) SendEmailChangedNotice(ctx context.Contex
 	args := m.Called(oldEmail, newEmail)
 	return args.Error(0)
 }
+
+func (m *EmailVerificationServiceMock) SendStepUpCode(ctx context.Context, email string, code string) error {
+	args := m.Called(email, code)
+	return args.Error(0)
+}

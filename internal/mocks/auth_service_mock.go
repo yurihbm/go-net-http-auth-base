@@ -38,6 +38,11 @@ func (m *AuthServiceMock) Logout(ctx context.Context, userUUID string, sessionUU
 	return args.Error(0)
 }
 
+func (m *AuthServiceMock) LogoutOthers(ctx context.Context, userUUID string, sessionUUID string) error {
+	args := m.Called(userUUID, sessionUUID)
+	return args.Error(0)
+}
+
 func (m *AuthServiceMock) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {

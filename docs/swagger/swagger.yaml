@@ -46,6 +46,21 @@ definitions:
       meta:
         $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
     type: object
+  go-net-http-auth-base_internal_api.ResponseBody-map_string_int64:
+    properties:
+      data:
+        $ref: '#/definitions/map_string_int64'
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
+    type: object
   go-net-http-auth-base_internal_api.ResponseBody-string:
     properties:
       data:
@@ -141,6 +156,13 @@ definitions:
     required:
     - email
     type: object
+  go-net-http-auth-base_internal_domain.StepUpVerifyDTO:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
   go-net-http-auth-base_internal_domain.User:
     properties:
       created_at:
@@ -177,6 +199,11 @@ definitions:
         type: string
     required:
     - token
+    type: object
+  map_string_int64:
+    additionalProperties:
+      format: int64
+      type: integer
     type: object
 info:
   contact: {}
@@ -415,6 +442,24 @@ paths:
       summary: Log out
       tags:
       - auth
+  /auth/logout-others:
+    post:
+      description: Deletes every session of the user except the current one. Requires
+        the `access_token` cookie set by POST /auth/login.
+      responses:
+        "204":
+          description: Other sessions deleted
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Log out of the other devices
+      tags:
+      - auth
   /auth/refresh:
     post:
       description: Rotates the refresh token. Requires the `refresh_token` cookie
@@ -435,6 +480,69 @@ paths:
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
       summary: Refresh the session tokens
+      tags:
+      - auth
+  /auth/step-up:
+    post:
+      description: Emails a 6-digit code to the current email address of the user.
+        Valid for 10 minutes, one request per 60 seconds per session. Requires the
+        `access_token` cookie set by POST /auth/login.
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Code sent
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "429":
+          description: Cooldown (auth.stepUp.cooldown)
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Request a step-up code
+      tags:
+      - auth
+  /auth/step-up/verify:
+    post:
+      consumes:
+      - application/json
+      description: Elevates the current session for 5 minutes. A code allows 5 attempts.
+        Requires the `access_token` cookie set by POST /auth/login.
+      parameters:
+      - description: Code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.StepUpVerifyDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Session elevated; step_up_until is a unix timestamp
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-map_string_int64'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Invalid code (auth.stepUp.invalidCode) or no active challenge
+            (auth.stepUp.noChallenge)
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Verify a step-up code
       tags:
       - auth
   /health:
@@ -502,7 +610,9 @@ paths:
       - users
   /users/{uuid}:
     delete:
-      description: Requires the `access_token` cookie set by POST /auth/login.
+      description: Requires the `access_token` cookie set by POST /auth/login and
+        a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also
+        for admins.
       parameters:
       - description: User UUID
         in: path
@@ -523,7 +633,7 @@ paths:
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
         "403":
-          description: Forbidden
+          description: Forbidden, or step-up required (auth.stepUp.required)
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
         "404":
@@ -696,7 +806,8 @@ paths:
       - application/json
       description: Sends a confirmation link to the new address; the email only changes
         after POST /users/confirm-email-change. Requires the `access_token` cookie
-        set by POST /auth/login.
+        set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST
+        /auth/step-up/verify).
       parameters:
       - description: New email address
         in: body
@@ -717,6 +828,10 @@ paths:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "403":
+          description: Step-up required (auth.stepUp.required)
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
         "409":

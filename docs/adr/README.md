@@ -12,7 +12,8 @@ Status, Context, Decision and Consequences.
 | [ADR-004](ADR-004-logging-observability.md)     | Logging & Observability               | Accepted |
 | [ADR-005](ADR-005-security-approach.md)         | Security Approach                     | Accepted |
 | [ADR-006](ADR-006-e2e-testing.md)               | End-to-End Testing Approach           | Accepted |
-| [ADR-007](ADR-007-email-change.md)              | Verified Email Change                 | Accepted |
+| [ADR-007](ADR-007-email-change.md)              | Verified Email Change                 | Superseded by ADR-008 |
+| [ADR-008](ADR-008-step-up-and-email-change-hardening.md) | Step-Up and Email Change Hardening | Accepted |
 
 ## Writing a new ADR
 
