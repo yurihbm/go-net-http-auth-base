@@ -95,6 +95,7 @@ type EmailConfig struct {
 	ResendAPIKey    string
 	From            string
 	VerificationURL string
+	ChangeURL       string
 }
 
 type TelemetryConfig struct {
@@ -190,6 +191,7 @@ func Load() (*Config, error) {
 			ResendAPIKey:    os.Getenv("RESEND_API_KEY"),
 			From:            os.Getenv("EMAIL_FROM"),
 			VerificationURL: os.Getenv("EMAIL_VERIFICATION_URL"),
+			ChangeURL:       os.Getenv("EMAIL_CHANGE_URL"),
 		},
 
 		Telemetry: TelemetryConfig{
@@ -246,6 +248,7 @@ func Load() (*Config, error) {
 			{"RESEND_API_KEY", cfg.Email.ResendAPIKey},
 			{"EMAIL_FROM", cfg.Email.From},
 			{"EMAIL_VERIFICATION_URL", cfg.Email.VerificationURL},
+			{"EMAIL_CHANGE_URL", cfg.Email.ChangeURL},
 		}
 		for _, v := range required {
 			if v.value == "" {

@@ -59,19 +59,6 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("Update stores the normalized email", func(t *testing.T) {
-		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock))
-		email := messyEmail
-		repo.On("FindByUUID", "some-uuid").Return(&domain.User{UUID: "some-uuid", Email: "old@example.com"}, nil).Once()
-		repo.On("Update", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).Return(&domain.User{UUID: "some-uuid", Email: normalizedEmail}, nil).Once()
-
-		_, err := service.Update(context.Background(), selfActor, "some-uuid", domain.UserUpdateDTO{Email: &email})
-
-		require.NoError(t, err)
-		repo.AssertExpectations(t)
-	})
-
 	t.Run("ResendVerification looks up the normalized email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		emailVerification := new(mocks.EmailVerificationServiceMock)
@@ -90,7 +77,7 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 
 func newAuthServiceOverRealUsers(repo *mocks.UsersRepositoryMock, authRepo *mocks.AuthRepositoryMock, registry *mocks.OAuthProviderRegistryMock, emailProvider *mocks.EmailProviderMock) domain.AuthService {
 	tokens := services.NewTokenService(normalizationKey)
-	emailVerification := services.NewEmailVerificationService(tokens, emailProvider, "https://app.test/verify-email")
+	emailVerification := services.NewEmailVerificationService(tokens, emailProvider, "https://app.test/verify-email", emailChangeURL)
 	sessionsRepo := new(mocks.SessionsRepositoryMock)
 	sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil)
 	sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil)

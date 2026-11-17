@@ -153,6 +153,7 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 	createdUser := seedUser(t, repo)
 
 	t.Run("success", func(t *testing.T) {
+		originalEmail := createdUser.Email
 		createdUser.Name = "John Doe Updated"
 		createdUser.Email = "john.doe.updated@example.com"
 
@@ -161,7 +162,7 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 		require.NotNil(t, returnedUser)
 		assert.Equal(t, createdUser.UUID, returnedUser.UUID)
 		assert.Equal(t, "John Doe Updated", returnedUser.Name)
-		assert.Equal(t, "john.doe.updated@example.com", returnedUser.Email)
+		assert.Equal(t, originalEmail, returnedUser.Email)
 		assert.Equal(t, createdUser.Role, returnedUser.Role)
 		assert.Equal(t, createdUser.EmailVerified, returnedUser.EmailVerified)
 		assert.GreaterOrEqual(t, returnedUser.UpdatedAt, createdUser.CreatedAt)
@@ -170,7 +171,7 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, updatedUser)
 		assert.Equal(t, "John Doe Updated", updatedUser.Name)
-		assert.Equal(t, "john.doe.updated@example.com", updatedUser.Email)
+		assert.Equal(t, originalEmail, updatedUser.Email)
 	})
 
 	t.Run("error - user not found", func(t *testing.T) {
@@ -185,6 +186,52 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 		invalidUser := domain.User{UUID: "invalid"}
 		returnedUser, err := repo.Update(context.Background(), invalidUser)
 		require.Error(t, err)
+		assert.Nil(t, returnedUser)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
+func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	createdUser := seedUser(t, repo)
+
+	t.Run("success sets the email as verified", func(t *testing.T) {
+		require.False(t, createdUser.EmailVerified)
+
+		returnedUser, err := repo.UpdateEmail(context.Background(), createdUser.UUID, "john.new@example.com")
+
+		require.NoError(t, err)
+		assert.Equal(t, "john.new@example.com", returnedUser.Email)
+		assert.True(t, returnedUser.EmailVerified)
+		found, err := repo.FindByUUID(context.Background(), createdUser.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, "john.new@example.com", found.Email)
+		assert.True(t, found.EmailVerified)
+	})
+
+	t.Run("error - email taken", func(t *testing.T) {
+		_, err := repo.Create(context.Background(), domain.User{Name: "Taken", Email: "taken@example.com", PasswordHash: "hash"})
+		require.NoError(t, err)
+
+		returnedUser, err := repo.UpdateEmail(context.Background(), createdUser.UUID, "Taken@Example.com")
+
+		assert.Nil(t, returnedUser)
+		var conflictErr *domain.ConflictError
+		assert.True(t, errors.As(err, &conflictErr))
+	})
+
+	t.Run("error - user not found", func(t *testing.T) {
+		returnedUser, err := repo.UpdateEmail(context.Background(), uuid.NewString(), "ghost@example.com")
+
+		assert.Nil(t, returnedUser)
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		returnedUser, err := repo.UpdateEmail(context.Background(), "invalid", "ghost@example.com")
+
 		assert.Nil(t, returnedUser)
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))

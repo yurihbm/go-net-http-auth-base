@@ -23,3 +23,21 @@ func (m *EmailVerificationServiceMock) VerifyVerificationToken(ctx context.Conte
 	args := m.Called(token)
 	return args.String(0), args.Error(1)
 }
+
+func (m *EmailVerificationServiceMock) SendEmailChangeEmail(ctx context.Context, user *domain.User, newEmail string) error {
+	args := m.Called(user, newEmail)
+	return args.Error(0)
+}
+
+func (m *EmailVerificationServiceMock) VerifyEmailChangeToken(ctx context.Context, token string) (*domain.EmailChange, error) {
+	args := m.Called(token)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.EmailChange), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *EmailVerificationServiceMock) SendEmailChangedNotice(ctx context.Context, oldEmail string, newEmail string) error {
+	args := m.Called(oldEmail, newEmail)
+	return args.Error(0)
+}

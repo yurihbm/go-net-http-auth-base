@@ -174,9 +174,11 @@ Every response uses the [standard format](#api-response-format). Authenticated e
 | `POST`   | `/users`                      | -     | Sign up with email and password, and send the verification email    |
 | `POST`   | `/users/verify-email`         | -     | Verify the email with the token from the email link                 |
 | `POST`   | `/users/resend-verification`  | -     | Resend the verification email (silent for unknown/verified emails)  |
+| `POST`   | `/users/confirm-email-change` | -     | Apply an email change with the token from the confirmation link     |
 | `GET`    | `/users/me`                   | User  | Current user                                                        |
+| `POST`   | `/users/me/email`             | User  | Request an email change (confirmation link sent to the new address) |
 | `GET`    | `/users/{uuid}`               | User  | Get a user (self or admin)                                          |
-| `PUT`    | `/users/{uuid}`               | User  | Update a user (self or admin)                                       |
+| `PUT`    | `/users/{uuid}`               | User  | Update a user's name (self or admin)                                |
 | `DELETE` | `/users/{uuid}`               | User  | Delete a user (self or admin)                                       |
 | `POST`   | `/auth/login`                 | -     | Email/password login; sets the `access_token` and `refresh_token` cookies |
 | `POST`   | `/auth/refresh`               | -     | Rotate the refresh token (reads the `refresh_token` cookie)        |
@@ -214,6 +216,7 @@ All variables are read and validated once at startup in `config/config.go`; the 
 | `RATE_LIMIT_REQUESTS_PER_SECOND`, `RATE_LIMIT_BURST`                     | `20`, `50`                     | Per-IP token bucket                                                                                 |
 | `RESEND_API_KEY`, `EMAIL_FROM`                                           | - (**required** outside development) | Resend credentials and sender; without a key, emails are only logged                          |
 | `EMAIL_VERIFICATION_URL`                                                 | - (**required** outside development) | Frontend URL that receives the verification token                                             |
+| `EMAIL_CHANGE_URL`                                                       | - (**required** outside development) | Frontend URL that receives the email change confirmation token                                |
 | `OTEL_*`                                                                 | see [Observability](#-observability) | OpenTelemetry export                                                                          |
 | `TEST_DB_PORT_START`, `TEST_DB_PORT_END`                                 | `15432`, `15499`               | Host port range for the integration test database container (tests only)                            |
 

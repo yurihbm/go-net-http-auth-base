@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -215,16 +216,12 @@ func TestUsersService_Update(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		newName := "New Name"
-		newEmail := "new@example.com"
-		dto := domain.UserUpdateDTO{
-			Name:  &newName,
-			Email: &newEmail,
-		}
+		dto := domain.UserUpdateDTO{Name: &newName}
 
 		repo.On("FindByUUID", uuid).Return(originalUser, nil).Once()
-		updatedUser := &domain.User{UUID: uuid, Name: newName, Email: newEmail}
+		updatedUser := &domain.User{UUID: uuid, Name: newName, Email: originalUser.Email}
 		repo.On("Update", mock.MatchedBy(func(u domain.User) bool {
-			return u.Name == newName && u.Email == newEmail
+			return u.Name == newName && u.Email == originalUser.Email
 		})).Return(updatedUser, nil).Once()
 
 		user, err := service.Update(context.Background(), selfActor, uuid, dto)
@@ -472,4 +469,178 @@ func TestUsersService_CreateOAuth_EmailVerified(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, verified, user.EmailVerified)
 	}
+}
+
+func TestUsersService_RequestEmailChange(t *testing.T) {
+	user := &domain.User{UUID: selfActor.UUID, Email: "old@example.com"}
+
+	t.Run("success sends the confirmation to the normalized new email", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		repo.On("FindByUUID", selfActor.UUID).Return(user, nil).Once()
+		repo.On("FindByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("users.notFound")).Once()
+		emailVerification.On("SendEmailChangeEmail", user, "new@example.com").Return(nil).Once()
+
+		err := service.RequestEmailChange(context.Background(), selfActor, "  New@Example.com ")
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+		emailVerification.AssertExpectations(t)
+	})
+
+	t.Run("error - unauthenticated actor", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+
+		err := service.RequestEmailChange(context.Background(), domain.Actor{}, "new@example.com")
+
+		var unauthorizedErr *domain.UnauthorizedError
+		assert.True(t, errors.As(err, &unauthorizedErr))
+		repo.AssertNotCalled(t, "FindByUUID", mock.Anything)
+		emailVerification.AssertNotCalled(t, "SendEmailChangeEmail", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - same email", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		repo.On("FindByUUID", selfActor.UUID).Return(user, nil).Once()
+
+		err := service.RequestEmailChange(context.Background(), selfActor, "OLD@example.com")
+
+		var validationErr *domain.ValidationError
+		require.True(t, errors.As(err, &validationErr))
+		assert.Equal(t, "users.emailChange.unchanged", validationErr.Error())
+		repo.AssertNotCalled(t, "FindByEmail", mock.Anything)
+		emailVerification.AssertNotCalled(t, "SendEmailChangeEmail", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - email taken", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		repo.On("FindByUUID", selfActor.UUID).Return(user, nil).Once()
+		repo.On("FindByEmail", "taken@example.com").Return(&domain.User{UUID: "other"}, nil).Once()
+
+		err := service.RequestEmailChange(context.Background(), selfActor, "taken@example.com")
+
+		var conflictErr *domain.ConflictError
+		require.True(t, errors.As(err, &conflictErr))
+		assert.Equal(t, "users.email.conflict", conflictErr.Error())
+		emailVerification.AssertNotCalled(t, "SendEmailChangeEmail", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - user lookup fails", func(t *testing.T) {
+		service, repo, _ := newVerificationUsersService()
+		notFound := domain.NewNotFoundError("users.notFound")
+		repo.On("FindByUUID", selfActor.UUID).Return(nil, notFound).Once()
+
+		err := service.RequestEmailChange(context.Background(), selfActor, "new@example.com")
+
+		assert.ErrorIs(t, err, notFound)
+	})
+
+	t.Run("error - email lookup fails", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		dbErr := errors.New("db error")
+		repo.On("FindByUUID", selfActor.UUID).Return(user, nil).Once()
+		repo.On("FindByEmail", "new@example.com").Return(nil, dbErr).Once()
+
+		err := service.RequestEmailChange(context.Background(), selfActor, "new@example.com")
+
+		assert.ErrorIs(t, err, dbErr)
+		emailVerification.AssertNotCalled(t, "SendEmailChangeEmail", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - send fails", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		sendErr := errors.New("smtp down")
+		repo.On("FindByUUID", selfActor.UUID).Return(user, nil).Once()
+		repo.On("FindByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("users.notFound")).Once()
+		emailVerification.On("SendEmailChangeEmail", user, "new@example.com").Return(sendErr).Once()
+
+		err := service.RequestEmailChange(context.Background(), selfActor, "new@example.com")
+
+		assert.ErrorIs(t, err, sendErr)
+	})
+}
+
+func TestUsersService_ConfirmEmailChange(t *testing.T) {
+	change := &domain.EmailChange{UserUUID: "user-uuid", CurrentEmail: "old@example.com", NewEmail: "new@example.com"}
+	user := &domain.User{UUID: "user-uuid", Email: "old@example.com"}
+	updated := &domain.User{UUID: "user-uuid", Email: "new@example.com", EmailVerified: true}
+
+	t.Run("success updates the email and notifies the old address", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
+		repo.On("FindByUUID", "user-uuid").Return(user, nil).Once()
+		repo.On("UpdateEmail", "user-uuid", "new@example.com").Return(updated, nil).Once()
+		emailVerification.On("SendEmailChangedNotice", "old@example.com", "new@example.com").Return(nil).Once()
+
+		result, err := service.ConfirmEmailChange(context.Background(), "token")
+
+		assert.NoError(t, err)
+		assert.Equal(t, updated, result)
+		repo.AssertExpectations(t)
+		emailVerification.AssertExpectations(t)
+	})
+
+	t.Run("notice failure does not fail the change", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
+		repo.On("FindByUUID", "user-uuid").Return(user, nil).Once()
+		repo.On("UpdateEmail", "user-uuid", "new@example.com").Return(updated, nil).Once()
+		emailVerification.On("SendEmailChangedNotice", "old@example.com", "new@example.com").Return(errors.New("smtp down")).Once()
+
+		result, err := service.ConfirmEmailChange(context.Background(), "token")
+
+		assert.NoError(t, err)
+		assert.Equal(t, updated, result)
+	})
+
+	t.Run("error - invalid token", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		emailVerification.On("VerifyEmailChangeToken", "token").Return(nil, services.ErrInvalidToken).Once()
+
+		result, err := service.ConfirmEmailChange(context.Background(), "token")
+
+		assert.ErrorIs(t, err, services.ErrInvalidToken)
+		assert.Nil(t, result)
+		repo.AssertNotCalled(t, "FindByUUID", mock.Anything)
+	})
+
+	t.Run("error - stale token", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
+		repo.On("FindByUUID", "user-uuid").Return(&domain.User{UUID: "user-uuid", Email: "other@example.com"}, nil).Once()
+
+		result, err := service.ConfirmEmailChange(context.Background(), "token")
+
+		var unauthorizedErr *domain.UnauthorizedError
+		require.True(t, errors.As(err, &unauthorizedErr))
+		assert.Equal(t, "users.emailChange.staleToken", unauthorizedErr.Error())
+		assert.Nil(t, result)
+		repo.AssertNotCalled(t, "UpdateEmail", mock.Anything, mock.Anything)
+		emailVerification.AssertNotCalled(t, "SendEmailChangedNotice", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - unknown user", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		notFound := domain.NewNotFoundError("users.notFound")
+		emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
+		repo.On("FindByUUID", "user-uuid").Return(nil, notFound).Once()
+
+		result, err := service.ConfirmEmailChange(context.Background(), "token")
+
+		assert.ErrorIs(t, err, notFound)
+		assert.Nil(t, result)
+	})
+
+	t.Run("error - update conflict", func(t *testing.T) {
+		service, repo, emailVerification := newVerificationUsersService()
+		conflict := domain.NewConflictError("users.email.conflict")
+		emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
+		repo.On("FindByUUID", "user-uuid").Return(user, nil).Once()
+		repo.On("UpdateEmail", "user-uuid", "new@example.com").Return(nil, conflict).Once()
+
+		result, err := service.ConfirmEmailChange(context.Background(), "token")
+
+		assert.ErrorIs(t, err, conflict)
+		assert.Nil(t, result)
+		emailVerification.AssertNotCalled(t, "SendEmailChangedNotice", mock.Anything, mock.Anything)
+	})
 }

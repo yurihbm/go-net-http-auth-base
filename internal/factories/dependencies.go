@@ -29,7 +29,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 
 	tokenService := services.NewTokenService(cfg.JWTSecret)
 	emailProvider := newEmailProvider(cfg.Email)
-	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.VerificationURL)
+	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.VerificationURL, cfg.Email.ChangeURL)
 
 	usersRepository := repositories.NewUsersPostgresRepository(db)
 	usersService := services.NewUserService(usersRepository, emailVerificationService)

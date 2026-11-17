@@ -81,9 +81,8 @@ func (r *UsersPostgresRepository) Update(ctx context.Context, user domain.User) 
 	}
 
 	params := postgres.UpdateUserParams{
-		Uuid:  *uuid,
-		Name:  user.Name,
-		Email: user.Email,
+		Uuid: *uuid,
+		Name: user.Name,
 	}
 
 	if user.PasswordHash != "" {
@@ -95,13 +94,34 @@ func (r *UsersPostgresRepository) Update(ctx context.Context, user domain.User) 
 		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
 			return nil, noRowsErr
 		}
+		return nil, domain.NewInternalServerError("users.internalServerError", err)
+	}
+
+	user = toDomainUser(updatedUser)
+	return &user, nil
+}
+
+func (r *UsersPostgresRepository) UpdateEmail(ctx context.Context, uuidStr string, email string) (*domain.User, error) {
+	uuid, err := parseUsersUUID(uuidStr)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedUser, err := r.q.UpdateUserEmail(ctx, postgres.UpdateUserEmailParams{
+		Uuid:  *uuid,
+		Email: email,
+	})
+	if err != nil {
+		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
+			return nil, noRowsErr
+		}
 		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
 			return nil, conflictErr
 		}
 		return nil, domain.NewInternalServerError("users.internalServerError", err)
 	}
 
-	user = toDomainUser(updatedUser)
+	user := toDomainUser(updatedUser)
 	return &user, nil
 }
 

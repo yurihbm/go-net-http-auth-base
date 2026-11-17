@@ -78,9 +78,6 @@ func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid stri
 	if dto.Name != nil {
 		user.Name = *dto.Name
 	}
-	if dto.Email != nil {
-		user.Email = normalizeEmail(*dto.Email)
-	}
 
 	return s.repo.Update(ctx, *user)
 }
@@ -118,6 +115,64 @@ func (s *usersService) ResendVerification(ctx context.Context, email string) err
 	}
 
 	return s.emailVerification.SendVerificationEmail(ctx, user)
+}
+
+func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Actor, email string) error {
+	if actor.UUID == "" {
+		return domain.NewUnauthorizedError("users.emailChange.unauthorized")
+	}
+
+	user, err := s.repo.FindByUUID(ctx, actor.UUID)
+	if err != nil {
+		return err
+	}
+
+	newEmail := normalizeEmail(email)
+	if newEmail == user.Email {
+		return domain.NewValidationError("users.emailChange.unchanged", map[string]string{
+			"email": "must differ from the current email",
+		})
+	}
+
+	existing, err := s.repo.FindByEmail(ctx, newEmail)
+	var notFoundErr *domain.NotFoundError
+	if err != nil && !errors.As(err, &notFoundErr) {
+		return err
+	}
+	if existing != nil {
+		return domain.NewConflictError("users.email.conflict")
+	}
+
+	return s.emailVerification.SendEmailChangeEmail(ctx, user, newEmail)
+}
+
+func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*domain.User, error) {
+	change, err := s.emailVerification.VerifyEmailChangeToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.FindByUUID(ctx, change.UserUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	// The token is bound to the email it was issued for: once the email changes,
+	// this token and any other pending one stop working.
+	if user.Email != change.CurrentEmail {
+		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
+	}
+
+	updated, err := s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.emailVerification.SendEmailChangedNotice(ctx, change.CurrentEmail, updated.Email); err != nil {
+		slog.ErrorContext(ctx, "email changed notice failed", "error", err, "user_uuid", updated.UUID)
+	}
+
+	return updated, nil
 }
 
 func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid string) error {

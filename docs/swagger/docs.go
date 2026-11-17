@@ -475,6 +475,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/confirm-email-change": {
+            "post": {
+                "description": "Applies the new email using the token from the confirmation link and marks it as verified.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Confirm an email change",
+                "parameters": [
+                    {
+                        "description": "Confirmation token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Email changed",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me": {
             "get": {
                 "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
@@ -500,6 +564,64 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/email": {
+            "post": {
+                "description": "Sends a confirmation link to the new address; the email only changes after POST /users/confirm-email-change. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Request an email change",
+                "parameters": [
+                    {
+                        "description": "New email address",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.RequestEmailChangeDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Confirmation sent",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -676,7 +798,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "Partially updates a user. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
+                "description": "Partially updates a user. The email changes through POST /users/me/email. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
                 "consumes": [
                     "application/json"
                 ],
@@ -732,12 +854,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not found",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -953,6 +1069,17 @@ const docTemplate = `{
                 }
             }
         },
+        "go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "go-net-http-auth-base_internal_domain.CreateUserDTO": {
             "type": "object",
             "required": [
@@ -984,6 +1111,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_domain.RequestEmailChangeDTO": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
                     "type": "string"
                 }
             }
@@ -1039,9 +1177,6 @@ const docTemplate = `{
         "go-net-http-auth-base_internal_domain.UserUpdateDTO": {
             "type": "object",
             "properties": {
-                "email": {
-                    "type": "string"
-                },
                 "name": {
                     "type": "string"
                 }
