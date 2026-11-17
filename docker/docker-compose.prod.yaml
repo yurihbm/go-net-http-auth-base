@@ -15,7 +15,7 @@ services:
 
   # Remove this service when running migrations on CI/CD
   migrate:
-    image: migrate/migrate
+    image: migrate/migrate:v4.19.1
     container_name: ${PROJECT_NAME:-auth-base}-migrate-prod
     env_file:
       - ../.env
