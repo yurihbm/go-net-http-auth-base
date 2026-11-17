@@ -22,6 +22,7 @@ CREATE TABLE users (
 );
 
 CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email));
+CREATE INDEX idx_users_previous_email_lower ON users (lower(previous_email)) WHERE previous_email IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS trigger
