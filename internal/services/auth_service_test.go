@@ -663,9 +663,11 @@ func TestAuthService_LogoutOthers(t *testing.T) {
 		service := services.NewAuthService(new(mocks.UsersServiceMock), new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
 		return service, sessionsRepo
 	}
+	activeSession := &domain.UserSession{UUID: sessionUUID, UserUUID: userUUID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
 
 	t.Run("success - keeps the given session", func(t *testing.T) {
 		service, sessionsRepo := newService()
+		sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(activeSession, nil).Once()
 		sessionsRepo.On("DeleteOthersByUser", userUUID, sessionUUID).Return(nil).Once()
 
 		err := service.LogoutOthers(context.Background(), userUUID, sessionUUID)
@@ -674,9 +676,42 @@ func TestAuthService_LogoutOthers(t *testing.T) {
 		sessionsRepo.AssertExpectations(t)
 	})
 
+	t.Run("error - session not found", func(t *testing.T) {
+		service, sessionsRepo := newService()
+		sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(nil, domain.NewNotFoundError("sessions.notFound")).Once()
+
+		err := service.LogoutOthers(context.Background(), userUUID, sessionUUID)
+
+		assert.ErrorIs(t, err, services.ErrInvalidToken)
+		sessionsRepo.AssertNotCalled(t, "DeleteOthersByUser", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - session expired", func(t *testing.T) {
+		service, sessionsRepo := newService()
+		expired := &domain.UserSession{UUID: sessionUUID, UserUUID: userUUID, ExpiresAt: time.Now().Add(-time.Minute).Unix()}
+		sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(expired, nil).Once()
+
+		err := service.LogoutOthers(context.Background(), userUUID, sessionUUID)
+
+		assert.ErrorIs(t, err, services.ErrInvalidToken)
+		sessionsRepo.AssertNotCalled(t, "DeleteOthersByUser", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - lookup failure is returned", func(t *testing.T) {
+		service, sessionsRepo := newService()
+		lookupErr := domain.NewInternalServerError("sessions.internalServerError", errors.New("db down"))
+		sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(nil, lookupErr).Once()
+
+		err := service.LogoutOthers(context.Background(), userUUID, sessionUUID)
+
+		assert.ErrorIs(t, err, lookupErr)
+		sessionsRepo.AssertNotCalled(t, "DeleteOthersByUser", mock.Anything, mock.Anything)
+	})
+
 	t.Run("error - delete failure is returned", func(t *testing.T) {
 		service, sessionsRepo := newService()
 		deleteErr := domain.NewInternalServerError("sessions.internalServerError", errors.New("db down"))
+		sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(activeSession, nil).Once()
 		sessionsRepo.On("DeleteOthersByUser", userUUID, sessionUUID).Return(deleteErr).Once()
 
 		err := service.LogoutOthers(context.Background(), userUUID, sessionUUID)
