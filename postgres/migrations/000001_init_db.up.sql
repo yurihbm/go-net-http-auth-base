@@ -51,6 +51,8 @@ CREATE TABLE user_oauth_providers (
     UNIQUE (provider, provider_user_id)
 );
 
+CREATE INDEX idx_user_oauth_providers_user_created ON user_oauth_providers (user_uuid, created_at);
+
 CREATE TABLE user_sessions (
     uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
     user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
@@ -72,6 +74,8 @@ CREATE TABLE step_up_challenges (
     expires_at timestamptz NOT NULL,
     created_at timestamptz DEFAULT now() NOT NULL
 );
+
+CREATE INDEX idx_step_up_challenges_user ON step_up_challenges (user_uuid);
 
 CREATE TABLE audit_logs (
     uuid uuid DEFAULT uuidv7() NOT NULL,
