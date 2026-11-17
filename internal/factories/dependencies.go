@@ -26,11 +26,29 @@ type Dependencies struct {
 	AdminRoleMiddleware middlewares.HandlerMiddleware
 }
 
-func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, error) {
+type Option func(*options)
+
+type options struct {
+	emailProvider domain.EmailProvider
+}
+
+func WithEmailProvider(provider domain.EmailProvider) Option {
+	return func(o *options) { o.emailProvider = provider }
+}
+
+func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*Dependencies, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	db := repositories.NewTxAwareDB(pool)
 
 	tokenService := services.NewTokenService(cfg.JWTSecret)
-	emailProvider := newEmailProvider(cfg.Email)
+	emailProvider := o.emailProvider
+	if emailProvider == nil {
+		emailProvider = newEmailProvider(cfg.Email)
+	}
 	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.VerificationURL, cfg.Email.ChangeURL, cfg.Email.ChangeRevertURL)
 
 	usersRepository := repositories.NewUsersPostgresRepository(db)

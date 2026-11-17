@@ -40,6 +40,8 @@ type response struct {
 	Status int
 	Body   api.ResponseBody[json.RawMessage]
 	Raw    []byte
+
+	Cookies []*http.Cookie
 }
 
 func truncateTables(t *testing.T, ctx context.Context, db *pgxpool.Pool) {
@@ -117,7 +119,7 @@ func send(t *testing.T, httpClient *http.Client, req *http.Request) response {
 	raw, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	result := response{Status: resp.StatusCode, Raw: raw}
+	result := response{Status: resp.StatusCode, Raw: raw, Cookies: resp.Cookies()}
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &result.Body)
 	}
@@ -146,4 +148,14 @@ func (c *client) cookie(name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func (c *client) stepUp(email string) {
+	c.t.Helper()
+
+	requested := c.do(http.MethodPost, "/auth/step-up", nil)
+	require.Equal(c.t, http.StatusAccepted, requested.Status)
+
+	verified := c.do(http.MethodPost, "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: mailbox.stepUpCode(c.t, email)})
+	require.Equal(c.t, http.StatusOK, verified.Status)
 }
