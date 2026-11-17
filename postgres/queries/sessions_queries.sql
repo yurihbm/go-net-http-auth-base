@@ -88,3 +88,17 @@ DELETE FROM
 WHERE
     user_uuid = $1
     AND uuid <> sqlc.arg(keep_uuid);
+
+-- name: DeleteExpiredUserSessionsBatch :execrows
+DELETE FROM
+    user_sessions
+WHERE
+    uuid IN (
+        SELECT
+            s.uuid
+        FROM
+            user_sessions s
+        WHERE
+            s.expires_at < now()
+            OR s.last_used_at < now() - sqlc.arg(idle_timeout)::interval
+        LIMIT sqlc.arg(batch_size)::int);

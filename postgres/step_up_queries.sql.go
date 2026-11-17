@@ -44,6 +44,28 @@ func (q *Queries) AttemptStepUpChallenge(ctx context.Context, arg AttemptStepUpC
 	return i, err
 }
 
+const deleteExpiredStepUpChallengesBatch = `-- name: DeleteExpiredStepUpChallengesBatch :execrows
+DELETE FROM
+    step_up_challenges
+WHERE
+    uuid IN (
+        SELECT
+            c.uuid
+        FROM
+            step_up_challenges c
+        WHERE
+            c.expires_at < now()
+        LIMIT $1::int)
+`
+
+func (q *Queries) DeleteExpiredStepUpChallengesBatch(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredStepUpChallengesBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteStepUpChallenge = `-- name: DeleteStepUpChallenge :exec
 DELETE FROM
     step_up_challenges

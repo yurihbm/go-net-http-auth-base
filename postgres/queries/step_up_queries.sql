@@ -31,3 +31,16 @@ DELETE FROM
     step_up_challenges
 WHERE
     session_uuid = $1;
+
+-- name: DeleteExpiredStepUpChallengesBatch :execrows
+DELETE FROM
+    step_up_challenges
+WHERE
+    uuid IN (
+        SELECT
+            c.uuid
+        FROM
+            step_up_challenges c
+        WHERE
+            c.expires_at < now()
+        LIMIT sqlc.arg(batch_size)::int);
