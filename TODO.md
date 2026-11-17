@@ -3,13 +3,10 @@
 This file tracks the project features that should be implemented.
 
 > **🧭 Current direction:** This project is a **generic, reusable backend
-> template** for quickly bootstrapping any Go service. The immediate focus is
-> **hardening the existing foundation** (consistency + correctness of what's
-> already here) before layering observability on top. Concretely:
->
-> 1. Fix the structural gaps first ([2.6 Architecture Hardening](#26-architecture-hardening)).
-> 2. Then add telemetry/o11y the **lean** way — OpenTelemetry used directly in
->    infra/adapters, **no custom abstraction over OTel** ([2.7 Telemetry & Observability](#27-telemetry--observability-opentelemetry--grafana-lgtm)).
+> template** for quickly bootstrapping any Go service. Phases 1 to 3 and the
+> [3.6 Final Review Fixes](#36-final-review-fixes) are done, so the template is
+> considered complete. Open follow-ups are the accepted residual risks listed in
+> ADR-005 and ADR-007.
 
 ---
 
@@ -744,6 +741,19 @@ Professional documentation and comprehensive testing.
 
 > **Dropped:** a performance baseline depends on the hardware and deployment of each derived application, so it does not belong in the template.
 
+### 3.6 Final Review Fixes
+
+**Tasks**:
+
+- [x] Dedicated, verified email change: `email` removed from `PUT /users/{uuid}`, `POST /users/me/email` + `POST /users/confirm-email-change` (ADR-007)
+- [x] HTTP server read, write and idle timeouts
+- [x] 1 MiB request body limit in `api.DecodeAndValidate`
+- [x] Audit log client IP from `RemoteAddr` only (no client-controlled `X-Forwarded-For`)
+- [x] JSON 429 from the rate limiter and an accurate missing-cookie message in `AuthMiddleware`
+- [x] Pinned Alpine, `migrate/migrate` and golangci-lint versions
+
+> **Resolved:** The final template review found that changing the email through `PUT /users/{uuid}` kept `email_verified`, which allowed OAuth account pre-hijacking. The email now changes only after the new address confirms a 1h `email_change_token` bound to the current email (single use without storage), and the old address is notified. The remaining items harden defaults that every derived service inherits.
+
 ---
 
 ## ✅ Phase 3 Completion Checklist
@@ -753,3 +763,4 @@ Professional documentation and comprehensive testing.
 - [x] E2E tests cover critical user flows
 - [x] ~~Benchmarks show performance characteristics~~ Dropped (3.4)
 - [x] ~~Load tests run successfully and show performance metrics~~ Dropped (3.5)
+- [x] Final review fixes applied (3.6)
