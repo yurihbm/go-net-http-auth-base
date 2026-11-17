@@ -26,6 +26,7 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 		emailVerification := new(mocks.EmailVerificationServiceMock)
 		emailVerification.On("SendVerificationEmail", mock.Anything, mock.Anything).Return(nil).Once()
 		service := services.NewUserService(repo, emailVerification, nil, nil, nil)
+		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).
 			Return(&domain.User{UUID: "uuid", Email: normalizedEmail}, nil).Once()
 
@@ -38,6 +39,7 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 	t.Run("CreateOAuth stores the normalized email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).
 			Return(&domain.User{UUID: "uuid", Email: normalizedEmail}, nil).Once()
 
@@ -118,6 +120,7 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 		service := newAuthServiceOverRealUsers(repo, authRepo, registry, new(mocks.EmailProviderMock))
 
 		var stored domain.User
+		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.Anything).Run(func(args mock.Arguments) {
 			stored = args.Get(0).(domain.User)
 			stored.UUID = "local-uuid"

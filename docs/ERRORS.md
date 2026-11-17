@@ -65,7 +65,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.stepUp.sendFailed`             | `InternalServerError`  | `StepUpService.RequestCode`: the code email could not be sent          |
 | `auth.stepUp.codeGenerationFailed`   | `InternalServerError`  | `StepUpService.RequestCode`: the random source failed                  |
 | `users.emailChange.staleToken`       | `UnauthorizedError`    | `UsersService.ConfirmEmailChange`/`RevertEmailChange` (token email or `email_version` no longer matches), `UsersRepository.UpdateEmail` (`email_version` no longer matches) |
-| `users.emailChange.locked`           | `ConflictError`        | `UsersService.RequestEmailChange`/`ConfirmEmailChange`: the email changed less than 72h ago |
+| `users.emailChange.locked`           | `ConflictError`        | `UsersService.RequestEmailChange`/`ConfirmEmailChange`/`Delete`: the email changed less than 72h ago (`Delete` only blocks a user deleting their own account) |
 
 ## Implementation Details
 

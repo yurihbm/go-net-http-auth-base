@@ -95,6 +95,7 @@ type UsersRepository interface {
 	UpdateEmail(ctx context.Context, uuid string, email string, expectedVersion int, changedAt *time.Time) (*User, error)
 	ReserveStepUpGuess(ctx context.Context, uuid string, window time.Duration) error
 	RefundStepUpGuess(ctx context.Context, uuid string) error
+	IsEmailReserved(ctx context.Context, email string) (bool, error)
 	MarkEmailVerified(context.Context, string) error
 	Delete(context.Context, string) error
 }
