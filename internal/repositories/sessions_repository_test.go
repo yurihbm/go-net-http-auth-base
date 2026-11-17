@@ -326,6 +326,50 @@ func TestSessionsPostgresRepository_SetStepUpUntil(t *testing.T) {
 	})
 }
 
+func TestSessionsPostgresRepository_IncrementStepUpFailures(t *testing.T) {
+	repo, _, user := setupSessionsRepoTest(t)
+	ctx := context.Background()
+
+	t.Run("success - counts per session", func(t *testing.T) {
+		session := seedSession(t, repo, user.UUID, "jti-1")
+		other := seedSession(t, repo, user.UUID, "jti-2")
+
+		first, err := repo.IncrementStepUpFailures(ctx, user.UUID, session.UUID)
+		require.NoError(t, err)
+		second, err := repo.IncrementStepUpFailures(ctx, user.UUID, session.UUID)
+		require.NoError(t, err)
+		otherFirst, err := repo.IncrementStepUpFailures(ctx, user.UUID, other.UUID)
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, first)
+		assert.Equal(t, 2, second)
+		assert.Equal(t, 1, otherFirst)
+	})
+
+	t.Run("error - session of another user", func(t *testing.T) {
+		session := seedSession(t, repo, user.UUID, "jti-3")
+
+		_, err := repo.IncrementStepUpFailures(ctx, uuid.NewString(), session.UUID)
+
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("error - session not found", func(t *testing.T) {
+		_, err := repo.IncrementStepUpFailures(ctx, user.UUID, uuid.NewString())
+
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		_, err := repo.IncrementStepUpFailures(ctx, user.UUID, "invalid")
+
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
 func TestSessionsPostgresRepository_DeleteAllByUser(t *testing.T) {
 	repo, usersRepo, user := setupSessionsRepoTest(t)
 	ctx := context.Background()

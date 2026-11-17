@@ -15,7 +15,7 @@ const createUserSession = `-- name: CreateUserSession :one
 INSERT INTO user_sessions (user_uuid, current_jti, expires_at)
     VALUES ($1, $2, $3)
 RETURNING
-    uuid, user_uuid, current_jti, created_at, last_used_at, expires_at, step_up_until
+    uuid, user_uuid, current_jti, created_at, last_used_at, expires_at, step_up_until, step_up_failures
 `
 
 type CreateUserSessionParams struct {
@@ -35,6 +35,7 @@ func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionPa
 		&i.LastUsedAt,
 		&i.ExpiresAt,
 		&i.StepUpUntil,
+		&i.StepUpFailures,
 	)
 	return i, err
 }
@@ -135,7 +136,7 @@ func (q *Queries) DeleteUserSessionsByUser(ctx context.Context, userUuid pgtype.
 
 const getUserSession = `-- name: GetUserSession :one
 SELECT
-    uuid, user_uuid, current_jti, created_at, last_used_at, expires_at, step_up_until
+    uuid, user_uuid, current_jti, created_at, last_used_at, expires_at, step_up_until, step_up_failures
 FROM
     user_sessions
 WHERE
@@ -159,8 +160,33 @@ func (q *Queries) GetUserSession(ctx context.Context, arg GetUserSessionParams) 
 		&i.LastUsedAt,
 		&i.ExpiresAt,
 		&i.StepUpUntil,
+		&i.StepUpFailures,
 	)
 	return i, err
+}
+
+const incrementUserSessionStepUpFailures = `-- name: IncrementUserSessionStepUpFailures :one
+UPDATE
+    user_sessions
+SET
+    step_up_failures = step_up_failures + 1
+WHERE
+    uuid = $1
+    AND user_uuid = $2
+RETURNING
+    step_up_failures
+`
+
+type IncrementUserSessionStepUpFailuresParams struct {
+	Uuid     pgtype.UUID
+	UserUuid pgtype.UUID
+}
+
+func (q *Queries) IncrementUserSessionStepUpFailures(ctx context.Context, arg IncrementUserSessionStepUpFailuresParams) (int32, error) {
+	row := q.db.QueryRow(ctx, incrementUserSessionStepUpFailures, arg.Uuid, arg.UserUuid)
+	var step_up_failures int32
+	err := row.Scan(&step_up_failures)
+	return step_up_failures, err
 }
 
 const rotateUserSessionJTI = `-- name: RotateUserSessionJTI :execrows
