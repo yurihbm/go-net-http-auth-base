@@ -20,7 +20,7 @@ Defines the core audit data structures and interfaces:
 
 ### 2. Controllers (`internal/controllers/audit_helpers.go`, `audit_controller.go`)
 
-- **Writing**: `UsersController` and `AuthController` call the unexported `auditLog` helper on both the success and failure paths of each audited action. It fills `RequestUUID` from `shared.RequestContextData` and the client IP and user agent from the request, then calls `AuditService.Log`. A persistence failure is only logged (`audit log failed`) and never changes the HTTP response.
+- **Writing**: `UsersController` and `AuthController` call the unexported `auditLog` helper on both the success and failure paths of each audited action. It fills `RequestUUID` from `shared.RequestContextData` and the client IP and user agent from the request, then calls `AuditService.Log`. The IP is `r.RemoteAddr` (port stripped): `X-Forwarded-For` and `X-Real-IP` are ignored because any client can set them, so behind a reverse proxy the recorded IP is the proxy's until a trusted-proxy policy is added (see ADR-005). A persistence failure is only logged (`audit log failed`) and never changes the HTTP response.
 - **Reading**: `AuditController` serves `GET /audit-logs` (see [Listing Audit Logs](#listing-audit-logs)).
 
 ### 3. Service Layer (`internal/services/audit_service.go`)
