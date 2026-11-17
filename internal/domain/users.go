@@ -42,8 +42,15 @@ type CreateOAuthUserDTO struct {
 }
 
 type UserUpdateDTO struct {
-	Name  *string `json:"name,omitempty"`
-	Email *string `json:"email,omitempty" validate:"omitempty,email"`
+	Name *string `json:"name,omitempty"`
+}
+
+type RequestEmailChangeDTO struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+type ConfirmEmailChangeDTO struct {
+	Token string `json:"token" validate:"required"`
 }
 
 type Actor struct {
@@ -63,6 +70,8 @@ type UsersService interface {
 	Update(context.Context, Actor, string, UserUpdateDTO) (*User, error)
 	VerifyEmail(context.Context, string) error
 	ResendVerification(context.Context, string) error
+	RequestEmailChange(context.Context, Actor, string) error
+	ConfirmEmailChange(context.Context, string) (*User, error)
 	Delete(context.Context, Actor, string) error
 }
 
@@ -71,6 +80,7 @@ type UsersRepository interface {
 	FindByEmail(context.Context, string) (*User, error)
 	Create(context.Context, User) (*User, error)
 	Update(context.Context, User) (*User, error)
+	UpdateEmail(context.Context, string, string) (*User, error)
 	MarkEmailVerified(context.Context, string) error
 	Delete(context.Context, string) error
 }

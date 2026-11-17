@@ -46,6 +46,14 @@ func (m *UsersRepositoryMock) Update(ctx context.Context, user domain.User) (*do
 	return nil, args.Error(1)
 }
 
+func (m *UsersRepositoryMock) UpdateEmail(ctx context.Context, uuid string, email string) (*domain.User, error) {
+	args := m.Called(uuid, email)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func (m *UsersRepositoryMock) Delete(ctx context.Context, uuid string) error {
 	args := m.Called(uuid)
 	return args.Error(0)

@@ -33,7 +33,9 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users", c.CreateUser)
 	router.HandleFunc("POST /users/verify-email", c.VerifyEmail)
 	router.HandleFunc("POST /users/resend-verification", c.ResendVerification)
+	router.HandleFunc("POST /users/confirm-email-change", c.ConfirmEmailChange)
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
+	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.RequestEmailChange))
 	router.HandleFunc("GET /users/{uuid}", c.authMiddleware.Use(c.GetUserByUUID))
 	router.HandleFunc("PUT /users/{uuid}", c.authMiddleware.Use(c.UpdateUser))
 	router.HandleFunc("DELETE /users/{uuid}", c.authMiddleware.Use(c.DeleteUser))
@@ -149,6 +151,92 @@ func (c *UsersController) ResendVerification(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// @Summary		Request an email change
+// @Description	Sends a confirmation link to the new address; the email only changes after POST /users/confirm-email-change. Requires the `access_token` cookie set by POST /auth/login.
+// @Tags			users
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.RequestEmailChangeDTO	true	"New email address"
+// @Success		202		{object}	api.ResponseBody[any]			"Confirmation sent"
+// @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]			"Unauthorized"
+// @Failure		409		{object}	api.ResponseBody[any]			"Conflict"
+// @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
+// @Router			/users/me/email [post]
+func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.RequestEmailChangeDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	actor := actorFromRequest(r)
+	if err := c.userService.RequestEmailChange(r.Context(), actor, dto.Email); err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			ActorUUID:     actorUUID(r),
+			Action:        domain.AuditActionEmailChangeRequest,
+			ResourceType:  domain.AuditResourceUser,
+			ResourceUUID:  actor.UUID,
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    actorUUID(r),
+		Action:       domain.AuditActionEmailChangeRequest,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: actor.UUID,
+		Status:       domain.AuditStatusSuccess,
+	})
+
+	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
+		Message: "user.emailChange.requested",
+	})
+}
+
+// @Summary		Confirm an email change
+// @Description	Applies the new email using the token from the confirmation link and marks it as verified.
+// @Tags			users
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.ConfirmEmailChangeDTO	true	"Confirmation token"
+// @Success		200		{object}	api.ResponseBody[domain.User]	"Email changed"
+// @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]			"Unauthorized"
+// @Failure		404		{object}	api.ResponseBody[any]			"Not found"
+// @Failure		409		{object}	api.ResponseBody[any]			"Conflict"
+// @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
+// @Router			/users/confirm-email-change [post]
+func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.ConfirmEmailChangeDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	user, err := c.userService.ConfirmEmailChange(r.Context(), dto.Token)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		Action:       domain.AuditActionEmailChange,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: user.UUID,
+		Status:       domain.AuditStatusSuccess,
+	})
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
+		Data:    *user,
+		Message: "user.emailChange.success",
+	})
+}
+
 // @Summary		Get the authenticated user
 // @Description	Requires the `access_token` cookie set by POST /auth/login.
 // @Tags			users
@@ -208,7 +296,7 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 }
 
 // @Summary		Update a user
-// @Description	Partially updates a user. Requires the `access_token` cookie set by POST /auth/login.
+// @Description	Partially updates a user. The email changes through POST /users/me/email. Requires the `access_token` cookie set by POST /auth/login.
 // @Tags			users
 // @Accept			json
 // @Produce		json
@@ -219,7 +307,6 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 // @Failure		401		{object}	api.ResponseBody[any]			"Unauthorized"
 // @Failure		403		{object}	api.ResponseBody[any]			"Forbidden"
 // @Failure		404		{object}	api.ResponseBody[any]			"Not found"
-// @Failure		409		{object}	api.ResponseBody[any]			"Conflict"
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
 // @Router			/users/{uuid} [put]
 func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {

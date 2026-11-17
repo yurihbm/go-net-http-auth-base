@@ -96,6 +96,13 @@ definitions:
       uuid:
         type: string
     type: object
+  go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
   go-net-http-auth-base_internal_domain.CreateUserDTO:
     properties:
       email:
@@ -119,6 +126,13 @@ definitions:
     required:
     - email
     - password
+    type: object
+  go-net-http-auth-base_internal_domain.RequestEmailChangeDTO:
+    properties:
+      email:
+        type: string
+    required:
+    - email
     type: object
   go-net-http-auth-base_internal_domain.ResendVerificationDTO:
     properties:
@@ -154,8 +168,6 @@ definitions:
     - RoleUser
   go-net-http-auth-base_internal_domain.UserUpdateDTO:
     properties:
-      email:
-        type: string
       name:
         type: string
     type: object
@@ -566,8 +578,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Partially updates a user. Requires the `access_token` cookie set
-        by POST /auth/login.
+      description: Partially updates a user. The email changes through POST /users/me/email.
+        Requires the `access_token` cookie set by POST /auth/login.
       parameters:
       - description: User UUID
         in: path
@@ -603,6 +615,45 @@ paths:
           description: Not found
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Update a user
+      tags:
+      - users
+  /users/confirm-email-change:
+    post:
+      consumes:
+      - application/json
+      description: Applies the new email using the token from the confirmation link
+        and marks it as verified.
+      parameters:
+      - description: Confirmation token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email changed
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
         "409":
           description: Conflict
           schema:
@@ -611,7 +662,7 @@ paths:
           description: Internal server error
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
-      summary: Update a user
+      summary: Confirm an email change
       tags:
       - users
   /users/me:
@@ -637,6 +688,46 @@ paths:
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
       summary: Get the authenticated user
+      tags:
+      - users
+  /users/me/email:
+    post:
+      consumes:
+      - application/json
+      description: Sends a confirmation link to the new address; the email only changes
+        after POST /users/confirm-email-change. Requires the `access_token` cookie
+        set by POST /auth/login.
+      parameters:
+      - description: New email address
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.RequestEmailChangeDTO'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Confirmation sent
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Request an email change
       tags:
       - users
   /users/resend-verification:

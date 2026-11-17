@@ -23,13 +23,15 @@ const (
 	AuditStatusFailure = "FAILURE"
 
 	// Actions
-	AuditActionUserCreate  = "USER_CREATE"
-	AuditActionUserUpdate  = "USER_UPDATE"
-	AuditActionUserDelete  = "USER_DELETE"
-	AuditActionLogin       = "LOGIN"
-	AuditActionOAuthLogin  = "OAUTH_LOGIN"
-	AuditActionLogout      = "LOGOUT"
-	AuditActionVerifyEmail = "VERIFY_EMAIL"
+	AuditActionUserCreate         = "USER_CREATE"
+	AuditActionUserUpdate         = "USER_UPDATE"
+	AuditActionUserDelete         = "USER_DELETE"
+	AuditActionLogin              = "LOGIN"
+	AuditActionOAuthLogin         = "OAUTH_LOGIN"
+	AuditActionLogout             = "LOGOUT"
+	AuditActionVerifyEmail        = "VERIFY_EMAIL"
+	AuditActionEmailChangeRequest = "EMAIL_CHANGE_REQUEST"
+	AuditActionEmailChange        = "EMAIL_CHANGE"
 
 	// Resources
 	AuditResourceUser = "user"

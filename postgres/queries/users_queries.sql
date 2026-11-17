@@ -34,8 +34,18 @@ UPDATE
     users
 SET
     name = COALESCE($2, name),
-    email = COALESCE($3, email),
-    password_hash = COALESCE($4, password_hash)
+    password_hash = COALESCE($3, password_hash)
+WHERE
+    uuid = $1
+RETURNING
+    *;
+
+-- name: UpdateUserEmail :one
+UPDATE
+    users
+SET
+    email = $2,
+    email_verified = true
 WHERE
     uuid = $1
 RETURNING
