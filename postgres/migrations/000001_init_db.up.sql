@@ -12,6 +12,8 @@ CREATE TABLE users (
     password_hash text,
     role user_role NOT NULL DEFAULT 'user',
     email_verified boolean NOT NULL DEFAULT false,
+    email_version int NOT NULL DEFAULT 0,
+    email_changed_at timestamptz,
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL
 );
@@ -55,10 +57,21 @@ CREATE TABLE user_sessions (
     current_jti text NOT NULL,
     created_at timestamptz DEFAULT now() NOT NULL,
     last_used_at timestamptz DEFAULT now() NOT NULL,
-    expires_at timestamptz NOT NULL
+    expires_at timestamptz NOT NULL,
+    step_up_until timestamptz
 );
 
 CREATE INDEX idx_user_sessions_user_last_used ON user_sessions (user_uuid, last_used_at);
+
+CREATE TABLE step_up_challenges (
+    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
+    session_uuid uuid NOT NULL UNIQUE REFERENCES user_sessions (uuid) ON DELETE CASCADE,
+    code_hash text NOT NULL,
+    attempts int NOT NULL DEFAULT 0,
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL
+);
 
 CREATE TABLE audit_logs (
     uuid uuid DEFAULT uuidv7() NOT NULL,

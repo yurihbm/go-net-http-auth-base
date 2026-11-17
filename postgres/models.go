@@ -126,15 +126,27 @@ type AuditLogsDefault struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type StepUpChallenge struct {
+	Uuid        pgtype.UUID
+	UserUuid    pgtype.UUID
+	SessionUuid pgtype.UUID
+	CodeHash    string
+	Attempts    int32
+	ExpiresAt   pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+}
+
 type User struct {
-	Uuid          pgtype.UUID
-	Name          string
-	Email         string
-	PasswordHash  pgtype.Text
-	Role          UserRole
-	EmailVerified bool
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	Uuid           pgtype.UUID
+	Name           string
+	Email          string
+	PasswordHash   pgtype.Text
+	Role           UserRole
+	EmailVerified  bool
+	EmailVersion   int32
+	EmailChangedAt pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
 }
 
 type UserOauthProvider struct {
@@ -147,10 +159,11 @@ type UserOauthProvider struct {
 }
 
 type UserSession struct {
-	Uuid       pgtype.UUID
-	UserUuid   pgtype.UUID
-	CurrentJti string
-	CreatedAt  pgtype.Timestamptz
-	LastUsedAt pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
+	Uuid        pgtype.UUID
+	UserUuid    pgtype.UUID
+	CurrentJti  string
+	CreatedAt   pgtype.Timestamptz
+	LastUsedAt  pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	StepUpUntil pgtype.Timestamptz
 }

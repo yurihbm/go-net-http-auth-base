@@ -284,3 +284,98 @@ func TestSessionsPostgresRepository_DeleteOldestBeyond(t *testing.T) {
 	assert.False(t, sessionExists(t, repo, user.UUID, sessions[3].UUID))
 	assert.True(t, sessionExists(t, repo, other.UUID, otherSession.UUID))
 }
+
+func TestSessionsPostgresRepository_SetStepUpUntil(t *testing.T) {
+	repo, _, user := setupSessionsRepoTest(t)
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		session := seedSession(t, repo, user.UUID, "jti-1")
+		require.Zero(t, session.StepUpUntil)
+		until := time.Now().Add(5 * time.Minute)
+
+		err := repo.SetStepUpUntil(ctx, user.UUID, session.UUID, until)
+
+		require.NoError(t, err)
+		found, err := repo.FindByUUID(ctx, user.UUID, session.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, until.Unix(), found.StepUpUntil)
+	})
+
+	t.Run("error - session of another user", func(t *testing.T) {
+		session := seedSession(t, repo, user.UUID, "jti-2")
+
+		err := repo.SetStepUpUntil(ctx, uuid.NewString(), session.UUID, time.Now())
+
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("error - session not found", func(t *testing.T) {
+		err := repo.SetStepUpUntil(ctx, user.UUID, uuid.NewString(), time.Now())
+
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		err := repo.SetStepUpUntil(ctx, user.UUID, "invalid", time.Now())
+
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
+func TestSessionsPostgresRepository_DeleteAllByUser(t *testing.T) {
+	repo, usersRepo, user := setupSessionsRepoTest(t)
+	ctx := context.Background()
+
+	t.Run("success deletes only the user's sessions", func(t *testing.T) {
+		other, err := usersRepo.Create(ctx, domain.User{Name: "Other", Email: "other@example.com", PasswordHash: "hash"})
+		require.NoError(t, err)
+		first := seedSession(t, repo, user.UUID, "jti-1")
+		second := seedSession(t, repo, user.UUID, "jti-2")
+		otherSession := seedSession(t, repo, other.UUID, "jti-3")
+
+		err = repo.DeleteAllByUser(ctx, user.UUID)
+
+		require.NoError(t, err)
+		assert.False(t, sessionExists(t, repo, user.UUID, first.UUID))
+		assert.False(t, sessionExists(t, repo, user.UUID, second.UUID))
+		assert.True(t, sessionExists(t, repo, other.UUID, otherSession.UUID))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		err := repo.DeleteAllByUser(ctx, "invalid")
+
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
+func TestSessionsPostgresRepository_DeleteOthersByUser(t *testing.T) {
+	repo, usersRepo, user := setupSessionsRepoTest(t)
+	ctx := context.Background()
+
+	t.Run("success keeps the given session and other users' sessions", func(t *testing.T) {
+		other, err := usersRepo.Create(ctx, domain.User{Name: "Other", Email: "other@example.com", PasswordHash: "hash"})
+		require.NoError(t, err)
+		keep := seedSession(t, repo, user.UUID, "jti-1")
+		dropped := seedSession(t, repo, user.UUID, "jti-2")
+		otherSession := seedSession(t, repo, other.UUID, "jti-3")
+
+		err = repo.DeleteOthersByUser(ctx, user.UUID, keep.UUID)
+
+		require.NoError(t, err)
+		assert.True(t, sessionExists(t, repo, user.UUID, keep.UUID))
+		assert.False(t, sessionExists(t, repo, user.UUID, dropped.UUID))
+		assert.True(t, sessionExists(t, repo, other.UUID, otherSession.UUID))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		err := repo.DeleteOthersByUser(ctx, user.UUID, "invalid")
+
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}

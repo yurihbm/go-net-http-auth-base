@@ -3,6 +3,7 @@ package repositories
 import (
 	"errors"
 	"go-net-http-auth-base/internal/domain"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -48,4 +49,18 @@ func isForeignKeyViolationError(err error, message string) error {
 		}
 	}
 	return nil
+}
+
+func toTimestamptz(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+func unixOrZero(t pgtype.Timestamptz) int64 {
+	if !t.Valid {
+		return 0
+	}
+	return t.Time.Unix()
 }

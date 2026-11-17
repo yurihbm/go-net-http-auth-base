@@ -64,6 +64,20 @@ func (e *UnauthorizedError) Error() string {
 
 var _ error = (*UnauthorizedError)(nil)
 
+type TooManyRequestsError struct {
+	message string
+}
+
+func NewTooManyRequestsError(message string) *TooManyRequestsError {
+	return &TooManyRequestsError{message: message}
+}
+
+func (e *TooManyRequestsError) Error() string {
+	return e.message
+}
+
+var _ error = (*TooManyRequestsError)(nil)
+
 type ForbiddenError struct {
 	message string
 }

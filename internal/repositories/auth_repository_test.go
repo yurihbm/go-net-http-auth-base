@@ -6,6 +6,7 @@ import (
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/repositories"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -241,6 +242,46 @@ func TestAuthPostgresRepository_DeleteUserOAuthProvider(t *testing.T) {
 	t.Run("invalid uuid", func(t *testing.T) {
 		err := repo.DeleteUserOAuthProvider(context.Background(), "invalid-uuid")
 		require.Error(t, err)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
+func TestAuthPostgresRepository_DeleteOAuthProvidersCreatedSince(t *testing.T) {
+	repo, _, createdUser := setupAuthRepoTest(t)
+	ctx := context.Background()
+
+	createProvider := func(t *testing.T, providerUserID string) *domain.UserOAuthProvider {
+		t.Helper()
+		provider, err := repo.CreateUserOAuthProvider(ctx, domain.UserOAuthProvider{
+			UserUUID:       createdUser.UUID,
+			Provider:       domain.OAuthProviderGoogle,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  "test@gmail.com",
+		})
+		require.NoError(t, err)
+		return provider
+	}
+
+	t.Run("success deletes only providers created since the cutoff", func(t *testing.T) {
+		old := createProvider(t, "old")
+		recent := createProvider(t, "recent")
+		_, err := testDB.Exec(ctx, "UPDATE user_oauth_providers SET created_at = now() - interval '2 days' WHERE uuid = $1", old.UUID)
+		require.NoError(t, err)
+
+		err = repo.DeleteOAuthProvidersCreatedSince(ctx, createdUser.UUID, time.Now().Add(-time.Hour))
+
+		require.NoError(t, err)
+		providers, err := repo.ListUserOAuthProvidersByUserUUID(ctx, createdUser.UUID)
+		require.NoError(t, err)
+		require.Len(t, providers, 1)
+		assert.Equal(t, old.UUID, providers[0].UUID)
+		assert.NotEqual(t, recent.UUID, providers[0].UUID)
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		err := repo.DeleteOAuthProvidersCreatedSince(ctx, "invalid", time.Now())
+
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))
 	})

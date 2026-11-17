@@ -200,4 +200,5 @@ type AuthRepository interface {
 	GetUserOAuthProviderByProviderAndProviderUserID(context.Context, OAuthProviderName, string) (*UserOAuthProvider, error)
 	DeleteUserOAuthProvider(context.Context, string) error
 	ListUserOAuthProvidersByUserUUID(context.Context, string) ([]UserOAuthProvider, error)
+	DeleteOAuthProvidersCreatedSince(ctx context.Context, userUUID string, since time.Time) error
 }
