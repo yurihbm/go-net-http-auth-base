@@ -32,8 +32,12 @@ type StepUpRepository interface {
 	Delete(ctx context.Context, sessionUUID string) error
 }
 
+type StepUpChecker interface {
+	IsElevated(ctx context.Context, userUUID string, sessionUUID string) (bool, error)
+}
+
 type StepUpService interface {
+	StepUpChecker
 	RequestCode(ctx context.Context, userUUID string, sessionUUID string) error
 	VerifyCode(ctx context.Context, userUUID string, sessionUUID string, code string) (int64, error)
-	IsElevated(ctx context.Context, userUUID string, sessionUUID string) (bool, error)
 }

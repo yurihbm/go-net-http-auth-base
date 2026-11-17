@@ -184,6 +184,7 @@ type AuthService interface {
 	CredentialsLogin(context.Context, CredentialsLoginDTO) (AuthTokens, error)
 	RefreshToken(context.Context, RefreshTokenDTO) (AuthTokens, error)
 	Logout(ctx context.Context, userUUID string, sessionUUID string) error
+	LogoutOthers(ctx context.Context, userUUID string, sessionUUID string) error
 	TokenVerifier
 	AddUserOAuthProvider(context.Context, AddUserOAuthProviderDTO) (*UserOAuthProvider, error)
 	GetUserOAuthProvider(context.Context, GetUserOAuthProviderDTO) (*UserOAuthProvider, error)

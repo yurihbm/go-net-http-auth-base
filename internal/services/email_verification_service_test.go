@@ -314,3 +314,33 @@ func TestEmailVerificationService_SendEmailChangedNotice(t *testing.T) {
 		assert.ErrorIs(t, err, sendErr)
 	})
 }
+
+func TestEmailVerificationService_SendStepUpCode(t *testing.T) {
+	t.Run("sends the code to the given address", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, verificationURL, emailChangeURL)
+		var sent domain.EmailMessage
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			sent = args.Get(1).(domain.EmailMessage)
+		})
+
+		err := service.SendStepUpCode(context.Background(), "user@example.com", "123456")
+
+		require.NoError(t, err)
+		assert.Equal(t, "user@example.com", sent.To)
+		assert.Equal(t, "Your verification code", sent.Subject)
+		assert.Contains(t, sent.Text, "123456")
+		assert.Contains(t, sent.HTML, "123456")
+	})
+
+	t.Run("error - returns provider error", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, verificationURL, emailChangeURL)
+		sendErr := errors.New("smtp down")
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
+
+		err := service.SendStepUpCode(context.Background(), "user@example.com", "123456")
+
+		assert.ErrorIs(t, err, sendErr)
+	})
+}

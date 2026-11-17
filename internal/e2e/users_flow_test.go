@@ -48,6 +48,14 @@ func TestSignupAndLogin(t *testing.T) {
 	})
 
 	t.Run("delete then login fails", func(t *testing.T) {
+		blocked := c.do(http.MethodDelete, "/users/"+user.UUID, nil)
+		require.Equal(t, http.StatusForbidden, blocked.Status)
+		assert.Equal(t, "auth.stepUp.required", blocked.Body.Error)
+
+		_, err := testDB.Exec(context.Background(),
+			"UPDATE user_sessions SET step_up_until = now() + interval '5 minutes' WHERE user_uuid = $1", user.UUID)
+		require.NoError(t, err)
+
 		deleted := c.do(http.MethodDelete, "/users/"+user.UUID, nil)
 		assert.Equal(t, http.StatusNoContent, deleted.Status)
 

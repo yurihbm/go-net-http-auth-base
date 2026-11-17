@@ -19,12 +19,19 @@ import (
 )
 
 func newTestUsersController() (*controllers.UsersController, *mocks.UsersServiceMock, *mocks.AuditServiceMock, *mocks.AuthMiddlewareMock) {
+	controller, serviceMock, auditMock, middlewareMock, stepUpMiddlewareMock := newTestUsersControllerWithStepUp()
+	stepUpMiddlewareMock.On("Use", mock.Anything).Return(mock.Anything).Maybe()
+	return controller, serviceMock, auditMock, middlewareMock
+}
+
+func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.UsersServiceMock, *mocks.AuditServiceMock, *mocks.AuthMiddlewareMock, *mocks.AuthMiddlewareMock) {
 	serviceMock := new(mocks.UsersServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(serviceMock, auditMock, middlewareMock)
+	stepUpMiddlewareMock := new(mocks.AuthMiddlewareMock)
+	controller := controllers.NewUsersController(serviceMock, auditMock, middlewareMock, stepUpMiddlewareMock)
 
-	return controller, serviceMock, auditMock, middlewareMock
+	return controller, serviceMock, auditMock, middlewareMock, stepUpMiddlewareMock
 }
 
 var actor = domain.Actor{UUID: "caller-uuid", Role: domain.RoleUser}
@@ -51,6 +58,19 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			_, pattern := router.Handler(httptest.NewRequest("POST", path, nil))
 			assert.Equal(t, "POST "+path, pattern)
 		}
+	})
+}
+
+func TestUsersController_RegisterRoutes_StepUp(t *testing.T) {
+	t.Run("should protect email change and deletion with step-up", func(t *testing.T) {
+		router := http.NewServeMux()
+		controller, _, _, authMiddleware, stepUpMiddleware := newTestUsersControllerWithStepUp()
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		stepUpMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(2)
+
+		controller.RegisterRoutes(router)
+
+		stepUpMiddleware.AssertNumberOfCalls(t, "Use", 2)
 	})
 }
 
