@@ -68,3 +68,16 @@ func (m *UsersServiceMock) ResendVerification(ctx context.Context, email string)
 	args := m.Called(email)
 	return args.Error(0)
 }
+
+func (m *UsersServiceMock) RequestEmailChange(ctx context.Context, actor domain.Actor, email string) error {
+	args := m.Called(actor, email)
+	return args.Error(0)
+}
+
+func (m *UsersServiceMock) ConfirmEmailChange(ctx context.Context, token string) (*domain.User, error) {
+	args := m.Called(token)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}

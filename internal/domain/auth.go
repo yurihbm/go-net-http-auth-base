@@ -13,6 +13,7 @@ const (
 	TokenAudienceExchange          TokenAudience = "exchange_token"
 	TokenAudienceOAuthState        TokenAudience = "oauth_state_token"
 	TokenAudienceEmailVerification TokenAudience = "email_verification_token"
+	TokenAudienceEmailChange       TokenAudience = "email_change_token"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 	TokenExpirationExchange          = time.Minute        // 1 minute
 	TokenExpirationOAuthState        = time.Minute * 5    // 5 minutes
 	TokenExpirationEmailVerification = time.Hour * 24     // 24 hours
+	TokenExpirationEmailChange       = time.Hour          // 1 hour
 )
 
 type OAuthProviderName string

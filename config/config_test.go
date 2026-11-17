@@ -115,6 +115,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("RESEND_API_KEY", "re_key")
 		t.Setenv("EMAIL_FROM", "no-reply@example.com")
 		t.Setenv("EMAIL_VERIFICATION_URL", "https://app.example.com/verify")
+		t.Setenv("EMAIL_CHANGE_URL", "https://app.example.com/confirm-email-change")
 
 		cfg, err := config.Load()
 
@@ -138,6 +139,7 @@ func TestLoad(t *testing.T) {
 			ResendAPIKey:    "re_key",
 			From:            "no-reply@example.com",
 			VerificationURL: "https://app.example.com/verify",
+			ChangeURL:       "https://app.example.com/confirm-email-change",
 		}, cfg.Email)
 	})
 
@@ -281,6 +283,7 @@ func TestLoad(t *testing.T) {
 		"RESEND_API_KEY":         "re_key",
 		"EMAIL_FROM":             "no-reply@example.com",
 		"EMAIL_VERIFICATION_URL": "https://app.example.com/verify",
+		"EMAIL_CHANGE_URL":       "https://app.example.com/confirm-email-change",
 	}
 
 	for name := range emailVars {
@@ -309,6 +312,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("RESEND_API_KEY", "")
 		t.Setenv("EMAIL_FROM", "")
 		t.Setenv("EMAIL_VERIFICATION_URL", "")
+		t.Setenv("EMAIL_CHANGE_URL", "")
 
 		cfg, err := config.Load()
 
@@ -401,6 +405,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("RESEND_API_KEY", "")
 		t.Setenv("EMAIL_FROM", "")
 		t.Setenv("EMAIL_VERIFICATION_URL", "")
+		t.Setenv("EMAIL_CHANGE_URL", "")
 
 		cfg, err := config.Load()
 
