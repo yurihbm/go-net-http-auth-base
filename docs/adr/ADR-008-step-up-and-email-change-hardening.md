@@ -26,6 +26,12 @@ not reliable across providers.
   in one transaction, deletes the challenge and sets
   `user_sessions.step_up_until` to now + 5 minutes. Exhausted, expired and
   missing challenges answer the same `401 auth.stepUp.noChallenge`.
+- **Cumulative failure cap.** New codes reset the per-code attempts, so a thief
+  holding a session could keep guessing at about 5 attempts per minute.
+  `user_sessions.step_up_failures` counts every wrong code of the session and
+  no new code resets it. At 10 failures the session is deleted and the request
+  answers `401 auth.stepUp.sessionRevoked`, with the auth cookies cleared. A
+  successful verification does not reset the counter, to keep it simple.
 - **Required on email change and account deletion.** `POST /users/me/email` and
   `DELETE /users/{uuid}` (self and admin) sit behind `StepUpMiddleware`, which
   answers `403 auth.stepUp.required` when the session is not elevated.
@@ -42,7 +48,12 @@ not reliable across providers.
   revokes every session. The notice sent to the old address carries an "it
   wasn't me" link (72 hours) that reverts the email, revokes all sessions and
   removes the OAuth links created since the change. Further email changes are
-  locked for 72 hours.
+  locked for 72 hours. During the lock the previous email is reserved: no
+  sign-up, OAuth account creation or email change of another user may take it,
+  so the undo cannot be blocked. Self-deletion is rejected with
+  `409 users.emailChange.locked` while the lock is active (deletion by an admin
+  is unaffected), so the owner cannot be stopped from undoing by an attacker
+  deleting the account.
 
 Rejected alternatives:
 
@@ -75,5 +86,10 @@ Rejected alternatives:
 - Sending the code is not best-effort: if the email provider fails, the request
   fails with `500`, since an undelivered code is useless.
 - Each user session can trigger one mail per minute; there is no per-user cap.
+- A legitimate user who mistypes the code 10 times over the life of a session
+  is signed out of it and logs in again; successful verifications never reset
+  the counter.
+- The E2E suite gains an email-capture seam (`factories.WithEmailProvider`),
+  which closes the email-flow gap that ADR-006 records.
 
 This ADR supersedes ADR-007, which accepted the stolen-session residual risk.

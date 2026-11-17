@@ -60,7 +60,8 @@ CREATE TABLE user_sessions (
     created_at timestamptz DEFAULT now() NOT NULL,
     last_used_at timestamptz DEFAULT now() NOT NULL,
     expires_at timestamptz NOT NULL,
-    step_up_until timestamptz
+    step_up_until timestamptz,
+    step_up_failures int NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_user_sessions_user_last_used ON user_sessions (user_uuid, last_used_at);

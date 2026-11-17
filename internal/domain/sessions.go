@@ -23,6 +23,7 @@ type SessionsRepository interface {
 	DeleteExpiredByUser(ctx context.Context, userUUID string, idleTimeout time.Duration) error
 	DeleteOldestBeyond(ctx context.Context, userUUID string, keep int) error
 	SetStepUpUntil(ctx context.Context, userUUID string, sessionUUID string, until time.Time) error
+	IncrementStepUpFailures(ctx context.Context, userUUID string, sessionUUID string) (int, error)
 	DeleteAllByUser(ctx context.Context, userUUID string) error
 	DeleteOthersByUser(ctx context.Context, userUUID string, keepSessionUUID string) error
 }

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -214,7 +215,7 @@ func (c *AuthController) RequestStepUp(w http.ResponseWriter, r *http.Request) {
 // @Param			body	body		domain.StepUpVerifyDTO					true	"Code"
 // @Success		200		{object}	api.ResponseBody[map[string]int64]	"Session elevated; step_up_until is a unix timestamp"
 // @Failure		400		{object}	api.ResponseBody[any]					"Validation error"
-// @Failure		401		{object}	api.ResponseBody[any]					"Invalid code (auth.stepUp.invalidCode) or no active challenge (auth.stepUp.noChallenge)"
+// @Failure		401		{object}	api.ResponseBody[any]					"Invalid code (auth.stepUp.invalidCode), no active challenge (auth.stepUp.noChallenge) or session revoked after too many failures (auth.stepUp.sessionRevoked, clears the auth cookies)"
 // @Failure		500		{object}	api.ResponseBody[any]					"Internal server error"
 // @Router			/auth/step-up/verify [post]
 func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
@@ -228,6 +229,9 @@ func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
 	until, err := c.stepUpService.VerifyCode(r.Context(), userUUID, sessionUUID, dto.Code)
 	if err != nil {
 		c.auditAuthFailure(r, domain.AuditActionStepUpVerify, err)
+		if errors.Is(err, domain.ErrStepUpSessionRevoked) {
+			c.deleteAuthCookies(w)
+		}
 		api.HandleError(r.Context(), w, err)
 		return
 	}
