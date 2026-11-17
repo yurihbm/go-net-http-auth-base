@@ -47,14 +47,24 @@ func TestSignupAndLogin(t *testing.T) {
 		assert.Equal(t, user, me)
 	})
 
+	t.Run("verification link verifies the email", func(t *testing.T) {
+		token := mailbox.linkToken(t, dto.Email)
+
+		resp := newClient(t).do(http.MethodPost, "/users/verify-email", domain.VerifyEmailDTO{Token: token})
+		require.Equal(t, http.StatusOK, resp.Status)
+
+		me := c.do(http.MethodGet, "/users/me", nil)
+		var verified domain.User
+		require.NoError(t, json.Unmarshal(me.Body.Data, &verified))
+		assert.True(t, verified.EmailVerified)
+	})
+
 	t.Run("delete then login fails", func(t *testing.T) {
 		blocked := c.do(http.MethodDelete, "/users/"+user.UUID, nil)
 		require.Equal(t, http.StatusForbidden, blocked.Status)
 		assert.Equal(t, "auth.stepUp.required", blocked.Body.Error)
 
-		_, err := testDB.Exec(context.Background(),
-			"UPDATE user_sessions SET step_up_until = now() + interval '5 minutes' WHERE user_uuid = $1", user.UUID)
-		require.NoError(t, err)
+		c.stepUp(dto.Email)
 
 		deleted := c.do(http.MethodDelete, "/users/"+user.UUID, nil)
 		assert.Equal(t, http.StatusNoContent, deleted.Status)

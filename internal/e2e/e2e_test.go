@@ -20,6 +20,7 @@ import (
 var (
 	testDB    *pgxpool.Pool
 	serverURL string
+	mailbox   = newCapturingEmailProvider()
 )
 
 func TestMain(m *testing.M) {
@@ -49,6 +50,10 @@ func run(m *testing.M) int {
 		"RATE_LIMIT_REQUESTS_PER_SECOND": "1000",
 		"RATE_LIMIT_BURST":               "1000",
 		"RESEND_API_KEY":                 "",
+		"EMAIL_FROM":                     "noreply@example.com",
+		"EMAIL_VERIFICATION_URL":         "http://app.test/verify-email",
+		"EMAIL_CHANGE_URL":               "http://app.test/confirm-email-change",
+		"EMAIL_CHANGE_REVERT_URL":        "http://app.test/revert-email-change",
 	} {
 		if err := os.Setenv(key, value); err != nil {
 			log.Printf("Could not set %s: %v", key, err)
@@ -67,7 +72,7 @@ func run(m *testing.M) int {
 		return 1
 	}
 
-	deps, err := factories.NewDependencies(pool, cfg)
+	deps, err := factories.NewDependencies(pool, cfg, factories.WithEmailProvider(mailbox))
 	if err != nil {
 		log.Printf("Could not build dependencies: %v", err)
 		return 1
