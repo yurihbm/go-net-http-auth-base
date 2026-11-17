@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,11 +26,18 @@ var validate = func() *validator.Validate {
 	return v
 }()
 
+const maxRequestBodyBytes = 1 << 20
+
 func DecodeAndValidate[T any](r *http.Request) (T, error) {
 	var v T
-	dec := json.NewDecoder(r.Body)
+	dec := json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxRequestBodyBytes))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&v); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return v, domain.NewValidationError("request.invalid",
+				map[string]string{"body": "request body too large"})
+		}
 		return v, domain.NewValidationError("request.invalid",
 			map[string]string{"body": err.Error()})
 	}
