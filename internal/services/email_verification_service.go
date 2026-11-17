@@ -10,18 +10,20 @@ import (
 )
 
 type emailVerificationService struct {
-	tokens          domain.TokenService
-	emailProvider   domain.EmailProvider
-	verificationURL string
-	emailChangeURL  string
+	tokens               domain.TokenService
+	emailProvider        domain.EmailProvider
+	verificationURL      string
+	emailChangeURL       string
+	emailChangeRevertURL string
 }
 
-func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, verificationURL string, emailChangeURL string) domain.EmailVerificationService {
+func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, verificationURL string, emailChangeURL string, emailChangeRevertURL string) domain.EmailVerificationService {
 	return &emailVerificationService{
-		tokens:          tokens,
-		emailProvider:   emailProvider,
-		verificationURL: verificationURL,
-		emailChangeURL:  emailChangeURL,
+		tokens:               tokens,
+		emailProvider:        emailProvider,
+		verificationURL:      verificationURL,
+		emailChangeURL:       emailChangeURL,
+		emailChangeRevertURL: emailChangeRevertURL,
 	}
 }
 
@@ -58,9 +60,10 @@ func (s *emailVerificationService) SendEmailChangeEmail(ctx context.Context, use
 	link, err := s.tokenLink(ctx, s.emailChangeURL, domain.GenerateTokenDTO{
 		Subject:  user.UUID,
 		Audience: domain.TokenAudienceEmailChange,
-		Payload: map[string]string{
+		Payload: map[string]any{
 			"current_email": user.Email,
 			"new_email":     newEmail,
+			"ver":           user.EmailVersion,
 		},
 	})
 	if err != nil {
@@ -87,7 +90,8 @@ func (s *emailVerificationService) VerifyEmailChangeToken(ctx context.Context, t
 	payload, _ := tokenData.Payload.(map[string]any)
 	currentEmail, _ := payload["current_email"].(string)
 	newEmail, _ := payload["new_email"].(string)
-	if currentEmail == "" || newEmail == "" {
+	version, ok := payload["ver"].(float64)
+	if currentEmail == "" || newEmail == "" || !ok {
 		return nil, ErrInvalidToken
 	}
 
@@ -95,16 +99,58 @@ func (s *emailVerificationService) VerifyEmailChangeToken(ctx context.Context, t
 		UserUUID:     tokenData.Subject,
 		CurrentEmail: currentEmail,
 		NewEmail:     newEmail,
+		Version:      int(version),
 	}, nil
 }
 
-func (s *emailVerificationService) SendEmailChangedNotice(ctx context.Context, oldEmail string, newEmail string) error {
-	return s.emailProvider.Send(ctx, domain.EmailMessage{
-		To:      oldEmail,
-		Subject: "Your email address was changed",
-		Text:    fmt.Sprintf("The email address of your account was changed to %s. If you did not make this change, contact support.", newEmail),
-		HTML:    fmt.Sprintf("<p>The email address of your account was changed to %s. If you did not make this change, contact support.</p>", html.EscapeString(newEmail)),
+func (s *emailVerificationService) SendEmailChangedNotice(ctx context.Context, revert domain.EmailChangeRevert) error {
+	link, err := s.tokenLink(ctx, s.emailChangeRevertURL, domain.GenerateTokenDTO{
+		Subject:  revert.UserUUID,
+		Audience: domain.TokenAudienceEmailChangeRevert,
+		Payload: map[string]any{
+			"old_email":  revert.OldEmail,
+			"new_email":  revert.NewEmail,
+			"ver":        revert.Version,
+			"changed_at": revert.ChangedAt,
+		},
 	})
+	if err != nil {
+		return err
+	}
+
+	return s.emailProvider.Send(ctx, domain.EmailMessage{
+		To:      revert.OldEmail,
+		Subject: "Your email address was changed",
+		Text:    fmt.Sprintf("The email address of your account was changed to %s. If this wasn't you, revert the change and sign out every device by opening this link: %s", revert.NewEmail, link),
+		HTML:    fmt.Sprintf(`<p>The email address of your account was changed to %s. If this wasn't you, <a href="%s">revert the change and sign out every device</a>.</p>`, html.EscapeString(revert.NewEmail), html.EscapeString(link)),
+	})
+}
+
+func (s *emailVerificationService) VerifyEmailChangeRevertToken(ctx context.Context, token string) (*domain.EmailChangeRevert, error) {
+	tokenData, err := s.tokens.VerifyToken(ctx, domain.VerifyTokenDTO{
+		Token:    token,
+		Audience: domain.TokenAudienceEmailChangeRevert,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	payload, _ := tokenData.Payload.(map[string]any)
+	oldEmail, _ := payload["old_email"].(string)
+	newEmail, _ := payload["new_email"].(string)
+	version, hasVersion := payload["ver"].(float64)
+	changedAt, hasChangedAt := payload["changed_at"].(float64)
+	if oldEmail == "" || newEmail == "" || !hasVersion || !hasChangedAt {
+		return nil, ErrInvalidToken
+	}
+
+	return &domain.EmailChangeRevert{
+		UserUUID:  tokenData.Subject,
+		OldEmail:  oldEmail,
+		NewEmail:  newEmail,
+		Version:   int(version),
+		ChangedAt: int64(changedAt),
+	}, nil
 }
 
 func (s *emailVerificationService) SendStepUpCode(ctx context.Context, email string, code string) error {

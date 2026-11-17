@@ -809,6 +809,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/revert-email-change": {
+            "post": {
+                "description": "Restores the previous email using the token from the \"it wasn't me\" link, signs out every device and unlinks OAuth providers added since the change.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Revert an email change",
+                "parameters": [
+                    {
+                        "description": "Revert token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.RevertEmailChangeDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Email change reverted",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
         "/users/verify-email": {
             "post": {
                 "description": "Confirms the email using the token from the verification link.",
@@ -1284,6 +1348,17 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_domain.RevertEmailChangeDTO": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
                     "type": "string"
                 }
             }

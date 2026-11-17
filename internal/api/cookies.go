@@ -1,6 +1,10 @@
 package api
 
-import "go-net-http-auth-base/internal/domain"
+import (
+	"net/http"
+
+	"go-net-http-auth-base/internal/domain"
+)
 
 const (
 	AccessTokenCookieName = "access_token"
@@ -29,4 +33,22 @@ func OAuthFlowCookiePath(provider domain.OAuthProviderName, secure bool) string 
 		return "/"
 	}
 	return "/auth/" + string(provider) + "/callback"
+}
+
+func DeleteAuthCookies(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AccessTokenCookieName,
+		Value:    "",
+		Path:     AccessTokenCookiePath,
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     RefreshTokenCookieName,
+		Value:    "",
+		Path:     RefreshTokenCookiePath,
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
 }

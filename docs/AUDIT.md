@@ -85,6 +85,7 @@ The domain package defines type-safe constants for common values:
 - `AuditActionVerifyEmail` (`VERIFY_EMAIL`): Email verification (`POST /users/verify-email`)
 - `AuditActionEmailChangeRequest` (`EMAIL_CHANGE_REQUEST`): Email change request (`POST /users/me/email`)
 - `AuditActionEmailChange` (`EMAIL_CHANGE`): Email change confirmation (`POST /users/confirm-email-change`)
+- `AuditActionEmailChangeRevert` (`EMAIL_CHANGE_REVERT`): Email change undone from the notice link (`POST /users/revert-email-change`)
 - `AuditActionLogin` (`LOGIN`): Email/password authentication (`POST /auth/login`)
 - `AuditActionOAuthLogin` (`OAUTH_LOGIN`): OAuth authentication (`GET /auth/{provider}/callback`)
 - `AuditActionLogout` (`LOGOUT`): User session termination (`POST /auth/logout`)

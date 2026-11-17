@@ -116,6 +116,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("EMAIL_FROM", "no-reply@example.com")
 		t.Setenv("EMAIL_VERIFICATION_URL", "https://app.example.com/verify")
 		t.Setenv("EMAIL_CHANGE_URL", "https://app.example.com/confirm-email-change")
+		t.Setenv("EMAIL_CHANGE_REVERT_URL", "https://app.example.com/revert-email-change")
 
 		cfg, err := config.Load()
 
@@ -140,6 +141,7 @@ func TestLoad(t *testing.T) {
 			From:            "no-reply@example.com",
 			VerificationURL: "https://app.example.com/verify",
 			ChangeURL:       "https://app.example.com/confirm-email-change",
+			ChangeRevertURL: "https://app.example.com/revert-email-change",
 		}, cfg.Email)
 	})
 
@@ -280,10 +282,11 @@ func TestLoad(t *testing.T) {
 	}
 
 	emailVars := map[string]string{
-		"RESEND_API_KEY":         "re_key",
-		"EMAIL_FROM":             "no-reply@example.com",
-		"EMAIL_VERIFICATION_URL": "https://app.example.com/verify",
-		"EMAIL_CHANGE_URL":       "https://app.example.com/confirm-email-change",
+		"RESEND_API_KEY":          "re_key",
+		"EMAIL_FROM":              "no-reply@example.com",
+		"EMAIL_VERIFICATION_URL":  "https://app.example.com/verify",
+		"EMAIL_CHANGE_URL":        "https://app.example.com/confirm-email-change",
+		"EMAIL_CHANGE_REVERT_URL": "https://app.example.com/revert-email-change",
 	}
 
 	for name := range emailVars {
@@ -313,6 +316,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("EMAIL_FROM", "")
 		t.Setenv("EMAIL_VERIFICATION_URL", "")
 		t.Setenv("EMAIL_CHANGE_URL", "")
+		t.Setenv("EMAIL_CHANGE_REVERT_URL", "")
 
 		cfg, err := config.Load()
 
@@ -406,6 +410,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("EMAIL_FROM", "")
 		t.Setenv("EMAIL_VERIFICATION_URL", "")
 		t.Setenv("EMAIL_CHANGE_URL", "")
+		t.Setenv("EMAIL_CHANGE_REVERT_URL", "")
 
 		cfg, err := config.Load()
 
