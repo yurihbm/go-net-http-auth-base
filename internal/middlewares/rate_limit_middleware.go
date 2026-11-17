@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"go-net-http-auth-base/internal/api"
+
 	"golang.org/x/time/rate"
 )
 
@@ -46,7 +48,10 @@ func (m *RateLimitMiddleware) Use(next http.Handler) http.Handler {
 
 		if !limiter.Allow() {
 			m.setHeaders(w, limiter)
-			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+			api.WriteJSONResponse(w, http.StatusTooManyRequests, api.ResponseBody[any]{
+				Message: "rateLimit.exceeded",
+				Error:   "too many requests",
+			})
 			return
 		}
 
