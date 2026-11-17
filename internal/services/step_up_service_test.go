@@ -155,11 +155,29 @@ func TestStepUpService_RequestCode(t *testing.T) {
 		m.users.On("FindByUUID", stepUpUserUUID).Return(user, nil).Once()
 		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(&domain.StepUpChallenge{}, nil).Once()
 		m.emails.On("SendStepUpCode", stepUpEmail, mock.Anything).Return(errors.New("smtp down")).Once()
+		m.challenges.On("Delete", stepUpSessionUUID).Return(nil).Once()
 
 		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
 
 		var internal *domain.InternalServerError
 		assert.ErrorAs(t, err, &internal)
+		m.challenges.AssertCalled(t, "Delete", stepUpSessionUUID)
+	})
+
+	t.Run("error - email failure with failing cleanup still returns the send error", func(t *testing.T) {
+		service, m := newTestStepUpService()
+		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(user, nil).Once()
+		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(&domain.StepUpChallenge{}, nil).Once()
+		m.emails.On("SendStepUpCode", stepUpEmail, mock.Anything).Return(errors.New("smtp down")).Once()
+		m.challenges.On("Delete", stepUpSessionUUID).Return(errors.New("db down")).Once()
+
+		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
+
+		var internal *domain.InternalServerError
+		require.ErrorAs(t, err, &internal)
+		assert.Equal(t, "auth.stepUp.sendFailed", internal.Error())
+		m.challenges.AssertCalled(t, "Delete", stepUpSessionUUID)
 	})
 }
 
