@@ -74,6 +74,14 @@ func TestHandleError(t *testing.T) {
 			},
 		},
 		{
+			name:           "TooManyRequestsError",
+			err:            domain.NewTooManyRequestsError("auth.stepUp.cooldown"),
+			expectedStatus: http.StatusTooManyRequests,
+			expectedBody: api.ResponseBody[any]{
+				Error: "auth.stepUp.cooldown",
+			},
+		},
+		{
 			name:           "InternalServerError",
 			err:            domain.NewInternalServerError("internal.error", errors.New("db failure")),
 			expectedStatus: http.StatusInternalServerError,

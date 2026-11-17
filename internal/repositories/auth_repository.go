@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/postgres"
@@ -78,6 +79,21 @@ func (r *AuthPostgresRepository) DeleteUserOAuthProvider(ctx context.Context, uu
 	err = r.q.DeleteUserOAuthProvider(ctx, *oauthProviderUUID)
 
 	if err != nil {
+		return domain.NewInternalServerError("auth.internalServerError", err)
+	}
+	return nil
+}
+
+func (r *AuthPostgresRepository) DeleteOAuthProvidersCreatedSince(ctx context.Context, userUUIDStr string, since time.Time) error {
+	userUUID, err := parseUsersUUID(userUUIDStr)
+	if err != nil {
+		return err
+	}
+
+	if err := r.q.DeleteUserOAuthProvidersCreatedSince(ctx, postgres.DeleteUserOAuthProvidersCreatedSinceParams{
+		UserUuid:  *userUUID,
+		CreatedAt: toTimestamptz(&since),
+	}); err != nil {
 		return domain.NewInternalServerError("auth.internalServerError", err)
 	}
 	return nil

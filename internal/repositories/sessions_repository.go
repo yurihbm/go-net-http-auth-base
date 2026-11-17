@@ -132,14 +132,62 @@ func (r *SessionsPostgresRepository) DeleteOldestBeyond(ctx context.Context, use
 	return nil
 }
 
+func (r *SessionsPostgresRepository) SetStepUpUntil(ctx context.Context, userUUIDStr string, sessionUUIDStr string, until time.Time) error {
+	userUUID, sessionUUID, err := parseSessionUUIDs(userUUIDStr, sessionUUIDStr)
+	if err != nil {
+		return err
+	}
+
+	rows, err := r.q.SetUserSessionStepUp(ctx, postgres.SetUserSessionStepUpParams{
+		Uuid:        *sessionUUID,
+		UserUuid:    *userUUID,
+		StepUpUntil: toTimestamptz(&until),
+	})
+	if err != nil {
+		return domain.NewInternalServerError("sessions.internalServerError", err)
+	}
+	if rows == 0 {
+		return domain.NewNotFoundError("sessions.notFound")
+	}
+	return nil
+}
+
+func (r *SessionsPostgresRepository) DeleteAllByUser(ctx context.Context, userUUIDStr string) error {
+	userUUID, err := parseUsersUUID(userUUIDStr)
+	if err != nil {
+		return err
+	}
+
+	if err := r.q.DeleteUserSessionsByUser(ctx, *userUUID); err != nil {
+		return domain.NewInternalServerError("sessions.internalServerError", err)
+	}
+	return nil
+}
+
+func (r *SessionsPostgresRepository) DeleteOthersByUser(ctx context.Context, userUUIDStr string, keepSessionUUIDStr string) error {
+	userUUID, keepUUID, err := parseSessionUUIDs(userUUIDStr, keepSessionUUIDStr)
+	if err != nil {
+		return err
+	}
+
+	if err := r.q.DeleteOtherUserSessionsByUser(ctx, postgres.DeleteOtherUserSessionsByUserParams{
+		UserUuid: *userUUID,
+		KeepUuid: *keepUUID,
+	}); err != nil {
+		return domain.NewInternalServerError("sessions.internalServerError", err)
+	}
+	return nil
+}
+
 func toDomainUserSession(session postgres.UserSession) domain.UserSession {
 	return domain.UserSession{
-		UUID:       uuid.UUID(session.Uuid.Bytes).String(),
-		UserUUID:   uuid.UUID(session.UserUuid.Bytes).String(),
-		CurrentJTI: session.CurrentJti,
-		CreatedAt:  session.CreatedAt.Time.Unix(),
-		LastUsedAt: session.LastUsedAt.Time.Unix(),
-		ExpiresAt:  session.ExpiresAt.Time.Unix(),
+		UUID:        uuid.UUID(session.Uuid.Bytes).String(),
+		UserUUID:    uuid.UUID(session.UserUuid.Bytes).String(),
+		CurrentJTI:  session.CurrentJti,
+		CreatedAt:   session.CreatedAt.Time.Unix(),
+		LastUsedAt:  session.LastUsedAt.Time.Unix(),
+		ExpiresAt:   session.ExpiresAt.Time.Unix(),
+		StepUpUntil: unixOrZero(session.StepUpUntil),
 	}
 }
 

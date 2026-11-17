@@ -39,3 +39,9 @@ SELECT
 FROM user_oauth_providers
 WHERE
     user_uuid = $1;
+
+-- name: DeleteUserOAuthProvidersCreatedSince :exec
+DELETE FROM user_oauth_providers
+WHERE
+    user_uuid = $1
+    AND created_at >= $2;

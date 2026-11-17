@@ -45,9 +45,12 @@ UPDATE
     users
 SET
     email = $2,
-    email_verified = true
+    email_verified = true,
+    email_version = email_version + 1,
+    email_changed_at = sqlc.narg(changed_at)
 WHERE
     uuid = $1
+    AND email_version = sqlc.arg(expected_version)
 RETURNING
     *;
 

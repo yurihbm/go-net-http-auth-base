@@ -50,3 +50,18 @@ func (m *SessionsRepositoryMock) DeleteOldestBeyond(ctx context.Context, userUUI
 	args := m.Called(userUUID, keep)
 	return args.Error(0)
 }
+
+func (m *SessionsRepositoryMock) SetStepUpUntil(ctx context.Context, userUUID string, sessionUUID string, until time.Time) error {
+	args := m.Called(userUUID, sessionUUID, until)
+	return args.Error(0)
+}
+
+func (m *SessionsRepositoryMock) DeleteAllByUser(ctx context.Context, userUUID string) error {
+	args := m.Called(userUUID)
+	return args.Error(0)
+}
+
+func (m *SessionsRepositoryMock) DeleteOthersByUser(ctx context.Context, userUUID string, keepSessionUUID string) error {
+	args := m.Called(userUUID, keepSessionUUID)
+	return args.Error(0)
+}
