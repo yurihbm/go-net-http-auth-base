@@ -23,13 +23,13 @@ var (
 
 func TestNewUserService(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 	assert.NotNil(t, service)
 }
 
 func TestUsersService_GetByUUID(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 
 	t.Run("self is allowed", func(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User"}
@@ -55,7 +55,7 @@ func TestUsersService_GetByUUID(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 
 		result, err := service.GetByUUID(context.Background(), otherActor, "some-uuid")
 
@@ -78,7 +78,7 @@ func TestUsersService_GetByUUID(t *testing.T) {
 
 func TestUsersService_GetByEmail(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 
 	t.Run("success", func(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User", Email: "test@example.com"}
@@ -120,7 +120,7 @@ func TestUsersService_Create(t *testing.T) {
 	t.Run("success sends the verification email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		sender := new(mocks.EmailVerificationServiceMock)
-		service := services.NewUserService(repo, sender, nil, nil, nil)
+		service := services.NewUserService(repo, sender, nil, nil, newTransactorMock())
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
 			return u.Role == domain.RoleUser
@@ -145,7 +145,7 @@ func TestUsersService_Create(t *testing.T) {
 	t.Run("verification email failure does not fail creation", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		sender := new(mocks.EmailVerificationServiceMock)
-		service := services.NewUserService(repo, sender, nil, nil, nil)
+		service := services.NewUserService(repo, sender, nil, nil, newTransactorMock())
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.AnythingOfType("domain.User")).Return(created, nil).Once()
 		sender.On("SendVerificationEmail", mock.Anything, created).Return(errors.New("smtp down")).Once()
@@ -160,7 +160,7 @@ func TestUsersService_Create(t *testing.T) {
 	t.Run("success oauth (no password) does not send the verification email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		sender := new(mocks.EmailVerificationServiceMock)
-		service := services.NewUserService(repo, sender, nil, nil, nil)
+		service := services.NewUserService(repo, sender, nil, nil, newTransactorMock())
 		dto := domain.CreateOAuthUserDTO{
 			Name:  "Test User",
 			Email: "test@example.com",
@@ -195,7 +195,7 @@ func TestUsersService_Create(t *testing.T) {
 	t.Run("repository create error", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		sender := new(mocks.EmailVerificationServiceMock)
-		service := services.NewUserService(repo, sender, nil, nil, nil)
+		service := services.NewUserService(repo, sender, nil, nil, newTransactorMock())
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.AnythingOfType("domain.User")).Return(nil, errors.New("db error")).Once()
 
@@ -211,7 +211,7 @@ func TestUsersService_Create(t *testing.T) {
 
 func TestUsersService_Update(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 	uuid := "some-uuid"
 	originalUser := &domain.User{
 		UUID:  uuid,
@@ -277,7 +277,7 @@ func TestUsersService_Update(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 		name := "New Name"
 		dto := domain.UserUpdateDTO{Name: &name}
 
@@ -293,7 +293,7 @@ func TestUsersService_Update(t *testing.T) {
 
 func TestUsersService_Delete(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 	uuid := "some-uuid"
 
 	t.Run("success", func(t *testing.T) {
@@ -328,7 +328,7 @@ func TestUsersService_Delete(t *testing.T) {
 
 	t.Run("error - self deletion is blocked during the email change lock", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 		repo.On("FindByUUID", uuid).Return(&domain.User{UUID: uuid, EmailChangedAt: time.Now().Add(-time.Hour).Unix()}, nil).Once()
 
 		err := service.Delete(context.Background(), selfActor, uuid)
@@ -341,7 +341,7 @@ func TestUsersService_Delete(t *testing.T) {
 
 	t.Run("admin deleting another locked user is allowed", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 		repo.On("Delete", uuid).Return(nil).Once()
 
 		err := service.Delete(context.Background(), adminActor, uuid)
@@ -352,7 +352,7 @@ func TestUsersService_Delete(t *testing.T) {
 
 	t.Run("error - lookup fails", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 		lookupErr := errors.New("db error")
 		repo.On("FindByUUID", uuid).Return(nil, lookupErr).Once()
 
@@ -364,7 +364,7 @@ func TestUsersService_Delete(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 
 		err := service.Delete(context.Background(), otherActor, uuid)
 
@@ -377,7 +377,7 @@ func TestUsersService_Delete(t *testing.T) {
 func newVerificationUsersService() (domain.UsersService, *mocks.UsersRepositoryMock, *mocks.EmailVerificationServiceMock) {
 	repo := new(mocks.UsersRepositoryMock)
 	emailVerification := new(mocks.EmailVerificationServiceMock)
-	return services.NewUserService(repo, emailVerification, nil, nil, nil), repo, emailVerification
+	return services.NewUserService(repo, emailVerification, nil, nil, newTransactorMock()), repo, emailVerification
 }
 
 func TestUsersService_VerifyEmail(t *testing.T) {
@@ -497,7 +497,8 @@ func TestUsersService_ResendVerification(t *testing.T) {
 func TestUsersService_Create_ReservedEmail(t *testing.T) {
 	t.Run("error - email reserved during another user's change lock", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
+		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid", Email: "taken@example.com"}, nil).Once()
 		repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
 
 		user, err := service.Create(context.Background(), domain.CreateUserDTO{Name: "Squatter", Email: " Taken@Example.com ", Password: "password123"})
@@ -506,25 +507,26 @@ func TestUsersService_Create_ReservedEmail(t *testing.T) {
 		require.True(t, errors.As(err, &conflictErr))
 		assert.Equal(t, "users.email.conflict", conflictErr.Error())
 		assert.Nil(t, user)
-		repo.AssertNotCalled(t, "Create", mock.Anything)
+		repo.AssertCalled(t, "Create", mock.Anything)
 	})
 
 	t.Run("error - reservation lookup fails", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 		lookupErr := errors.New("db error")
+		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
 		repo.On("IsEmailReserved", "taken@example.com").Return(false, lookupErr).Once()
 
 		_, err := service.Create(context.Background(), domain.CreateUserDTO{Name: "Squatter", Email: "taken@example.com", Password: "password123"})
 
 		assert.ErrorIs(t, err, lookupErr)
-		repo.AssertNotCalled(t, "Create", mock.Anything)
 	})
 }
 
 func TestUsersService_CreateOAuth_ReservedEmail(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
+	repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
 	repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
 
 	user, err := service.CreateOAuth(context.Background(), domain.CreateOAuthUserDTO{Name: "Squatter", Email: "Taken@example.com", EmailVerified: true})
@@ -533,12 +535,12 @@ func TestUsersService_CreateOAuth_ReservedEmail(t *testing.T) {
 	require.True(t, errors.As(err, &conflictErr))
 	assert.Equal(t, "users.email.conflict", conflictErr.Error())
 	assert.Nil(t, user)
-	repo.AssertNotCalled(t, "Create", mock.Anything)
+	repo.AssertCalled(t, "Create", mock.Anything)
 }
 
 func TestUsersService_CreateOAuth_EmailVerified(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil)
+	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 
 	for _, verified := range []bool{true, false} {
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
@@ -805,6 +807,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 		f := newEmailChangeFixture()
 		f.emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
 		f.repo.On("FindByUUID", "user-uuid").Return(user, nil).Once()
+		f.repo.On("UpdateEmail", "user-uuid", "new@example.com", 3, mock.Anything).Return(updated, nil).Once()
 		f.repo.On("IsEmailReserved", "new@example.com").Return(true, nil).Once()
 
 		result, err := f.service.ConfirmEmailChange(context.Background(), "token")
@@ -813,7 +816,8 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 		require.True(t, errors.As(err, &conflictErr))
 		assert.Equal(t, "users.email.conflict", conflictErr.Error())
 		assert.Nil(t, result)
-		f.repo.AssertNotCalled(t, "UpdateEmail", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		f.sessions.AssertNotCalled(t, "DeleteAllByUser", mock.Anything)
+		f.emailVerification.AssertNotCalled(t, "SendEmailChangedNotice", mock.Anything)
 	})
 
 	t.Run("error - unknown user", func(t *testing.T) {
