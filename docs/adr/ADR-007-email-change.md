@@ -1,6 +1,6 @@
 # ADR-007: Verified Email Change
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-008
 - **Date:** 2026-11-17
 
 ## Context

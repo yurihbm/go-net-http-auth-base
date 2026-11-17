@@ -88,6 +88,9 @@ The domain package defines type-safe constants for common values:
 - `AuditActionLogin` (`LOGIN`): Email/password authentication (`POST /auth/login`)
 - `AuditActionOAuthLogin` (`OAUTH_LOGIN`): OAuth authentication (`GET /auth/{provider}/callback`)
 - `AuditActionLogout` (`LOGOUT`): User session termination (`POST /auth/logout`)
+- `AuditActionLogoutOthers` (`LOGOUT_OTHERS`): Termination of the other sessions (`POST /auth/logout-others`)
+- `AuditActionStepUpRequest` (`STEP_UP_REQUEST`): Step-up code request (`POST /auth/step-up`)
+- `AuditActionStepUpVerify` (`STEP_UP_VERIFY`): Step-up code verification (`POST /auth/step-up/verify`)
 
 **Resources:**
 

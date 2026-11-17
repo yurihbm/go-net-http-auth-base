@@ -10,9 +10,10 @@ import (
 )
 
 type UsersController struct {
-	userService    domain.UsersService
-	auditService   domain.AuditService
-	authMiddleware middlewares.HandlerMiddleware
+	userService      domain.UsersService
+	auditService     domain.AuditService
+	authMiddleware   middlewares.HandlerMiddleware
+	stepUpMiddleware middlewares.HandlerMiddleware
 }
 
 var _ Controller = (*UsersController)(nil)
@@ -21,11 +22,13 @@ func NewUsersController(
 	service domain.UsersService,
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
+	stepUpMiddleware middlewares.HandlerMiddleware,
 ) *UsersController {
 	return &UsersController{
-		userService:    service,
-		auditService:   auditService,
-		authMiddleware: authMiddleware,
+		userService:      service,
+		auditService:     auditService,
+		authMiddleware:   authMiddleware,
+		stepUpMiddleware: stepUpMiddleware,
 	}
 }
 
@@ -35,10 +38,10 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users/resend-verification", c.ResendVerification)
 	router.HandleFunc("POST /users/confirm-email-change", c.ConfirmEmailChange)
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
-	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.RequestEmailChange))
+	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.RequestEmailChange)))
 	router.HandleFunc("GET /users/{uuid}", c.authMiddleware.Use(c.GetUserByUUID))
 	router.HandleFunc("PUT /users/{uuid}", c.authMiddleware.Use(c.UpdateUser))
-	router.HandleFunc("DELETE /users/{uuid}", c.authMiddleware.Use(c.DeleteUser))
+	router.HandleFunc("DELETE /users/{uuid}", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.DeleteUser)))
 }
 
 // @Summary		Create a user
@@ -152,7 +155,7 @@ func (c *UsersController) ResendVerification(w http.ResponseWriter, r *http.Requ
 }
 
 // @Summary		Request an email change
-// @Description	Sends a confirmation link to the new address; the email only changes after POST /users/confirm-email-change. Requires the `access_token` cookie set by POST /auth/login.
+// @Description	Sends a confirmation link to the new address; the email only changes after POST /users/confirm-email-change. Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify).
 // @Tags			users
 // @Accept			json
 // @Produce		json
@@ -160,6 +163,7 @@ func (c *UsersController) ResendVerification(w http.ResponseWriter, r *http.Requ
 // @Success		202		{object}	api.ResponseBody[any]			"Confirmation sent"
 // @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]			"Unauthorized"
+// @Failure		403		{object}	api.ResponseBody[any]			"Step-up required (auth.stepUp.required)"
 // @Failure		409		{object}	api.ResponseBody[any]			"Conflict"
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
 // @Router			/users/me/email [post]
@@ -351,14 +355,14 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary		Delete a user
-// @Description	Requires the `access_token` cookie set by POST /auth/login.
+// @Description	Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins.
 // @Tags			users
 // @Produce		json
 // @Param			uuid	path	string	true	"User UUID"
 // @Success		204		"User deleted"
 // @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]	"Unauthorized"
-// @Failure		403		{object}	api.ResponseBody[any]	"Forbidden"
+// @Failure		403		{object}	api.ResponseBody[any]	"Forbidden, or step-up required (auth.stepUp.required)"
 // @Failure		404		{object}	api.ResponseBody[any]	"Not found"
 // @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
 // @Router			/users/{uuid} [delete]

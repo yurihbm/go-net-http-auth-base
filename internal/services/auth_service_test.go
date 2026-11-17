@@ -652,6 +652,39 @@ func TestAuthService_Logout(t *testing.T) {
 	})
 }
 
+func TestAuthService_LogoutOthers(t *testing.T) {
+	const (
+		userUUID    = "user-uuid-123"
+		sessionUUID = "session-uuid"
+	)
+
+	newService := func() (domain.AuthService, *mocks.SessionsRepositoryMock) {
+		sessionsRepo := new(mocks.SessionsRepositoryMock)
+		service := services.NewAuthService(new(mocks.UsersServiceMock), new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
+		return service, sessionsRepo
+	}
+
+	t.Run("success - keeps the given session", func(t *testing.T) {
+		service, sessionsRepo := newService()
+		sessionsRepo.On("DeleteOthersByUser", userUUID, sessionUUID).Return(nil).Once()
+
+		err := service.LogoutOthers(context.Background(), userUUID, sessionUUID)
+
+		assert.NoError(t, err)
+		sessionsRepo.AssertExpectations(t)
+	})
+
+	t.Run("error - delete failure is returned", func(t *testing.T) {
+		service, sessionsRepo := newService()
+		deleteErr := domain.NewInternalServerError("sessions.internalServerError", errors.New("db down"))
+		sessionsRepo.On("DeleteOthersByUser", userUUID, sessionUUID).Return(deleteErr).Once()
+
+		err := service.LogoutOthers(context.Background(), userUUID, sessionUUID)
+
+		assert.ErrorIs(t, err, deleteErr)
+	})
+}
+
 func TestAuthService_GenerateToken(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)

@@ -14,13 +14,15 @@ import (
 type Dependencies struct {
 	Pool *pgxpool.Pool
 
-	UsersService domain.UsersService
-	AuthService  domain.AuthService
-	AuditService domain.AuditService
+	UsersService  domain.UsersService
+	AuthService   domain.AuthService
+	AuditService  domain.AuditService
+	StepUpService domain.StepUpService
 
 	EmailProvider domain.EmailProvider
 
 	AuthMiddleware      middlewares.HandlerMiddleware
+	StepUpMiddleware    middlewares.HandlerMiddleware
 	AdminRoleMiddleware middlewares.HandlerMiddleware
 }
 
@@ -36,6 +38,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 
 	authRepository := repositories.NewAuthPostgresRepository(db)
 	sessionsRepository := repositories.NewSessionsPostgresRepository(db)
+	transactor := repositories.NewPostgresTransactor(pool)
 	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
 		map[domain.OAuthProviderName]domain.OAuthProvider{
 			domain.OAuthProviderGoogle: providers.NewGoogleOAuthProvider(
@@ -57,10 +60,19 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		authRepository,
 		sessionsRepository,
 		oauthProviderRegistry,
-		repositories.NewPostgresTransactor(pool),
+		transactor,
 		tokenService,
 		cfg.SessionMaxAge,
 		cfg.MaxSessionsPerUser,
+	)
+
+	stepUpService := services.NewStepUpService(
+		repositories.NewStepUpPostgresRepository(db),
+		sessionsRepository,
+		usersRepository,
+		transactor,
+		emailVerificationService,
+		[]byte(cfg.JWTSecret),
 	)
 
 	auditRepository := repositories.NewAuditPostgresRepository(db)
@@ -71,8 +83,10 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 		UsersService:        usersService,
 		AuthService:         authService,
 		AuditService:        auditService,
+		StepUpService:       stepUpService,
 		EmailProvider:       emailProvider,
 		AuthMiddleware:      middlewares.NewAuthMiddleware(authService),
+		StepUpMiddleware:    middlewares.NewStepUpMiddleware(stepUpService),
 		AdminRoleMiddleware: middlewares.NewRoleMiddleware([]domain.UserRole{domain.RoleAdmin}),
 	}, nil
 }

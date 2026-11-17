@@ -24,5 +24,6 @@ type EmailVerificationService interface {
 	VerifyVerificationToken(ctx context.Context, token string) (string, error)
 	SendEmailChangeEmail(ctx context.Context, user *User, newEmail string) error
 	VerifyEmailChangeToken(ctx context.Context, token string) (*EmailChange, error)
+	SendStepUpCode(ctx context.Context, email string, code string) error
 	SendEmailChangedNotice(ctx context.Context, oldEmail string, newEmail string) error
 }
