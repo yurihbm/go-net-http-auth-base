@@ -58,7 +58,7 @@ func TestCredentialsLogin_Transaction(t *testing.T) {
 		}
 
 		service := services.NewAuthService(
-			services.NewUserService(usersRepo, new(mocks.EmailVerificationServiceMock)),
+			services.NewUserService(usersRepo, new(mocks.EmailVerificationServiceMock), nil, nil, nil),
 			repositories.NewAuthPostgresRepository(db),
 			serviceSessionsRepo,
 			new(mocks.OAuthProviderRegistryMock),

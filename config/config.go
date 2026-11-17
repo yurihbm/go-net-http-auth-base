@@ -96,6 +96,7 @@ type EmailConfig struct {
 	From            string
 	VerificationURL string
 	ChangeURL       string
+	ChangeRevertURL string
 }
 
 type TelemetryConfig struct {
@@ -192,6 +193,7 @@ func Load() (*Config, error) {
 			From:            os.Getenv("EMAIL_FROM"),
 			VerificationURL: os.Getenv("EMAIL_VERIFICATION_URL"),
 			ChangeURL:       os.Getenv("EMAIL_CHANGE_URL"),
+			ChangeRevertURL: os.Getenv("EMAIL_CHANGE_REVERT_URL"),
 		},
 
 		Telemetry: TelemetryConfig{
@@ -249,6 +251,7 @@ func Load() (*Config, error) {
 			{"EMAIL_FROM", cfg.Email.From},
 			{"EMAIL_VERIFICATION_URL", cfg.Email.VerificationURL},
 			{"EMAIL_CHANGE_URL", cfg.Email.ChangeURL},
+			{"EMAIL_CHANGE_REVERT_URL", cfg.Email.ChangeRevertURL},
 		}
 		for _, v := range required {
 			if v.value == "" {

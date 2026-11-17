@@ -37,6 +37,7 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users/verify-email", c.VerifyEmail)
 	router.HandleFunc("POST /users/resend-verification", c.ResendVerification)
 	router.HandleFunc("POST /users/confirm-email-change", c.ConfirmEmailChange)
+	router.HandleFunc("POST /users/revert-email-change", c.RevertEmailChange)
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
 	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.RequestEmailChange)))
 	router.HandleFunc("GET /users/{uuid}", c.authMiddleware.Use(c.GetUserByUUID))
@@ -235,9 +236,47 @@ func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Requ
 		Status:       domain.AuditStatusSuccess,
 	})
 
+	api.DeleteAuthCookies(w)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
 		Message: "user.emailChange.success",
+	})
+}
+
+// @Summary		Revert an email change
+// @Description	Restores the previous email using the token from the "it wasn't me" link, signs out every device and unlinks OAuth providers added since the change.
+// @Tags			users
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.RevertEmailChangeDTO	true	"Revert token"
+// @Success		200		{object}	api.ResponseBody[any]		"Email change reverted"
+// @Failure		400		{object}	api.ResponseBody[any]		"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]		"Unauthorized"
+// @Failure		404		{object}	api.ResponseBody[any]		"Not found"
+// @Failure		409		{object}	api.ResponseBody[any]		"Conflict"
+// @Failure		500		{object}	api.ResponseBody[any]		"Internal server error"
+// @Router			/users/revert-email-change [post]
+func (c *UsersController) RevertEmailChange(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.RevertEmailChangeDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	if err := c.userService.RevertEmailChange(r.Context(), dto.Token); err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		Action:       domain.AuditActionEmailChangeRevert,
+		ResourceType: domain.AuditResourceUser,
+		Status:       domain.AuditStatusSuccess,
+	})
+
+	api.DeleteAuthCookies(w)
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
+		Message: "user.emailChange.reverted",
 	})
 }
 
