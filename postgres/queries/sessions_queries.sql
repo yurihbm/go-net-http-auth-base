@@ -54,3 +54,26 @@ WHERE
             s.last_used_at DESC,
             s.uuid DESC
         OFFSET sqlc.arg(keep)::int);
+
+
+-- name: SetUserSessionStepUp :execrows
+UPDATE
+    user_sessions
+SET
+    step_up_until = $3
+WHERE
+    uuid = $1
+    AND user_uuid = $2;
+
+-- name: DeleteUserSessionsByUser :exec
+DELETE FROM
+    user_sessions
+WHERE
+    user_uuid = $1;
+
+-- name: DeleteOtherUserSessionsByUser :exec
+DELETE FROM
+    user_sessions
+WHERE
+    user_uuid = $1
+    AND uuid <> sqlc.arg(keep_uuid);

@@ -568,7 +568,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 		service, repo, emailVerification := newVerificationUsersService()
 		emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
 		repo.On("FindByUUID", "user-uuid").Return(user, nil).Once()
-		repo.On("UpdateEmail", "user-uuid", "new@example.com").Return(updated, nil).Once()
+		repo.On("UpdateEmail", "user-uuid", "new@example.com", user.EmailVersion, mock.Anything).Return(updated, nil).Once()
 		emailVerification.On("SendEmailChangedNotice", "old@example.com", "new@example.com").Return(nil).Once()
 
 		result, err := service.ConfirmEmailChange(context.Background(), "token")
@@ -583,7 +583,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 		service, repo, emailVerification := newVerificationUsersService()
 		emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
 		repo.On("FindByUUID", "user-uuid").Return(user, nil).Once()
-		repo.On("UpdateEmail", "user-uuid", "new@example.com").Return(updated, nil).Once()
+		repo.On("UpdateEmail", "user-uuid", "new@example.com", user.EmailVersion, mock.Anything).Return(updated, nil).Once()
 		emailVerification.On("SendEmailChangedNotice", "old@example.com", "new@example.com").Return(errors.New("smtp down")).Once()
 
 		result, err := service.ConfirmEmailChange(context.Background(), "token")
@@ -614,7 +614,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 		require.True(t, errors.As(err, &unauthorizedErr))
 		assert.Equal(t, "users.emailChange.staleToken", unauthorizedErr.Error())
 		assert.Nil(t, result)
-		repo.AssertNotCalled(t, "UpdateEmail", mock.Anything, mock.Anything)
+		repo.AssertNotCalled(t, "UpdateEmail", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		emailVerification.AssertNotCalled(t, "SendEmailChangedNotice", mock.Anything, mock.Anything)
 	})
 
@@ -635,7 +635,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 		conflict := domain.NewConflictError("users.email.conflict")
 		emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()
 		repo.On("FindByUUID", "user-uuid").Return(user, nil).Once()
-		repo.On("UpdateEmail", "user-uuid", "new@example.com").Return(nil, conflict).Once()
+		repo.On("UpdateEmail", "user-uuid", "new@example.com", user.EmailVersion, mock.Anything).Return(nil, conflict).Once()
 
 		result, err := service.ConfirmEmailChange(context.Background(), "token")
 

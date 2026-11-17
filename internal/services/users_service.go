@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 
@@ -163,7 +164,8 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*d
 		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
 	}
 
-	updated, err := s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail)
+	now := time.Now()
+	updated, err := s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail, user.EmailVersion, &now)
 	if err != nil {
 		return nil, err
 	}

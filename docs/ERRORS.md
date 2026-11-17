@@ -48,7 +48,17 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `ConflictError`       | 409         | State conflicts (e.g., Email already exists)     |
 | `UnauthorizedError`   | 401         | Authentication failures (missing/invalid token, bad credentials) |
 | `ForbiddenError`      | 403         | Authenticated but not allowed (e.g., not self or admin, missing role) |
+| `TooManyRequestsError` | 429       | Rate-style limits enforced by the domain (e.g., step-up code cooldown) |
 | `InternalServerError` | 500         | Unexpected system failures. Wraps original error |
+
+### Step-up and email change keys
+
+| Key                                  | Type                   | Where                                                                  |
+| :----------------------------------- | :--------------------- | :--------------------------------------------------------------------- |
+| `auth.stepUp.cooldown`               | `TooManyRequestsError` | `StepUpRepository.Upsert`: a code was already issued in the last 60s   |
+| `auth.stepUp.noChallenge`            | `UnauthorizedError`    | `StepUpRepository.Attempt`: no challenge, expired, or attempts exhausted |
+| `auth.stepUp.internalServerError`    | `InternalServerError`  | Unexpected `StepUpRepository` failures                                 |
+| `users.emailChange.staleToken`       | `UnauthorizedError`    | `UsersRepository.UpdateEmail`: `email_version` no longer matches       |
 
 ## Implementation Details
 

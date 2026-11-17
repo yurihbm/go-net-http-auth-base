@@ -2,11 +2,14 @@ package repositories
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/postgres"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -101,19 +104,21 @@ func (r *UsersPostgresRepository) Update(ctx context.Context, user domain.User) 
 	return &user, nil
 }
 
-func (r *UsersPostgresRepository) UpdateEmail(ctx context.Context, uuidStr string, email string) (*domain.User, error) {
+func (r *UsersPostgresRepository) UpdateEmail(ctx context.Context, uuidStr string, email string, expectedVersion int, changedAt *time.Time) (*domain.User, error) {
 	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {
 		return nil, err
 	}
 
 	updatedUser, err := r.q.UpdateUserEmail(ctx, postgres.UpdateUserEmailParams{
-		Uuid:  *uuid,
-		Email: email,
+		Uuid:            *uuid,
+		Email:           email,
+		ChangedAt:       toTimestamptz(changedAt),
+		ExpectedVersion: int32(expectedVersion),
 	})
 	if err != nil {
-		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
-			return nil, noRowsErr
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
 		}
 		if conflictErr := isConflictError(err, "users.email.conflict"); conflictErr != nil {
 			return nil, conflictErr
@@ -153,14 +158,16 @@ func (r *UsersPostgresRepository) Delete(ctx context.Context, uuidStr string) er
 func toDomainUser(user postgres.User) domain.User {
 	var uuidBytes = user.Uuid.Bytes
 	return domain.User{
-		UUID:          uuid.UUID(uuidBytes).String(),
-		Name:          user.Name,
-		Email:         user.Email,
-		Role:          domain.UserRole(user.Role),
-		EmailVerified: user.EmailVerified,
-		PasswordHash:  user.PasswordHash.String,
-		CreatedAt:     user.CreatedAt.Time.Unix(),
-		UpdatedAt:     user.UpdatedAt.Time.Unix(),
+		UUID:           uuid.UUID(uuidBytes).String(),
+		Name:           user.Name,
+		Email:          user.Email,
+		Role:           domain.UserRole(user.Role),
+		EmailVerified:  user.EmailVerified,
+		EmailVersion:   int(user.EmailVersion),
+		EmailChangedAt: unixOrZero(user.EmailChangedAt),
+		PasswordHash:   user.PasswordHash.String,
+		CreatedAt:      user.CreatedAt.Time.Unix(),
+		UpdatedAt:      user.UpdatedAt.Time.Unix(),
 	}
 }
 

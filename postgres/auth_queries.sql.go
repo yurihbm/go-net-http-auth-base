@@ -62,6 +62,23 @@ func (q *Queries) DeleteUserOAuthProvider(ctx context.Context, uuid pgtype.UUID)
 	return err
 }
 
+const deleteUserOAuthProvidersCreatedSince = `-- name: DeleteUserOAuthProvidersCreatedSince :exec
+DELETE FROM user_oauth_providers
+WHERE
+    user_uuid = $1
+    AND created_at >= $2
+`
+
+type DeleteUserOAuthProvidersCreatedSinceParams struct {
+	UserUuid  pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) DeleteUserOAuthProvidersCreatedSince(ctx context.Context, arg DeleteUserOAuthProvidersCreatedSinceParams) error {
+	_, err := q.db.Exec(ctx, deleteUserOAuthProvidersCreatedSince, arg.UserUuid, arg.CreatedAt)
+	return err
+}
+
 const getUserOAuthProviderByProviderAndProviderUserID = `-- name: GetUserOAuthProviderByProviderAndProviderUserID :one
 SELECT
     uuid,
