@@ -880,9 +880,10 @@ func TestUsersService_RevertEmailChange(t *testing.T) {
 		f.sessions.On("DeleteAllByUser", "user-uuid").Return(nil).Once()
 		f.authRepo.On("DeleteOAuthProvidersCreatedSince", "user-uuid", time.Unix(changedAt, 0)).Return(nil).Once()
 
-		err := f.service.RevertEmailChange(context.Background(), "token")
+		result, err := f.service.RevertEmailChange(context.Background(), "token")
 
 		assert.NoError(t, err)
+		assert.Equal(t, restored, result)
 		f.repo.AssertExpectations(t)
 		f.sessions.AssertExpectations(t)
 		f.authRepo.AssertExpectations(t)
@@ -892,9 +893,10 @@ func TestUsersService_RevertEmailChange(t *testing.T) {
 		f := newEmailChangeFixture()
 		f.emailVerification.On("VerifyEmailChangeRevertToken", "token").Return(nil, services.ErrInvalidToken).Once()
 
-		err := f.service.RevertEmailChange(context.Background(), "token")
+		result, err := f.service.RevertEmailChange(context.Background(), "token")
 
 		assert.ErrorIs(t, err, services.ErrInvalidToken)
+		assert.Nil(t, result)
 	})
 
 	staleCases := map[string]*domain.User{
@@ -907,11 +909,12 @@ func TestUsersService_RevertEmailChange(t *testing.T) {
 			f.emailVerification.On("VerifyEmailChangeRevertToken", "token").Return(revert, nil).Once()
 			f.repo.On("FindByUUID", "user-uuid").Return(staleUser, nil).Once()
 
-			err := f.service.RevertEmailChange(context.Background(), "token")
+			result, err := f.service.RevertEmailChange(context.Background(), "token")
 
 			var unauthorizedErr *domain.UnauthorizedError
 			require.True(t, errors.As(err, &unauthorizedErr))
 			assert.Equal(t, "users.emailChange.staleToken", unauthorizedErr.Error())
+			assert.Nil(t, result)
 			f.repo.AssertNotCalled(t, "UpdateEmail", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		})
 	}
@@ -922,9 +925,10 @@ func TestUsersService_RevertEmailChange(t *testing.T) {
 		f.emailVerification.On("VerifyEmailChangeRevertToken", "token").Return(revert, nil).Once()
 		f.repo.On("FindByUUID", "user-uuid").Return(nil, notFound).Once()
 
-		err := f.service.RevertEmailChange(context.Background(), "token")
+		result, err := f.service.RevertEmailChange(context.Background(), "token")
 
 		assert.ErrorIs(t, err, notFound)
+		assert.Nil(t, result)
 	})
 
 	t.Run("error - old email taken meanwhile", func(t *testing.T) {
@@ -933,9 +937,10 @@ func TestUsersService_RevertEmailChange(t *testing.T) {
 		expectLoad(f)
 		f.repo.On("UpdateEmail", "user-uuid", "old@example.com", 4, (*time.Time)(nil)).Return(nil, conflict).Once()
 
-		err := f.service.RevertEmailChange(context.Background(), "token")
+		result, err := f.service.RevertEmailChange(context.Background(), "token")
 
 		assert.Equal(t, conflict, err)
+		assert.Nil(t, result)
 		f.sessions.AssertNotCalled(t, "DeleteAllByUser", mock.Anything)
 	})
 
@@ -947,8 +952,9 @@ func TestUsersService_RevertEmailChange(t *testing.T) {
 		f.sessions.On("DeleteAllByUser", "user-uuid").Return(nil).Once()
 		f.authRepo.On("DeleteOAuthProvidersCreatedSince", "user-uuid", mock.Anything).Return(deleteErr).Once()
 
-		err := f.service.RevertEmailChange(context.Background(), "token")
+		result, err := f.service.RevertEmailChange(context.Background(), "token")
 
 		assert.ErrorIs(t, err, deleteErr)
+		assert.Nil(t, result)
 	})
 }

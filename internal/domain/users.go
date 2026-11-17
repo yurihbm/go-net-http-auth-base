@@ -83,7 +83,7 @@ type UsersService interface {
 	ResendVerification(context.Context, string) error
 	RequestEmailChange(context.Context, Actor, string) error
 	ConfirmEmailChange(context.Context, string) (*User, error)
-	RevertEmailChange(context.Context, string) error
+	RevertEmailChange(context.Context, string) (*User, error)
 	Delete(context.Context, Actor, string) error
 }
 
