@@ -135,7 +135,7 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 	userUUID, sessionUUID := sessionFromRequest(r)
 	err := c.authService.Logout(r.Context(), userUUID, sessionUUID)
-	c.deleteAuthCookies(w)
+	api.DeleteAuthCookies(w)
 	if err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
@@ -231,7 +231,7 @@ func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		c.auditAuthFailure(r, domain.AuditActionStepUpVerify, err)
 		if errors.Is(err, domain.ErrStepUpSessionRevoked) {
-			c.deleteAuthCookies(w)
+			api.DeleteAuthCookies(w)
 		}
 		api.HandleError(r.Context(), w, err)
 		return
@@ -544,23 +544,5 @@ func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.Aut
 		MaxAge:   int(domain.TokenExpirationRefresh.Seconds()),
 		SameSite: http.SameSiteStrictMode,
 		Secure:   isSecure,
-	})
-}
-
-func (c *AuthController) deleteAuthCookies(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     api.AccessTokenCookieName,
-		Value:    "",
-		Path:     api.AccessTokenCookiePath,
-		HttpOnly: true,
-		MaxAge:   -1,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     api.RefreshTokenCookieName,
-		Value:    "",
-		Path:     api.RefreshTokenCookiePath,
-		HttpOnly: true,
-		MaxAge:   -1,
 	})
 }

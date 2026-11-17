@@ -37,9 +37,17 @@ func (m *EmailVerificationServiceMock) VerifyEmailChangeToken(ctx context.Contex
 	return nil, args.Error(1)
 }
 
-func (m *EmailVerificationServiceMock) SendEmailChangedNotice(ctx context.Context, oldEmail string, newEmail string) error {
-	args := m.Called(oldEmail, newEmail)
+func (m *EmailVerificationServiceMock) SendEmailChangedNotice(ctx context.Context, revert domain.EmailChangeRevert) error {
+	args := m.Called(revert)
 	return args.Error(0)
+}
+
+func (m *EmailVerificationServiceMock) VerifyEmailChangeRevertToken(ctx context.Context, token string) (*domain.EmailChangeRevert, error) {
+	args := m.Called(token)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.EmailChangeRevert), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 
 func (m *EmailVerificationServiceMock) SendStepUpCode(ctx context.Context, email string, code string) error {

@@ -81,3 +81,8 @@ func (m *UsersServiceMock) ConfirmEmailChange(ctx context.Context, token string)
 	}
 	return nil, args.Error(1)
 }
+
+func (m *UsersServiceMock) RevertEmailChange(ctx context.Context, token string) error {
+	args := m.Called(token)
+	return args.Error(0)
+}

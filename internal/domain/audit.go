@@ -32,6 +32,7 @@ const (
 	AuditActionVerifyEmail        = "VERIFY_EMAIL"
 	AuditActionEmailChangeRequest = "EMAIL_CHANGE_REQUEST"
 	AuditActionEmailChange        = "EMAIL_CHANGE"
+	AuditActionEmailChangeRevert  = "EMAIL_CHANGE_REVERT"
 	AuditActionStepUpRequest      = "STEP_UP_REQUEST"
 	AuditActionStepUpVerify       = "STEP_UP_VERIFY"
 	AuditActionLogoutOthers       = "LOGOUT_OTHERS"

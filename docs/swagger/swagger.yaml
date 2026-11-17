@@ -156,6 +156,13 @@ definitions:
     required:
     - email
     type: object
+  go-net-http-auth-base_internal_domain.RevertEmailChangeDTO:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
   go-net-http-auth-base_internal_domain.StepUpVerifyDTO:
     properties:
       code:
@@ -879,6 +886,50 @@ paths:
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
       summary: Resend the verification email
+      tags:
+      - users
+  /users/revert-email-change:
+    post:
+      consumes:
+      - application/json
+      description: Restores the previous email using the token from the "it wasn't
+        me" link, signs out every device and unlinks OAuth providers added since the
+        change.
+      parameters:
+      - description: Revert token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.RevertEmailChangeDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email change reverted
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Revert an email change
       tags:
       - users
   /users/verify-email:

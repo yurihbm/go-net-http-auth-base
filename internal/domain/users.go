@@ -60,6 +60,10 @@ type ConfirmEmailChangeDTO struct {
 	Token string `json:"token" validate:"required"`
 }
 
+type RevertEmailChangeDTO struct {
+	Token string `json:"token" validate:"required"`
+}
+
 type Actor struct {
 	UUID string
 	Role UserRole
@@ -79,6 +83,7 @@ type UsersService interface {
 	ResendVerification(context.Context, string) error
 	RequestEmailChange(context.Context, Actor, string) error
 	ConfirmEmailChange(context.Context, string) (*User, error)
+	RevertEmailChange(context.Context, string) error
 	Delete(context.Context, Actor, string) error
 }
 

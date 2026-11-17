@@ -31,14 +31,13 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config) (*Dependencies, err
 
 	tokenService := services.NewTokenService(cfg.JWTSecret)
 	emailProvider := newEmailProvider(cfg.Email)
-	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.VerificationURL, cfg.Email.ChangeURL)
+	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.VerificationURL, cfg.Email.ChangeURL, cfg.Email.ChangeRevertURL)
 
 	usersRepository := repositories.NewUsersPostgresRepository(db)
-	usersService := services.NewUserService(usersRepository, emailVerificationService)
-
 	authRepository := repositories.NewAuthPostgresRepository(db)
 	sessionsRepository := repositories.NewSessionsPostgresRepository(db)
 	transactor := repositories.NewPostgresTransactor(pool)
+	usersService := services.NewUserService(usersRepository, emailVerificationService, sessionsRepository, authRepository, transactor)
 	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
 		map[domain.OAuthProviderName]domain.OAuthProvider{
 			domain.OAuthProviderGoogle: providers.NewGoogleOAuthProvider(

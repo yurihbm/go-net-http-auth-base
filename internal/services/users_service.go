@@ -16,10 +16,25 @@ var errForbiddenUserAccess = domain.NewForbiddenError("users.forbidden")
 type usersService struct {
 	repo              domain.UsersRepository
 	emailVerification domain.EmailVerificationService
+	sessionsRepo      domain.SessionsRepository
+	authRepo          domain.AuthRepository
+	transactor        domain.Transactor
 }
 
-func NewUserService(repo domain.UsersRepository, emailVerification domain.EmailVerificationService) domain.UsersService {
-	return &usersService{repo: repo, emailVerification: emailVerification}
+func NewUserService(
+	repo domain.UsersRepository,
+	emailVerification domain.EmailVerificationService,
+	sessionsRepo domain.SessionsRepository,
+	authRepo domain.AuthRepository,
+	transactor domain.Transactor,
+) domain.UsersService {
+	return &usersService{
+		repo:              repo,
+		emailVerification: emailVerification,
+		sessionsRepo:      sessionsRepo,
+		authRepo:          authRepo,
+		transactor:        transactor,
+	}
 }
 
 func (s *usersService) GetByUUID(ctx context.Context, actor domain.Actor, uuid string) (*domain.User, error) {
@@ -128,6 +143,10 @@ func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Acto
 		return err
 	}
 
+	if isEmailChangeLocked(user) {
+		return domain.NewConflictError("users.emailChange.locked")
+	}
+
 	newEmail := normalizeEmail(email)
 	if newEmail == user.Email {
 		return domain.NewValidationError("users.emailChange.unchanged", map[string]string{
@@ -158,23 +177,75 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*d
 		return nil, err
 	}
 
-	// The token is bound to the email it was issued for: once the email changes,
-	// this token and any other pending one stop working.
-	if user.Email != change.CurrentEmail {
+	// The token is bound to the email and version it was issued for: once the
+	// email changes (even back to the same value), this token and any other
+	// pending one stop working.
+	if user.Email != change.CurrentEmail || user.EmailVersion != change.Version {
 		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
 	}
 
+	if isEmailChangeLocked(user) {
+		return nil, domain.NewConflictError("users.emailChange.locked")
+	}
+
 	now := time.Now()
-	updated, err := s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail, user.EmailVersion, &now)
+	var updated *domain.User
+	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		updated, err = s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail, change.Version, &now)
+		if err != nil {
+			return err
+		}
+		return s.sessionsRepo.DeleteAllByUser(ctx, user.UUID)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.emailVerification.SendEmailChangedNotice(ctx, change.CurrentEmail, updated.Email); err != nil {
+	notice := domain.EmailChangeRevert{
+		UserUUID:  updated.UUID,
+		OldEmail:  change.CurrentEmail,
+		NewEmail:  updated.Email,
+		Version:   updated.EmailVersion,
+		ChangedAt: updated.EmailChangedAt,
+	}
+	if err := s.emailVerification.SendEmailChangedNotice(ctx, notice); err != nil {
 		slog.ErrorContext(ctx, "email changed notice failed", "error", err, "user_uuid", updated.UUID)
 	}
 
 	return updated, nil
+}
+
+// The revert token is single use because the revert bumps the version, and the
+// email change lock guarantees no other change happened since the token was issued.
+func (s *usersService) RevertEmailChange(ctx context.Context, token string) error {
+	revert, err := s.emailVerification.VerifyEmailChangeRevertToken(ctx, token)
+	if err != nil {
+		return err
+	}
+
+	user, err := s.repo.FindByUUID(ctx, revert.UserUUID)
+	if err != nil {
+		return err
+	}
+
+	if user.Email != revert.NewEmail || user.EmailVersion != revert.Version {
+		return domain.NewUnauthorizedError("users.emailChange.staleToken")
+	}
+
+	return s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		if _, err := s.repo.UpdateEmail(ctx, user.UUID, revert.OldEmail, revert.Version, nil); err != nil {
+			return err
+		}
+		if err := s.sessionsRepo.DeleteAllByUser(ctx, user.UUID); err != nil {
+			return err
+		}
+		return s.authRepo.DeleteOAuthProvidersCreatedSince(ctx, user.UUID, time.Unix(revert.ChangedAt, 0))
+	})
+}
+
+func isEmailChangeLocked(user *domain.User) bool {
+	return user.EmailChangedAt != 0 && time.Now().Before(time.Unix(user.EmailChangedAt, 0).Add(domain.EmailChangeLock))
 }
 
 func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid string) error {
