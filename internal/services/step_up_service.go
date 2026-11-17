@@ -14,7 +14,10 @@ import (
 	"go-net-http-auth-base/internal/domain"
 )
 
-var ErrStepUpInvalidCode = domain.NewUnauthorizedError("auth.stepUp.invalidCode")
+var (
+	ErrStepUpInvalidCode = domain.NewUnauthorizedError("auth.stepUp.invalidCode")
+	ErrStepUpUserLocked  = domain.NewTooManyRequestsError("auth.stepUp.userLocked")
+)
 
 type stepUpService struct {
 	challenges domain.StepUpRepository
@@ -56,6 +59,9 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 	if err != nil {
 		return err
 	}
+	if isStepUpLocked(user) {
+		return ErrStepUpUserLocked
+	}
 
 	code, err := generateStepUpCode()
 	if err != nil {
@@ -79,6 +85,14 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 }
 
 func (s *stepUpService) VerifyCode(ctx context.Context, userUUID string, sessionUUID string, code string) (int64, error) {
+	user, err := s.users.FindByUUID(ctx, userUUID)
+	if err != nil {
+		return 0, err
+	}
+	if isStepUpLocked(user) {
+		return 0, ErrStepUpUserLocked
+	}
+
 	challenge, err := s.challenges.Attempt(ctx, userUUID, sessionUUID, domain.StepUpMaxAttempts)
 	if err != nil {
 		return 0, err
@@ -116,6 +130,10 @@ func (s *stepUpService) IsElevated(ctx context.Context, userUUID string, session
 }
 
 func (s *stepUpService) rejectWrongCode(ctx context.Context, userUUID string, sessionUUID string) error {
+	if _, err := s.users.RecordStepUpFailure(ctx, userUUID, domain.StepUpUserFailureWindow); err != nil {
+		return err
+	}
+
 	failures, err := s.sessions.IncrementStepUpFailures(ctx, userUUID, sessionUUID)
 	if err != nil {
 		return err
@@ -134,6 +152,11 @@ func (s *stepUpService) hashCode(sessionUUID string, code string) string {
 	mac := hmac.New(sha256.New, s.hmacKey)
 	mac.Write([]byte(sessionUUID + ":" + code))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func isStepUpLocked(user *domain.User) bool {
+	windowEnd := time.Unix(user.StepUpFailuresWindowStart, 0).Add(domain.StepUpUserFailureWindow)
+	return user.StepUpFailures >= domain.StepUpMaxUserFailures && time.Now().Before(windowEnd)
 }
 
 func generateStepUpCode() (string, error) {

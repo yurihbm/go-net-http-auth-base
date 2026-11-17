@@ -15,7 +15,7 @@ const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email, password_hash, email_verified)
     VALUES ($1, $2, $3, $4)
 RETURNING
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -42,6 +42,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
+		&i.StepUpFailures,
+		&i.StepUpFailuresWindowStart,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -62,7 +64,7 @@ func (q *Queries) DeleteUser(ctx context.Context, uuid pgtype.UUID) error {
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, created_at, updated_at
 FROM
     users
 WHERE
@@ -81,6 +83,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
+		&i.StepUpFailures,
+		&i.StepUpFailuresWindowStart,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -89,7 +93,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 
 const getUserByUUID = `-- name: GetUserByUUID :one
 SELECT
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, created_at, updated_at
 FROM
     users
 WHERE
@@ -108,6 +112,8 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
+		&i.StepUpFailures,
+		&i.StepUpFailuresWindowStart,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -116,7 +122,7 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 
 const listUsers = `-- name: ListUsers :many
 SELECT
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, created_at, updated_at
 FROM
     users
 ORDER BY
@@ -147,6 +153,8 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.EmailVerified,
 			&i.EmailVersion,
 			&i.EmailChangedAt,
+			&i.StepUpFailures,
+			&i.StepUpFailuresWindowStart,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -174,6 +182,40 @@ func (q *Queries) MarkUserEmailVerified(ctx context.Context, uuid pgtype.UUID) e
 	return err
 }
 
+const recordUserStepUpFailure = `-- name: RecordUserStepUpFailure :one
+UPDATE
+    users
+SET
+    step_up_failures = CASE WHEN step_up_failures_window_start IS NULL
+        OR step_up_failures_window_start < now() - $2::interval THEN
+        1
+    ELSE
+        step_up_failures + 1
+    END,
+    step_up_failures_window_start = CASE WHEN step_up_failures_window_start IS NULL
+        OR step_up_failures_window_start < now() - $2::interval THEN
+        now()
+    ELSE
+        step_up_failures_window_start
+    END
+WHERE
+    uuid = $1
+RETURNING
+    step_up_failures
+`
+
+type RecordUserStepUpFailureParams struct {
+	Uuid          pgtype.UUID
+	FailureWindow pgtype.Interval
+}
+
+func (q *Queries) RecordUserStepUpFailure(ctx context.Context, arg RecordUserStepUpFailureParams) (int32, error) {
+	row := q.db.QueryRow(ctx, recordUserStepUpFailure, arg.Uuid, arg.FailureWindow)
+	var step_up_failures int32
+	err := row.Scan(&step_up_failures)
+	return step_up_failures, err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE
     users
@@ -183,7 +225,7 @@ SET
 WHERE
     uuid = $1
 RETURNING
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, created_at, updated_at
 `
 
 type UpdateUserParams struct {
@@ -204,6 +246,8 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
+		&i.StepUpFailures,
+		&i.StepUpFailuresWindowStart,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -222,7 +266,7 @@ WHERE
     uuid = $1
     AND email_version = $4
 RETURNING
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, created_at, updated_at
+    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, created_at, updated_at
 `
 
 type UpdateUserEmailParams struct {
@@ -249,6 +293,8 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
+		&i.StepUpFailures,
+		&i.StepUpFailuresWindowStart,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

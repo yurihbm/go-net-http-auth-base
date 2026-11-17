@@ -5,6 +5,7 @@ import (
 	"errors"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/repositories"
+	"sync"
 	"testing"
 	"time"
 
@@ -257,6 +258,75 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 		returnedUser, err := repo.UpdateEmail(context.Background(), "invalid", "ghost@example.com", 0, nil)
 
 		assert.Nil(t, returnedUser)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
+func TestUsersPostgresRepository_RecordStepUpFailure(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	ctx := context.Background()
+	user, err := repo.Create(ctx, domain.User{Name: "Failures", Email: "failures@example.com", PasswordHash: "hash", Role: domain.RoleUser})
+	require.NoError(t, err)
+	window := domain.StepUpUserFailureWindow
+
+	t.Run("success - starts the window and increments", func(t *testing.T) {
+		first, err := repo.RecordStepUpFailure(ctx, user.UUID, window)
+		require.NoError(t, err)
+		second, err := repo.RecordStepUpFailure(ctx, user.UUID, window)
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, first)
+		assert.Equal(t, 2, second)
+		found, err := repo.FindByUUID(ctx, user.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, 2, found.StepUpFailures)
+		assert.WithinDuration(t, time.Now(), time.Unix(found.StepUpFailuresWindowStart, 0), 5*time.Second)
+	})
+
+	t.Run("success - expired window restarts the count", func(t *testing.T) {
+		_, err := testDB.Exec(ctx, "UPDATE users SET step_up_failures = 7, step_up_failures_window_start = now() - interval '25 hours' WHERE uuid = $1", user.UUID)
+		require.NoError(t, err)
+
+		failures, err := repo.RecordStepUpFailure(ctx, user.UUID, window)
+
+		require.NoError(t, err)
+		assert.Equal(t, 1, failures)
+		found, err := repo.FindByUUID(ctx, user.UUID)
+		require.NoError(t, err)
+		assert.WithinDuration(t, time.Now(), time.Unix(found.StepUpFailuresWindowStart, 0), 5*time.Second)
+	})
+
+	t.Run("success - concurrent failures are all counted", func(t *testing.T) {
+		_, err := testDB.Exec(ctx, "UPDATE users SET step_up_failures = 0, step_up_failures_window_start = now() WHERE uuid = $1", user.UUID)
+		require.NoError(t, err)
+
+		var wg sync.WaitGroup
+		for range 10 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := repo.RecordStepUpFailure(ctx, user.UUID, window)
+				assert.NoError(t, err)
+			}()
+		}
+		wg.Wait()
+
+		found, err := repo.FindByUUID(ctx, user.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, 10, found.StepUpFailures)
+	})
+
+	t.Run("error - user not found", func(t *testing.T) {
+		_, err := repo.RecordStepUpFailure(ctx, uuid.NewString(), window)
+
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		_, err := repo.RecordStepUpFailure(ctx, "invalid-uuid", window)
+
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))
 	})
