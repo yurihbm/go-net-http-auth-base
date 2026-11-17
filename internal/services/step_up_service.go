@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"time"
 
@@ -79,6 +80,9 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 	}
 
 	if err := s.emails.SendStepUpCode(ctx, user.Email, code); err != nil {
+		if deleteErr := s.challenges.Delete(ctx, sessionUUID); deleteErr != nil {
+			slog.ErrorContext(ctx, "step-up challenge cleanup failed", "error", deleteErr, "user_uuid", userUUID)
+		}
 		return domain.NewInternalServerError("auth.stepUp.sendFailed", err)
 	}
 	return nil
