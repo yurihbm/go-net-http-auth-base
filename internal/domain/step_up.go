@@ -10,6 +10,8 @@ const (
 	StepUpElevationWindow    = 5 * time.Minute
 	StepUpMaxAttempts        = 5
 	StepUpMaxSessionFailures = 10
+	StepUpMaxUserFailures    = 20
+	StepUpUserFailureWindow  = 24 * time.Hour
 	StepUpCooldown           = 60 * time.Second
 	EmailChangeLock          = 72 * time.Hour
 )

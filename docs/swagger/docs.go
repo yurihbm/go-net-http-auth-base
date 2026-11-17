@@ -280,7 +280,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "Cooldown (auth.stepUp.cooldown)",
+                        "description": "Cooldown (auth.stepUp.cooldown) or too many failed codes for the user in 24 hours (auth.stepUp.userLocked)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -333,6 +333,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Invalid code (auth.stepUp.invalidCode), no active challenge (auth.stepUp.noChallenge) or session revoked after too many failures (auth.stepUp.sessionRevoked, clears the auth cookies)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many failed codes for the user in 24 hours (auth.stepUp.userLocked)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }

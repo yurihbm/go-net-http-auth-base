@@ -130,6 +130,25 @@ func (r *UsersPostgresRepository) UpdateEmail(ctx context.Context, uuidStr strin
 	return &user, nil
 }
 
+func (r *UsersPostgresRepository) RecordStepUpFailure(ctx context.Context, uuidStr string, window time.Duration) (int, error) {
+	uuid, err := parseUsersUUID(uuidStr)
+	if err != nil {
+		return 0, err
+	}
+
+	failures, err := r.q.RecordUserStepUpFailure(ctx, postgres.RecordUserStepUpFailureParams{
+		Uuid:          *uuid,
+		FailureWindow: pgtype.Interval{Microseconds: window.Microseconds(), Valid: true},
+	})
+	if err != nil {
+		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
+			return 0, noRowsErr
+		}
+		return 0, domain.NewInternalServerError("users.internalServerError", err)
+	}
+	return int(failures), nil
+}
+
 func (r *UsersPostgresRepository) MarkEmailVerified(ctx context.Context, uuidStr string) error {
 	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {
@@ -158,16 +177,18 @@ func (r *UsersPostgresRepository) Delete(ctx context.Context, uuidStr string) er
 func toDomainUser(user postgres.User) domain.User {
 	var uuidBytes = user.Uuid.Bytes
 	return domain.User{
-		UUID:           uuid.UUID(uuidBytes).String(),
-		Name:           user.Name,
-		Email:          user.Email,
-		Role:           domain.UserRole(user.Role),
-		EmailVerified:  user.EmailVerified,
-		EmailVersion:   int(user.EmailVersion),
-		EmailChangedAt: unixOrZero(user.EmailChangedAt),
-		PasswordHash:   user.PasswordHash.String,
-		CreatedAt:      user.CreatedAt.Time.Unix(),
-		UpdatedAt:      user.UpdatedAt.Time.Unix(),
+		UUID:                      uuid.UUID(uuidBytes).String(),
+		Name:                      user.Name,
+		Email:                     user.Email,
+		Role:                      domain.UserRole(user.Role),
+		EmailVerified:             user.EmailVerified,
+		EmailVersion:              int(user.EmailVersion),
+		EmailChangedAt:            unixOrZero(user.EmailChangedAt),
+		StepUpFailures:            int(user.StepUpFailures),
+		StepUpFailuresWindowStart: unixOrZero(user.StepUpFailuresWindowStart),
+		PasswordHash:              user.PasswordHash.String,
+		CreatedAt:                 user.CreatedAt.Time.Unix(),
+		UpdatedAt:                 user.UpdatedAt.Time.Unix(),
 	}
 }
 

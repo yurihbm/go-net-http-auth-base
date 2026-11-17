@@ -189,7 +189,7 @@ func (c *AuthController) LogoutOthers(w http.ResponseWriter, r *http.Request) {
 // @Produce		json
 // @Success		202	{object}	api.ResponseBody[any]	"Code sent"
 // @Failure		401	{object}	api.ResponseBody[any]	"Unauthorized"
-// @Failure		429	{object}	api.ResponseBody[any]	"Cooldown (auth.stepUp.cooldown)"
+// @Failure		429	{object}	api.ResponseBody[any]	"Cooldown (auth.stepUp.cooldown) or too many failed codes for the user in 24 hours (auth.stepUp.userLocked)"
 // @Failure		500	{object}	api.ResponseBody[any]	"Internal server error"
 // @Router			/auth/step-up [post]
 func (c *AuthController) RequestStepUp(w http.ResponseWriter, r *http.Request) {
@@ -216,6 +216,7 @@ func (c *AuthController) RequestStepUp(w http.ResponseWriter, r *http.Request) {
 // @Success		200		{object}	api.ResponseBody[map[string]int64]	"Session elevated; step_up_until is a unix timestamp"
 // @Failure		400		{object}	api.ResponseBody[any]					"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]					"Invalid code (auth.stepUp.invalidCode), no active challenge (auth.stepUp.noChallenge) or session revoked after too many failures (auth.stepUp.sessionRevoked, clears the auth cookies)"
+// @Failure		429		{object}	api.ResponseBody[any]					"Too many failed codes for the user in 24 hours (auth.stepUp.userLocked)"
 // @Failure		500		{object}	api.ResponseBody[any]					"Internal server error"
 // @Router			/auth/step-up/verify [post]
 func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {

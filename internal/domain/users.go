@@ -22,16 +22,18 @@ func (r UserRole) IsValid() bool {
 }
 
 type User struct {
-	UUID           string   `json:"uuid"`
-	Name           string   `json:"name"`
-	Email          string   `json:"email"`
-	PasswordHash   string   `json:"-"`
-	Role           UserRole `json:"role"`
-	EmailVerified  bool     `json:"email_verified"`
-	EmailVersion   int      `json:"-"`
-	EmailChangedAt int64    `json:"-"`
-	CreatedAt      int64    `json:"created_at"`
-	UpdatedAt      int64    `json:"updated_at"`
+	UUID                      string   `json:"uuid"`
+	Name                      string   `json:"name"`
+	Email                     string   `json:"email"`
+	PasswordHash              string   `json:"-"`
+	Role                      UserRole `json:"role"`
+	EmailVerified             bool     `json:"email_verified"`
+	EmailVersion              int      `json:"-"`
+	EmailChangedAt            int64    `json:"-"`
+	StepUpFailures            int      `json:"-"`
+	StepUpFailuresWindowStart int64    `json:"-"`
+	CreatedAt                 int64    `json:"created_at"`
+	UpdatedAt                 int64    `json:"updated_at"`
 }
 
 type CreateUserDTO struct {
@@ -86,6 +88,7 @@ type UsersRepository interface {
 	Create(context.Context, User) (*User, error)
 	Update(context.Context, User) (*User, error)
 	UpdateEmail(ctx context.Context, uuid string, email string, expectedVersion int, changedAt *time.Time) (*User, error)
+	RecordStepUpFailure(ctx context.Context, uuid string, window time.Duration) (int, error)
 	MarkEmailVerified(context.Context, string) error
 	Delete(context.Context, string) error
 }

@@ -117,6 +117,25 @@ func TestStepUpService_RequestCode(t *testing.T) {
 		assert.ErrorIs(t, err, lookupErr)
 	})
 
+	t.Run("error - user failure cap reached", func(t *testing.T) {
+		service, m := newTestStepUpService()
+		locked := &domain.User{
+			UUID:                      stepUpUserUUID,
+			Email:                     stepUpEmail,
+			StepUpFailures:            domain.StepUpMaxUserFailures,
+			StepUpFailuresWindowStart: time.Now().Add(-time.Hour).Unix(),
+		}
+		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(locked, nil).Once()
+
+		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
+
+		var tooMany *domain.TooManyRequestsError
+		require.ErrorAs(t, err, &tooMany)
+		assert.Equal(t, "auth.stepUp.userLocked", tooMany.Error())
+		m.challenges.AssertNotCalled(t, "Upsert", mock.Anything, mock.Anything)
+	})
+
 	t.Run("error - cooldown does not send email", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		cooldown := domain.NewTooManyRequestsError("auth.stepUp.cooldown")
@@ -149,6 +168,7 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		service, m := newTestStepUpService()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(&domain.User{UUID: stepUpUserUUID}, nil).Once()
 		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
 			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
 		m.challenges.On("Delete", stepUpSessionUUID).Return(nil).Once()
@@ -164,6 +184,7 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 
 	t.Run("error - no challenge", func(t *testing.T) {
 		service, m := newTestStepUpService()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(&domain.User{UUID: stepUpUserUUID}, nil).Once()
 		noChallenge := domain.NewUnauthorizedError("auth.stepUp.noChallenge")
 		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).Return(nil, noChallenge).Once()
 
@@ -175,8 +196,10 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 
 	t.Run("error - wrong code", func(t *testing.T) {
 		service, m := newTestStepUpService()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(&domain.User{UUID: stepUpUserUUID}, nil).Once()
 		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
 			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.users.On("RecordStepUpFailure", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(1, nil).Once()
 		m.sessions.On("IncrementStepUpFailures", stepUpUserUUID, stepUpSessionUUID).Return(domain.StepUpMaxSessionFailures-1, nil).Once()
 
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
@@ -191,8 +214,10 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 
 	t.Run("error - reaching the failure cap revokes the session", func(t *testing.T) {
 		service, m := newTestStepUpService()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(&domain.User{UUID: stepUpUserUUID}, nil).Once()
 		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
 			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.users.On("RecordStepUpFailure", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(1, nil).Once()
 		m.sessions.On("IncrementStepUpFailures", stepUpUserUUID, stepUpSessionUUID).Return(domain.StepUpMaxSessionFailures, nil).Once()
 		m.sessions.On("Delete", stepUpUserUUID, stepUpSessionUUID).Return(nil).Once()
 
@@ -206,9 +231,11 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 
 	t.Run("error - revoking the session fails", func(t *testing.T) {
 		service, m := newTestStepUpService()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(&domain.User{UUID: stepUpUserUUID}, nil).Once()
 		deleteErr := errors.New("db down")
 		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
 			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.users.On("RecordStepUpFailure", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(1, nil).Once()
 		m.sessions.On("IncrementStepUpFailures", stepUpUserUUID, stepUpSessionUUID).Return(domain.StepUpMaxSessionFailures, nil).Once()
 		m.sessions.On("Delete", stepUpUserUUID, stepUpSessionUUID).Return(deleteErr).Once()
 
@@ -219,9 +246,11 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 
 	t.Run("error - counting the failure fails", func(t *testing.T) {
 		service, m := newTestStepUpService()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(&domain.User{UUID: stepUpUserUUID}, nil).Once()
 		incrementErr := errors.New("db down")
 		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
 			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.users.On("RecordStepUpFailure", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(1, nil).Once()
 		m.sessions.On("IncrementStepUpFailures", stepUpUserUUID, stepUpSessionUUID).Return(0, incrementErr).Once()
 
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
@@ -232,6 +261,7 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 
 	t.Run("error - elevating the session fails", func(t *testing.T) {
 		service, m := newTestStepUpService()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(&domain.User{UUID: stepUpUserUUID}, nil).Once()
 		setErr := errors.New("db down")
 		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
 			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
@@ -241,6 +271,57 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
 
 		assert.ErrorIs(t, err, setErr)
+	})
+
+	t.Run("error - user failure cap reached", func(t *testing.T) {
+		service, m := newTestStepUpService()
+		m.users.ExpectedCalls = nil
+		locked := &domain.User{
+			UUID:                      stepUpUserUUID,
+			StepUpFailures:            domain.StepUpMaxUserFailures,
+			StepUpFailuresWindowStart: time.Now().Add(-time.Hour).Unix(),
+		}
+		m.users.On("FindByUUID", stepUpUserUUID).Return(locked, nil).Once()
+
+		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
+
+		var tooMany *domain.TooManyRequestsError
+		require.ErrorAs(t, err, &tooMany)
+		assert.Equal(t, "auth.stepUp.userLocked", tooMany.Error())
+		m.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("success - expired failure window does not lock", func(t *testing.T) {
+		service, m := newTestStepUpService()
+		m.users.ExpectedCalls = nil
+		stale := &domain.User{
+			UUID:                      stepUpUserUUID,
+			StepUpFailures:            domain.StepUpMaxUserFailures,
+			StepUpFailuresWindowStart: time.Now().Add(-domain.StepUpUserFailureWindow - time.Minute).Unix(),
+		}
+		m.users.On("FindByUUID", stepUpUserUUID).Return(stale, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
+			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
+		m.challenges.On("Delete", stepUpSessionUUID).Return(nil).Once()
+		m.sessions.On("SetStepUpUntil", stepUpUserUUID, stepUpSessionUUID, mock.Anything).Return(nil).Once()
+
+		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("error - recording the user failure fails", func(t *testing.T) {
+		service, m := newTestStepUpService()
+		recordErr := errors.New("db down")
+		m.users.On("FindByUUID", stepUpUserUUID).Return(&domain.User{UUID: stepUpUserUUID}, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
+			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.users.On("RecordStepUpFailure", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(0, recordErr).Once()
+
+		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
+
+		assert.ErrorIs(t, err, recordErr)
+		m.sessions.AssertNotCalled(t, "IncrementStepUpFailures", mock.Anything, mock.Anything)
 	})
 }
 
