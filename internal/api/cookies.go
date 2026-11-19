@@ -18,7 +18,7 @@ const (
 	OAuthNonceCookieName    = "oauth_nonce"
 	OAuthVerifierCookieName = "oauth_code_verifier"
 
-	pendingSignupCookieName = "pending_signup"
+	PendingSignupCookieName = "pending_signup"
 
 	hostCookiePrefix = "__Host-"
 )
@@ -37,13 +37,6 @@ func OAuthFlowCookiePath(provider domain.OAuthProviderName, secure bool) string 
 	return "/auth/" + string(provider) + "/callback"
 }
 
-func PendingSignupCookieName(secure bool) string {
-	if secure {
-		return hostCookiePrefix + pendingSignupCookieName
-	}
-	return pendingSignupCookieName
-}
-
 func SetPendingSignupCookie(w http.ResponseWriter, pendingUUID string, secure bool) {
 	http.SetCookie(w, newPendingSignupCookie(pendingUUID, int(domain.PendingSignupTTL.Seconds()), secure))
 }
@@ -54,7 +47,7 @@ func DeletePendingSignupCookie(w http.ResponseWriter, secure bool) {
 
 func newPendingSignupCookie(value string, maxAge int, secure bool) *http.Cookie {
 	return &http.Cookie{
-		Name:     PendingSignupCookieName(secure),
+		Name:     OAuthFlowCookieName(PendingSignupCookieName, secure),
 		Value:    value,
 		Path:     "/",
 		HttpOnly: true,

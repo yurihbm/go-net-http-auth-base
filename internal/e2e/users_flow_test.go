@@ -26,7 +26,7 @@ func TestSignupAndLogin(t *testing.T) {
 	pending := c.do(http.MethodPost, "/users", dto)
 	require.Equal(t, http.StatusAccepted, pending.Status)
 	assert.Equal(t, "user.create.pending", pending.Body.Message)
-	pendingCookie := c.cookie(api.PendingSignupCookieName(false))
+	pendingCookie := c.cookie(api.OAuthFlowCookieName(api.PendingSignupCookieName, false))
 	require.NotNil(t, pendingCookie)
 	code := mailbox.otpCode(t, dto.Email)
 
@@ -53,7 +53,7 @@ func TestSignupAndLogin(t *testing.T) {
 		assert.Equal(t, dto.Email, user.Email)
 		assert.NotNil(t, c.cookie(api.AccessTokenCookieName))
 		assert.NotNil(t, c.cookie(api.RefreshTokenCookieName))
-		assert.Nil(t, c.cookie(api.PendingSignupCookieName(false)))
+		assert.Nil(t, c.cookie(api.OAuthFlowCookieName(api.PendingSignupCookieName, false)))
 	})
 
 	t.Run("me returns the signed up user", func(t *testing.T) {

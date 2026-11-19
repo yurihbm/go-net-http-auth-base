@@ -23,18 +23,13 @@ func responseCookie(t *testing.T, w *httptest.ResponseRecorder, name string) *ht
 	return nil
 }
 
-func TestPendingSignupCookieName(t *testing.T) {
-	assert.Equal(t, "__Host-pending_signup", api.PendingSignupCookieName(true))
-	assert.Equal(t, "pending_signup", api.PendingSignupCookieName(false))
-}
-
 func TestSetPendingSignupCookie(t *testing.T) {
-	for _, secure := range []bool{true, false} {
+	for secure, name := range map[bool]string{true: "__Host-pending_signup", false: "pending_signup"} {
 		w := httptest.NewRecorder()
 
 		api.SetPendingSignupCookie(w, "pending-uuid", secure)
 
-		cookie := responseCookie(t, w, api.PendingSignupCookieName(secure))
+		cookie := responseCookie(t, w, name)
 		assert.Equal(t, "pending-uuid", cookie.Value)
 		assert.Equal(t, "/", cookie.Path)
 		assert.True(t, cookie.HttpOnly)
