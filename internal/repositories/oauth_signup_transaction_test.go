@@ -54,7 +54,7 @@ func TestCompleteSignup_OAuthTransaction(t *testing.T) {
 
 		emails := new(mocks.EmailVerificationServiceMock)
 		var code string
-		emails.On("SendSignupCode", email, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		emails.On("SendOAuthSignupCode", email, mock.Anything, mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 			code = args.String(1)
 		})
 		pendingSignups := services.NewPendingSignupService(

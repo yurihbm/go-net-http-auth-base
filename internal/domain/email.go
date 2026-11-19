@@ -30,6 +30,7 @@ type EmailChangeRevert struct {
 
 type EmailVerificationService interface {
 	SendSignupCode(ctx context.Context, email string, code string) error
+	SendOAuthSignupCode(ctx context.Context, email string, code string, provider OAuthProviderName) error
 	SendEmailChangeEmail(ctx context.Context, user *User, newEmail string) error
 	VerifyEmailChangeToken(ctx context.Context, token string) (*EmailChange, error)
 	SendStepUpCode(ctx context.Context, email string, code string) error

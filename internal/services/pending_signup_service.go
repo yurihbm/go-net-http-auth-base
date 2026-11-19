@@ -91,7 +91,7 @@ func (s *pendingSignupService) Resend(ctx context.Context, pendingUUID string) e
 		return err
 	}
 
-	if err := s.emails.SendSignupCode(ctx, pending.Email, code); err != nil {
+	if err := s.sendCode(ctx, *pending, code); err != nil {
 		return domain.NewInternalServerError("auth.signup.sendFailed", err)
 	}
 	return nil
@@ -156,13 +156,20 @@ func (s *pendingSignupService) start(ctx context.Context, pending domain.Pending
 	}
 
 	err = sendOrRollback(ctx, "auth.signup.sendFailed",
-		func() error { return s.emails.SendSignupCode(ctx, created.Email, code) },
+		func() error { return s.sendCode(ctx, pending, code) },
 		func() error { return s.pending.Delete(ctx, created.UUID) },
 	)
 	if err != nil {
 		return "", err
 	}
 	return created.UUID, nil
+}
+
+func (s *pendingSignupService) sendCode(ctx context.Context, pending domain.PendingSignup, code string) error {
+	if pending.Kind == domain.PendingSignupKindOAuth {
+		return s.emails.SendOAuthSignupCode(ctx, pending.Email, code, pending.Provider)
+	}
+	return s.emails.SendSignupCode(ctx, pending.Email, code)
 }
 
 func (s *pendingSignupService) reserveSend(ctx context.Context, email string) error {
