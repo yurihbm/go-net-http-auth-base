@@ -41,7 +41,9 @@ victim can be tricked into opening.
 - **Per-address limits** in `email_send_limits`, independent of the requester:
   one email per address every 60 seconds and 5 per hour (`429
   auth.email.sendLimit`), and 20 wrong codes per address in 24 hours (`429
-  auth.email.codeLocked`). The send slot is not refunded when delivery fails.
+  auth.email.codeLocked`; each guess is reserved atomically before it is
+  compared and given back when the code matches, so parallel guesses cannot
+  exceed the cap). The send slot is not refunded when delivery fails.
 - **Rollout in layers:** (1) credentials sign-up (this change); (2) OAuth
   providers that do not attest a verified email go through the same pending
   flow (kind `oauth`) instead of being rejected; (3) the email change is
@@ -80,6 +82,12 @@ Rejected alternatives:
     5 sends per hour are lower than this cap).
   - An abuser can delay sign-up for an address by up to 1 hour by exhausting its
     send cap.
+  - Anyone can lock an address's code entry for up to 24 hours by starting
+    sign-ups for it (no account needed) and submitting 20 wrong codes. This
+    blocks that address's own sign-up, OAuth pending sign-up and, once email
+    change codes land, email changes to it, until the window ends. It is
+    accepted as the price of the brute-force bound, the same class as the
+    per-user step-up lock of ADR-008.
   - A victim who reads the code aloud to an attacker hands over the proof. The
     email says the code is for creating an account and must never be shared.
   - `409 users.email.conflict` on sign-up reveals that an address has an

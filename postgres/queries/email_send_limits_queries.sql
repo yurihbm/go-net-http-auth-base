@@ -21,17 +21,7 @@ ON CONFLICT (email)
 RETURNING
     sends;
 
--- name: GetEmailCodeFailures :one
-SELECT
-    COALESCE((
-        SELECT
-            l.failures
-        FROM email_send_limits l
-        WHERE
-            l.email = $1
-            AND l.failures_window_start > now() - sqlc.arg(failure_window)::interval), 0)::int AS failures;
-
--- name: RecordEmailCodeFailure :one
+-- name: ReserveEmailCodeGuess :one
 INSERT INTO email_send_limits (email, failures, failures_window_start)
     VALUES ($1, 1, now())
 ON CONFLICT (email)
@@ -48,8 +38,19 @@ ON CONFLICT (email)
         ELSE
             email_send_limits.failures_window_start
         END
+    WHERE email_send_limits.failures_window_start IS NULL
+        OR email_send_limits.failures_window_start < now() - sqlc.arg(failure_window)::interval
+        OR email_send_limits.failures < sqlc.arg(max_failures)::int
     RETURNING
         failures;
+
+-- name: RefundEmailCodeGuess :exec
+UPDATE
+    email_send_limits
+SET
+    failures = GREATEST(failures - 1, 0)
+WHERE
+    email = $1;
 
 -- name: DeleteStaleEmailSendLimitsBatch :execrows
 DELETE FROM
