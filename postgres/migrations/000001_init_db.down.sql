@@ -1,5 +1,11 @@
 DROP TABLE IF EXISTS audit_logs;
 
+DROP TABLE IF EXISTS email_send_limits;
+
+DROP TABLE IF EXISTS pending_signups;
+
+DROP TYPE IF EXISTS pending_signup_kind;
+
 DROP TABLE IF EXISTS step_up_challenges;
 
 DROP TABLE IF EXISTS user_sessions;

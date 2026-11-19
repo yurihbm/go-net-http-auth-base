@@ -12,48 +12,17 @@ import (
 type emailVerificationService struct {
 	tokens               domain.TokenService
 	emailProvider        domain.EmailProvider
-	verificationURL      string
 	emailChangeURL       string
 	emailChangeRevertURL string
 }
 
-func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, verificationURL string, emailChangeURL string, emailChangeRevertURL string) domain.EmailVerificationService {
+func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, emailChangeURL string, emailChangeRevertURL string) domain.EmailVerificationService {
 	return &emailVerificationService{
 		tokens:               tokens,
 		emailProvider:        emailProvider,
-		verificationURL:      verificationURL,
 		emailChangeURL:       emailChangeURL,
 		emailChangeRevertURL: emailChangeRevertURL,
 	}
-}
-
-func (s *emailVerificationService) SendVerificationEmail(ctx context.Context, user *domain.User) error {
-	link, err := s.tokenLink(ctx, s.verificationURL, domain.GenerateTokenDTO{
-		Subject:  user.UUID,
-		Audience: domain.TokenAudienceEmailVerification,
-	})
-	if err != nil {
-		return err
-	}
-
-	return s.emailProvider.Send(ctx, domain.EmailMessage{
-		To:      user.Email,
-		Subject: "Verify your email address",
-		Text:    fmt.Sprintf("Verify your email address by opening this link: %s", link),
-		HTML:    fmt.Sprintf(`<p>Verify your email address by clicking <a href="%s">this link</a>.</p>`, html.EscapeString(link)),
-	})
-}
-
-func (s *emailVerificationService) VerifyVerificationToken(ctx context.Context, token string) (string, error) {
-	tokenData, err := s.tokens.VerifyToken(ctx, domain.VerifyTokenDTO{
-		Token:    token,
-		Audience: domain.TokenAudienceEmailVerification,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return tokenData.Subject, nil
 }
 
 func (s *emailVerificationService) SendEmailChangeEmail(ctx context.Context, user *domain.User, newEmail string) error {
@@ -159,6 +128,16 @@ func (s *emailVerificationService) SendStepUpCode(ctx context.Context, email str
 		Subject: "Your verification code",
 		Text:    fmt.Sprintf("Your verification code is %s. It expires in %d minutes. If you did not request it, ignore this email.", code, int(domain.StepUpCodeTTL.Minutes())),
 		HTML:    fmt.Sprintf("<p>Your verification code is <strong>%s</strong>. It expires in %d minutes. If you did not request it, ignore this email.</p>", html.EscapeString(code), int(domain.StepUpCodeTTL.Minutes())),
+	})
+}
+
+func (s *emailVerificationService) SendSignupCode(ctx context.Context, email string, code string) error {
+	minutes := int(domain.SignupCodeTTL.Minutes())
+	return s.emailProvider.Send(ctx, domain.EmailMessage{
+		To:      email,
+		Subject: "Your sign-up code",
+		Text:    fmt.Sprintf("Your sign-up code is %s. Enter it in the browser where you started creating your account. It expires in %d minutes. Never share this code with anyone. If you did not try to create an account, ignore this email.", code, minutes),
+		HTML:    fmt.Sprintf("<p>Your sign-up code is <strong>%s</strong>. Enter it in the browser where you started creating your account. It expires in %d minutes.</p><p>Never share this code with anyone. If you did not try to create an account, ignore this email.</p>", html.EscapeString(code), minutes),
 	})
 }
 

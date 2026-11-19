@@ -104,6 +104,14 @@ func (m *AuthServiceMock) OAuthLogin(ctx context.Context, dto domain.OAuthLoginD
 	return nil, args.Error(1)
 }
 
+func (m *AuthServiceMock) CompleteSignup(ctx context.Context, pendingUUID string, code string) (*domain.SignupResult, error) {
+	args := m.Called(pendingUUID, code)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.SignupResult), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func (m *AuthServiceMock) VerifyOAuthState(ctx context.Context, dto domain.VerifyOAuthStateDTO) (string, error) {
 	args := m.Called(dto)
 	return args.String(0), args.Error(1)

@@ -114,7 +114,6 @@ func TestLoad(t *testing.T) {
 		t.Setenv("DB_STATS_LOG_INTERVAL", "1m")
 		t.Setenv("RESEND_API_KEY", "re_key")
 		t.Setenv("EMAIL_FROM", "no-reply@example.com")
-		t.Setenv("EMAIL_VERIFICATION_URL", "https://app.example.com/verify")
 		t.Setenv("EMAIL_CHANGE_URL", "https://app.example.com/confirm-email-change")
 		t.Setenv("EMAIL_CHANGE_REVERT_URL", "https://app.example.com/revert-email-change")
 
@@ -139,7 +138,6 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, config.EmailConfig{
 			ResendAPIKey:    "re_key",
 			From:            "no-reply@example.com",
-			VerificationURL: "https://app.example.com/verify",
 			ChangeURL:       "https://app.example.com/confirm-email-change",
 			ChangeRevertURL: "https://app.example.com/revert-email-change",
 		}, cfg.Email)
@@ -284,7 +282,6 @@ func TestLoad(t *testing.T) {
 	emailVars := map[string]string{
 		"RESEND_API_KEY":          "re_key",
 		"EMAIL_FROM":              "no-reply@example.com",
-		"EMAIL_VERIFICATION_URL":  "https://app.example.com/verify",
 		"EMAIL_CHANGE_URL":        "https://app.example.com/confirm-email-change",
 		"EMAIL_CHANGE_REVERT_URL": "https://app.example.com/revert-email-change",
 	}
@@ -314,7 +311,6 @@ func TestLoad(t *testing.T) {
 		t.Setenv("API_ENV", "")
 		t.Setenv("RESEND_API_KEY", "")
 		t.Setenv("EMAIL_FROM", "")
-		t.Setenv("EMAIL_VERIFICATION_URL", "")
 		t.Setenv("EMAIL_CHANGE_URL", "")
 		t.Setenv("EMAIL_CHANGE_REVERT_URL", "")
 
@@ -408,7 +404,6 @@ func TestLoad(t *testing.T) {
 		t.Setenv("API_ENV", "development")
 		t.Setenv("RESEND_API_KEY", "")
 		t.Setenv("EMAIL_FROM", "")
-		t.Setenv("EMAIL_VERIFICATION_URL", "")
 		t.Setenv("EMAIL_CHANGE_URL", "")
 		t.Setenv("EMAIL_CHANGE_REVERT_URL", "")
 

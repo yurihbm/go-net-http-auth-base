@@ -5,7 +5,7 @@
 
 A clean, modular Go backend service template. Built with the standard `net/http`
 library and focused on maintainability, testability, and following clean architecture
-principles. This project comes with users CRUD, email verification, email/password and
+principles. This project comes with users CRUD, sign-up confirmed by an emailed one-time code, email/password and
 OAuth (Google, GitHub, Microsoft) login with per-device refresh sessions, audit logs,
 admin-only Swagger UI and OpenTelemetry observability.
 
@@ -171,9 +171,9 @@ Every response uses the [standard format](#api-response-format). Authenticated e
 
 | Method   | Path                          | Auth  | Description                                                         |
 | -------- | ----------------------------- | ----- | ------------------------------------------------------------------- |
-| `POST`   | `/users`                      | -     | Sign up with email and password, and send the verification email    |
-| `POST`   | `/users/verify-email`         | -     | Verify the email with the token from the email link                 |
-| `POST`   | `/users/resend-verification`  | -     | Resend the verification email (silent for unknown/verified emails)  |
+| `POST`   | `/users`                      | -     | Start a sign-up: emails a 6-digit code and sets the `pending_signup` cookie |
+| `POST`   | `/auth/signup/verify`         | -     | Create the account with the code (needs the `pending_signup` cookie); signs in |
+| `POST`   | `/auth/signup/resend`         | -     | Send a new sign-up code (needs the `pending_signup` cookie)         |
 | `POST`   | `/users/confirm-email-change` | -     | Apply an email change with the token from the confirmation link     |
 | `GET`    | `/users/me`                   | User  | Current user                                                        |
 | `POST`   | `/users/me/email`             | User  | Request an email change (confirmation link sent to the new address) |
@@ -215,7 +215,6 @@ All variables are read and validated once at startup in `config/config.go`; the 
 | `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`                           | -                              | Comma-separated CORS allow lists (exact match)                                                      |
 | `RATE_LIMIT_REQUESTS_PER_SECOND`, `RATE_LIMIT_BURST`                     | `20`, `50`                     | Per-IP token bucket                                                                                 |
 | `RESEND_API_KEY`, `EMAIL_FROM`                                           | - (**required** outside development) | Resend credentials and sender; without a key, emails are only logged                          |
-| `EMAIL_VERIFICATION_URL`                                                 | - (**required** outside development) | Frontend URL that receives the verification token                                             |
 | `EMAIL_CHANGE_URL`                                                       | - (**required** outside development) | Frontend URL that receives the email change confirmation token                                |
 | `EMAIL_CHANGE_REVERT_URL`                                                | - (**required** outside development) | Frontend URL that receives the "it wasn't me" revert token                                     |
 | `OTEL_*`                                                                 | see [Observability](#-observability) | OpenTelemetry export                                                                          |
@@ -383,6 +382,7 @@ Logs carry `trace_id`/`span_id`, so a trace in Tempo links to its logs in Loki (
 ## 🔐 Security
 
 - Passwords are hashed using bcrypt
+- Accounts only exist once the email is proven: sign-up emails a 6-digit code that only works in the browser that started it (HttpOnly `pending_signup` cookie), with per-address send and failure limits ([ADR-009](docs/adr/ADR-009-otp-email-proof-and-verified-accounts.md))
 - Short-lived JWTs (15 min access, 7 day refresh) sent only as `HttpOnly`, `SameSite=Strict` cookies (`Secure` outside development); the app refuses to boot with a `JWT_SECRET` shorter than 32 characters
 - Server-side, per-device sessions with refresh token rotation and reuse detection; logout ends the current session
 - OAuth with PKCE, a state nonce bound to the browser, an exact `redirect_uri` allow list, and account creation/linking only through verified emails

@@ -27,7 +27,6 @@ type User struct {
 	Email                     string   `json:"email"`
 	PasswordHash              string   `json:"-"`
 	Role                      UserRole `json:"role"`
-	EmailVerified             bool     `json:"email_verified"`
 	EmailVersion              int      `json:"-"`
 	EmailChangedAt            int64    `json:"-"`
 	StepUpFailures            int      `json:"-"`
@@ -42,10 +41,15 @@ type CreateUserDTO struct {
 	Password string `json:"password" validate:"required,min=8"`
 }
 
+type NewUserDTO struct {
+	Name         string
+	Email        string
+	PasswordHash string
+}
+
 type CreateOAuthUserDTO struct {
-	Name          string
-	Email         string
-	EmailVerified bool
+	Name  string
+	Email string
 }
 
 type UserUpdateDTO struct {
@@ -76,11 +80,9 @@ func (a Actor) CanAccess(userUUID string) bool {
 type UsersService interface {
 	GetByUUID(context.Context, Actor, string) (*User, error)
 	GetByEmail(context.Context, string) (*User, error)
-	Create(context.Context, CreateUserDTO) (*User, error)
+	Create(context.Context, NewUserDTO) (*User, error)
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
 	Update(context.Context, Actor, string, UserUpdateDTO) (*User, error)
-	VerifyEmail(context.Context, string) error
-	ResendVerification(context.Context, string) error
 	RequestEmailChange(context.Context, Actor, string) error
 	ConfirmEmailChange(context.Context, string) (*User, error)
 	RevertEmailChange(context.Context, string) (*User, error)
@@ -96,6 +98,5 @@ type UsersRepository interface {
 	ReserveStepUpGuess(ctx context.Context, uuid string, window time.Duration) error
 	RefundStepUpGuess(ctx context.Context, uuid string) error
 	IsEmailReserved(ctx context.Context, email string) (bool, error)
-	MarkEmailVerified(context.Context, string) error
 	Delete(context.Context, string) error
 }

@@ -22,6 +22,7 @@ var (
 
 type authService struct {
 	usersService          domain.UsersService
+	pendingSignups        domain.PendingSignupService
 	authRepository        domain.AuthRepository
 	sessionsRepository    domain.SessionsRepository
 	oauthProviderRegistry domain.OAuthProviderRegistry
@@ -33,6 +34,7 @@ type authService struct {
 
 func NewAuthService(
 	usersService domain.UsersService,
+	pendingSignups domain.PendingSignupService,
 	authRepository domain.AuthRepository,
 	sessionsRepository domain.SessionsRepository,
 	oauthProviderRegistry domain.OAuthProviderRegistry,
@@ -43,6 +45,7 @@ func NewAuthService(
 ) domain.AuthService {
 	return &authService{
 		usersService,
+		pendingSignups,
 		authRepository,
 		sessionsRepository,
 		oauthProviderRegistry,
@@ -73,6 +76,46 @@ func (s *authService) CredentialsLogin(ctx context.Context, dto domain.Credentia
 	}
 
 	return tokens, nil
+}
+
+// The attempt is counted outside the transaction so a wrong code is never rolled
+// back. If the user cannot be created (email taken meanwhile), the rollback keeps
+// the pending signup.
+func (s *authService) CompleteSignup(ctx context.Context, pendingUUID string, code string) (*domain.SignupResult, error) {
+	if err := s.pendingSignups.Attempt(ctx, pendingUUID, code); err != nil {
+		return nil, err
+	}
+
+	var result domain.SignupResult
+	err := s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		pending, err := s.pendingSignups.Consume(ctx, pendingUUID, code)
+		if err != nil {
+			return err
+		}
+		if pending.Kind != domain.PendingSignupKindCredentials {
+			return domain.NewInternalServerError("auth.signup.unsupportedKind", errors.New("unsupported pending signup kind: "+string(pending.Kind)))
+		}
+
+		result.User, err = s.usersService.Create(ctx, domain.NewUserDTO{
+			Name:         pending.Name,
+			Email:        pending.Email,
+			PasswordHash: pending.PasswordHash,
+		})
+		if err != nil {
+			return err
+		}
+
+		result.Tokens, err = s.startSession(ctx, result.User)
+		if err != nil {
+			return domain.NewInternalServerError("auth.signup.tokenGenerationFailed", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 func (s *authService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
@@ -437,18 +480,9 @@ func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain
 	}
 
 	// Case 2: provider email matches an existing user account (link provider).
-	// The local account must be verified too, otherwise whoever pre-registered
-	// this email without owning it would share the account with the real owner.
+	// Every account proved its email when it was created, so the provider and
+	// the account belong to the same mailbox owner.
 	if existingUser != nil {
-		if !existingUser.EmailVerified {
-			return nil, domain.NewValidationError(
-				"auth.providerCallback.localEmailNotVerified",
-				map[string]string{
-					"email": "local account email is not verified",
-				},
-			)
-		}
-
 		if _, err := s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
 			UserUUID:       existingUser.UUID,
 			Provider:       provider,
@@ -463,9 +497,8 @@ func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain
 
 	// Case 3: provider is not used and there is no user with this email (create user and link).
 	newUser, err := s.usersService.CreateOAuth(ctx, domain.CreateOAuthUserDTO{
-		Name:          userInfo.Name,
-		Email:         userInfo.Email,
-		EmailVerified: true,
+		Name:  userInfo.Name,
+		Email: userInfo.Email,
 	})
 	if err != nil {
 		return nil, err

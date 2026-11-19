@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO users (name, email, password_hash, email_verified)
-    VALUES ($1, $2, $3, $4)
+INSERT INTO users (name, email, password_hash)
+    VALUES ($1, $2, $3)
 RETURNING
     *;
 
@@ -45,7 +45,6 @@ UPDATE
     users
 SET
     email = $2,
-    email_verified = true,
     email_version = email_version + 1,
     email_changed_at = sqlc.narg(changed_at),
     previous_email = CASE WHEN sqlc.narg(changed_at)::timestamptz IS NULL THEN NULL ELSE email END
@@ -98,14 +97,6 @@ SELECT
             lower(previous_email) = lower(sqlc.arg(email)::text)
             AND email_changed_at > now() - make_interval(secs => sqlc.arg(lock_seconds)::float8)
     );
-
--- name: MarkUserEmailVerified :exec
-UPDATE
-    users
-SET
-    email_verified = true
-WHERE
-    uuid = $1;
 
 -- name: DeleteUser :exec
 DELETE FROM 
