@@ -120,27 +120,17 @@ func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Requ
 
 	actor := actorFromRequest(r)
 	_, sessionUUID := sessionFromRequest(r)
-	if err := c.userService.RequestEmailChange(r.Context(), actor, sessionUUID, dto.Email); err != nil {
-		reason := err.Error()
-		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
-			ActorUUID:     actorUUID(r),
-			Action:        domain.AuditActionEmailChangeRequest,
-			ResourceType:  domain.AuditResourceUser,
-			ResourceUUID:  actor.UUID,
-			Status:        domain.AuditStatusFailure,
-			FailureReason: &reason,
-		})
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+	err = c.userService.RequestEmailChange(r.Context(), actor, sessionUUID, dto.Email)
+	auditResult(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),
 		Action:       domain.AuditActionEmailChangeRequest,
 		ResourceType: domain.AuditResourceUser,
 		ResourceUUID: actor.UUID,
-		Status:       domain.AuditStatusSuccess,
-	})
+	}, err)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 
 	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
 		Message: "user.emailChange.requested",
@@ -171,27 +161,16 @@ func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Requ
 	actor := actorFromRequest(r)
 	_, sessionUUID := sessionFromRequest(r)
 	user, err := c.userService.ConfirmEmailChange(r.Context(), actor, sessionUUID, dto.Code)
-	if err != nil {
-		reason := err.Error()
-		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
-			ActorUUID:     actorUUID(r),
-			Action:        domain.AuditActionEmailChange,
-			ResourceType:  domain.AuditResourceUser,
-			ResourceUUID:  actor.UUID,
-			Status:        domain.AuditStatusFailure,
-			FailureReason: &reason,
-		})
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+	auditResult(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),
 		Action:       domain.AuditActionEmailChange,
 		ResourceType: domain.AuditResourceUser,
-		ResourceUUID: user.UUID,
-		Status:       domain.AuditStatusSuccess,
-	})
+		ResourceUUID: actor.UUID,
+	}, err)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 
 	api.DeleteAuthCookies(w)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
