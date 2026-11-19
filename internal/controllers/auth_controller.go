@@ -180,13 +180,12 @@ func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 // @Router			/auth/logout-others [post]
 func (c *AuthController) LogoutOthers(w http.ResponseWriter, r *http.Request) {
 	userUUID, sessionUUID := sessionFromRequest(r)
-	if err := c.authService.LogoutOthers(r.Context(), userUUID, sessionUUID); err != nil {
-		c.auditAuthFailure(r, domain.AuditActionLogoutOthers, err)
+	err := c.authService.LogoutOthers(r.Context(), userUUID, sessionUUID)
+	c.auditAuth(r, domain.AuditActionLogoutOthers, err)
+	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
 	}
-
-	c.auditAuthSuccess(r, domain.AuditActionLogoutOthers)
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -202,13 +201,12 @@ func (c *AuthController) LogoutOthers(w http.ResponseWriter, r *http.Request) {
 // @Router			/auth/step-up [post]
 func (c *AuthController) RequestStepUp(w http.ResponseWriter, r *http.Request) {
 	userUUID, sessionUUID := sessionFromRequest(r)
-	if err := c.stepUpService.RequestCode(r.Context(), userUUID, sessionUUID); err != nil {
-		c.auditAuthFailure(r, domain.AuditActionStepUpRequest, err)
+	err := c.stepUpService.RequestCode(r.Context(), userUUID, sessionUUID)
+	c.auditAuth(r, domain.AuditActionStepUpRequest, err)
+	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
 	}
-
-	c.auditAuthSuccess(r, domain.AuditActionStepUpRequest)
 
 	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
 		Message: "auth.stepUp.codeSent",
@@ -236,16 +234,14 @@ func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
 
 	userUUID, sessionUUID := sessionFromRequest(r)
 	until, err := c.stepUpService.VerifyCode(r.Context(), userUUID, sessionUUID, dto.Code)
+	c.auditAuth(r, domain.AuditActionStepUpVerify, err)
 	if err != nil {
-		c.auditAuthFailure(r, domain.AuditActionStepUpVerify, err)
 		if errors.Is(err, domain.ErrStepUpSessionRevoked) {
 			api.DeleteAuthCookies(w)
 		}
 		api.HandleError(r.Context(), w, err)
 		return
 	}
-
-	c.auditAuthSuccess(r, domain.AuditActionStepUpVerify)
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[map[string]int64]{
 		Data:    map[string]int64{"step_up_until": until},
@@ -343,26 +339,12 @@ func (c *AuthController) pendingSignupUUID(r *http.Request) (string, bool) {
 	return cookie.Value, true
 }
 
-func (c *AuthController) auditAuthSuccess(r *http.Request, action string) {
-	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+func (c *AuthController) auditAuth(r *http.Request, action string, err error) {
+	auditResult(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),
 		Action:       action,
 		ResourceType: domain.AuditResourceAuth,
-		ResourceUUID: "",
-		Status:       domain.AuditStatusSuccess,
-	})
-}
-
-func (c *AuthController) auditAuthFailure(r *http.Request, action string, err error) {
-	reason := err.Error()
-	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
-		ActorUUID:     actorUUID(r),
-		Action:        action,
-		ResourceType:  domain.AuditResourceAuth,
-		ResourceUUID:  "",
-		Status:        domain.AuditStatusFailure,
-		FailureReason: &reason,
-	})
+	}, err)
 }
 
 // @Summary		Refresh the session tokens
