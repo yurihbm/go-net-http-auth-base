@@ -156,6 +156,6 @@ func (c *client) stepUp(email string) {
 	requested := c.do(http.MethodPost, "/auth/step-up", nil)
 	require.Equal(c.t, http.StatusAccepted, requested.Status)
 
-	verified := c.do(http.MethodPost, "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: mailbox.otpCode(c.t, email)})
+	verified := c.do(http.MethodPost, "/auth/step-up/verify", domain.CodeDTO{Code: mailbox.otpCode(c.t, email)})
 	require.Equal(c.t, http.StatusOK, verified.Status)
 }

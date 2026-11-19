@@ -52,10 +52,6 @@ type StartOAuthSignupDTO struct {
 	ProviderUserID string
 }
 
-type SignupVerifyDTO struct {
-	Code string `json:"code" validate:"required,len=6,numeric"`
-}
-
 type SignupResult struct {
 	User   *User
 	Tokens AuthTokens

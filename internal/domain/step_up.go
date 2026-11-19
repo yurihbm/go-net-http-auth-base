@@ -30,10 +30,6 @@ type StepUpChallenge struct {
 	CreatedAt   int64
 }
 
-type StepUpVerifyDTO struct {
-	Code string `json:"code" validate:"required,len=6,numeric"`
-}
-
 type StepUpRepository interface {
 	Upsert(ctx context.Context, challenge StepUpChallenge, cooldown time.Duration) (*StepUpChallenge, error)
 	Attempt(ctx context.Context, userUUID string, sessionUUID string, maxAttempts int) (*StepUpChallenge, error)

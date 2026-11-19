@@ -37,7 +37,7 @@ func TestSignupAndLogin(t *testing.T) {
 	})
 
 	t.Run("another browser without the cookie cannot verify the code", func(t *testing.T) {
-		resp := newClient(t).do(http.MethodPost, "/auth/signup/verify", domain.SignupVerifyDTO{Code: code})
+		resp := newClient(t).do(http.MethodPost, "/auth/signup/verify", domain.CodeDTO{Code: code})
 
 		assert.Equal(t, http.StatusUnauthorized, resp.Status)
 		assert.Equal(t, "auth.signup.noPending", resp.Body.Error)
@@ -45,7 +45,7 @@ func TestSignupAndLogin(t *testing.T) {
 
 	var user domain.User
 	t.Run("verifying the code creates the account and signs in", func(t *testing.T) {
-		resp := c.do(http.MethodPost, "/auth/signup/verify", domain.SignupVerifyDTO{Code: code})
+		resp := c.do(http.MethodPost, "/auth/signup/verify", domain.CodeDTO{Code: code})
 
 		require.Equal(t, http.StatusCreated, resp.Status)
 		assert.Equal(t, "auth.signup.success", resp.Body.Message)
@@ -71,7 +71,7 @@ func TestSignupAndLogin(t *testing.T) {
 		require.NoError(t, err)
 		replay.jar.SetCookies(base, []*http.Cookie{{Name: pendingCookie.Name, Value: pendingCookie.Value, Path: "/"}})
 
-		resp := replay.do(http.MethodPost, "/auth/signup/verify", domain.SignupVerifyDTO{Code: code})
+		resp := replay.do(http.MethodPost, "/auth/signup/verify", domain.CodeDTO{Code: code})
 
 		assert.Equal(t, http.StatusUnauthorized, resp.Status)
 		assert.Equal(t, "auth.signup.noPending", resp.Body.Error)
