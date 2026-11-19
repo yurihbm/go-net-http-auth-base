@@ -30,7 +30,7 @@ const (
 	serverWriteTimeout      = 30 * time.Second
 	serverIdleTimeout       = 60 * time.Second
 
-	expiredSessionsSweepInterval = time.Hour
+	expiredRecordsSweepInterval = time.Hour
 )
 
 // runEvery runs fn on every interval tick until ctx is cancelled.
@@ -133,8 +133,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	sessionsSweeper := infra.NewExpiredSessionsSweeper(pool)
-	if err := sessionsSweeper.RunMaintenance(ctx); err != nil {
+	recordsSweeper := infra.NewExpiredRecordsSweeper(pool)
+	if err := recordsSweeper.RunMaintenance(ctx); err != nil {
 		slog.Error("Failed to sweep expired sessions", "error", err)
 		os.Exit(1)
 	}
@@ -153,9 +153,9 @@ func main() {
 
 	// Sweep expired sessions and step-up challenges in background — stops on shutdown signal.
 	runEvery(
-		ctx, &wg, expiredSessionsSweepInterval,
+		ctx, &wg, expiredRecordsSweepInterval,
 		func() {
-			if err := sessionsSweeper.RunMaintenance(ctx); err != nil {
+			if err := recordsSweeper.RunMaintenance(ctx); err != nil {
 				slog.Error("Failed to sweep expired sessions", "error", err)
 			}
 		},
