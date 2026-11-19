@@ -38,26 +38,26 @@ func (r *EmailSendLimitsPostgresRepository) ReserveSend(ctx context.Context, ema
 	return nil
 }
 
-func (r *EmailSendLimitsPostgresRepository) CodeFailures(ctx context.Context, email string, window time.Duration) (int, error) {
-	failures, err := r.q.GetEmailCodeFailures(ctx, postgres.GetEmailCodeFailuresParams{
+func (r *EmailSendLimitsPostgresRepository) ReserveCodeGuess(ctx context.Context, email string, window time.Duration) error {
+	_, err := r.q.ReserveEmailCodeGuess(ctx, postgres.ReserveEmailCodeGuessParams{
 		Email:         email,
 		FailureWindow: toInterval(window),
+		MaxFailures:   int32(domain.EmailMaxCodeFailures),
 	})
 	if err != nil {
-		return 0, domain.NewInternalServerError("auth.email.internalServerError", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrEmailCodeLocked
+		}
+		return domain.NewInternalServerError("auth.email.internalServerError", err)
 	}
-	return int(failures), nil
+	return nil
 }
 
-func (r *EmailSendLimitsPostgresRepository) RecordCodeFailure(ctx context.Context, email string, window time.Duration) (int, error) {
-	failures, err := r.q.RecordEmailCodeFailure(ctx, postgres.RecordEmailCodeFailureParams{
-		Email:         email,
-		FailureWindow: toInterval(window),
-	})
-	if err != nil {
-		return 0, domain.NewInternalServerError("auth.email.internalServerError", err)
+func (r *EmailSendLimitsPostgresRepository) RefundCodeGuess(ctx context.Context, email string) error {
+	if err := r.q.RefundEmailCodeGuess(ctx, email); err != nil {
+		return domain.NewInternalServerError("auth.email.internalServerError", err)
 	}
-	return int(failures), nil
+	return nil
 }
 
 func toInterval(d time.Duration) pgtype.Interval {

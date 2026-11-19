@@ -20,12 +20,12 @@ func (m *EmailSendLimiterMock) ReserveSend(ctx context.Context, email string, co
 	return args.Error(0)
 }
 
-func (m *EmailSendLimiterMock) CodeFailures(ctx context.Context, email string, window time.Duration) (int, error) {
+func (m *EmailSendLimiterMock) ReserveCodeGuess(ctx context.Context, email string, window time.Duration) error {
 	args := m.Called(email, window)
-	return args.Int(0), args.Error(1)
+	return args.Error(0)
 }
 
-func (m *EmailSendLimiterMock) RecordCodeFailure(ctx context.Context, email string, window time.Duration) (int, error) {
-	args := m.Called(email, window)
-	return args.Int(0), args.Error(1)
+func (m *EmailSendLimiterMock) RefundCodeGuess(ctx context.Context, email string) error {
+	args := m.Called(email)
+	return args.Error(0)
 }

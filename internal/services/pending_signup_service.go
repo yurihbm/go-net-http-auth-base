@@ -103,26 +103,27 @@ func (s *pendingSignupService) Attempt(ctx context.Context, pendingUUID string, 
 		return err
 	}
 
-	failures, err := s.limiter.CodeFailures(ctx, pending.Email, domain.EmailCodeFailureWindow)
-	if err != nil {
+	if err := s.limiter.ReserveCodeGuess(ctx, pending.Email, domain.EmailCodeFailureWindow); err != nil {
 		return err
-	}
-	if failures >= domain.EmailMaxCodeFailures {
-		return domain.ErrEmailCodeLocked
 	}
 
 	attempted, err := s.pending.Attempt(ctx, pendingUUID, domain.SignupMaxAttempts)
 	if err != nil {
+		s.refundCodeGuess(ctx, pending.Email)
 		return err
 	}
 
 	if !hmac.Equal([]byte(attempted.CodeHash), []byte(s.hashCode(pendingUUID, code))) {
-		if _, err := s.limiter.RecordCodeFailure(ctx, attempted.Email, domain.EmailCodeFailureWindow); err != nil {
-			return err
-		}
 		return domain.ErrSignupInvalidCode
 	}
+	s.refundCodeGuess(ctx, pending.Email)
 	return nil
+}
+
+func (s *pendingSignupService) refundCodeGuess(ctx context.Context, email string) {
+	if err := s.limiter.RefundCodeGuess(ctx, email); err != nil {
+		slog.ErrorContext(ctx, "code guess refund failed", "error", err)
+	}
 }
 
 func (s *pendingSignupService) Consume(ctx context.Context, pendingUUID string, code string) (*domain.PendingSignup, error) {

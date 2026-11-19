@@ -141,8 +141,8 @@ func TestCompleteSignup_Transaction(t *testing.T) {
 		pending, err := f.pendingRepo.FindByUUID(context.Background(), f.pendingUUID)
 		require.NoError(t, err)
 		assert.Equal(t, 1, pending.Attempts)
-		failures, err := repositories.NewEmailSendLimitsPostgresRepository(testDB).CodeFailures(context.Background(), email, domain.EmailCodeFailureWindow)
-		require.NoError(t, err)
+		var failures int
+		require.NoError(t, testDB.QueryRow(context.Background(), "SELECT failures FROM email_send_limits WHERE email = $1", email).Scan(&failures))
 		assert.Equal(t, 1, failures)
 		assert.Equal(t, 0, countUsers(t))
 	})

@@ -75,8 +75,8 @@ type PendingSignupRepository interface {
 
 type EmailSendLimiter interface {
 	ReserveSend(ctx context.Context, email string, cooldown time.Duration, window time.Duration, maxSends int) error
-	CodeFailures(ctx context.Context, email string, window time.Duration) (int, error)
-	RecordCodeFailure(ctx context.Context, email string, window time.Duration) (int, error)
+	ReserveCodeGuess(ctx context.Context, email string, window time.Duration) error
+	RefundCodeGuess(ctx context.Context, email string) error
 }
 
 type PendingSignupService interface {

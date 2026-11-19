@@ -3,6 +3,8 @@ package repositories_test
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -72,59 +74,99 @@ func TestEmailSendLimitsPostgresRepository_ReserveSend(t *testing.T) {
 
 	t.Run("success after a recorded failure", func(t *testing.T) {
 		limiter := setupEmailSendLimitsRepoTest(t)
-		_, err := limiter.RecordCodeFailure(context.Background(), limitedEmail, domain.EmailCodeFailureWindow)
-		require.NoError(t, err)
+		require.NoError(t, limiter.ReserveCodeGuess(context.Background(), limitedEmail, domain.EmailCodeFailureWindow))
 
 		assert.NoError(t, reserveSend(limiter))
 	})
 }
 
-func TestEmailSendLimitsPostgresRepository_RecordCodeFailure(t *testing.T) {
+func codeFailures(t *testing.T) int {
+	t.Helper()
+	var failures int
+	require.NoError(t, testDB.QueryRow(context.Background(), "SELECT failures FROM email_send_limits WHERE email = $1", limitedEmail).Scan(&failures))
+	return failures
+}
+
+func TestEmailSendLimitsPostgresRepository_ReserveCodeGuess(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("success counts failures and restarts after the window", func(t *testing.T) {
+	t.Run("success counts guesses up to the cap, then locks", func(t *testing.T) {
 		limiter := setupEmailSendLimitsRepoTest(t)
-		require.NoError(t, reserveSend(limiter))
 
-		for i := 1; i <= 3; i++ {
-			failures, err := limiter.RecordCodeFailure(ctx, limitedEmail, domain.EmailCodeFailureWindow)
-			require.NoError(t, err)
-			assert.Equal(t, i, failures)
+		for range domain.EmailMaxCodeFailures {
+			require.NoError(t, limiter.ReserveCodeGuess(ctx, limitedEmail, domain.EmailCodeFailureWindow))
+		}
+
+		assert.Equal(t, domain.ErrEmailCodeLocked, limiter.ReserveCodeGuess(ctx, limitedEmail, domain.EmailCodeFailureWindow))
+		assert.Equal(t, domain.EmailMaxCodeFailures, codeFailures(t))
+	})
+
+	t.Run("success window restarts after it ends", func(t *testing.T) {
+		limiter := setupEmailSendLimitsRepoTest(t)
+		for range domain.EmailMaxCodeFailures {
+			require.NoError(t, limiter.ReserveCodeGuess(ctx, limitedEmail, domain.EmailCodeFailureWindow))
 		}
 
 		shiftEmailSendLimit(t, "failures_window_start", -domain.EmailCodeFailureWindow)
-		failures, err := limiter.RecordCodeFailure(ctx, limitedEmail, domain.EmailCodeFailureWindow)
-		require.NoError(t, err)
-		assert.Equal(t, 1, failures)
+
+		require.NoError(t, limiter.ReserveCodeGuess(ctx, limitedEmail, domain.EmailCodeFailureWindow))
+		assert.Equal(t, 1, codeFailures(t))
+	})
+
+	t.Run("success concurrent guesses never exceed the cap", func(t *testing.T) {
+		limiter := setupEmailSendLimitsRepoTest(t)
+		var granted, locked atomic.Int32
+
+		var wg sync.WaitGroup
+		for range 30 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				switch err := limiter.ReserveCodeGuess(ctx, limitedEmail, domain.EmailCodeFailureWindow); {
+				case err == nil:
+					granted.Add(1)
+				case errors.Is(err, domain.ErrEmailCodeLocked):
+					locked.Add(1)
+				default:
+					t.Errorf("unexpected error: %v", err)
+				}
+			}()
+		}
+		wg.Wait()
+
+		assert.Equal(t, int32(domain.EmailMaxCodeFailures), granted.Load())
+		assert.Equal(t, int32(30-domain.EmailMaxCodeFailures), locked.Load())
+		assert.Equal(t, domain.EmailMaxCodeFailures, codeFailures(t))
 	})
 }
 
-func TestEmailSendLimitsPostgresRepository_CodeFailures(t *testing.T) {
+func TestEmailSendLimitsPostgresRepository_RefundCodeGuess(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("success zero for an unknown address", func(t *testing.T) {
+	t.Run("success gives one guess back", func(t *testing.T) {
 		limiter := setupEmailSendLimitsRepoTest(t)
-
-		failures, err := limiter.CodeFailures(ctx, limitedEmail, domain.EmailCodeFailureWindow)
-
-		require.NoError(t, err)
-		assert.Equal(t, 0, failures)
-	})
-
-	t.Run("success counts failures inside the window only", func(t *testing.T) {
-		limiter := setupEmailSendLimitsRepoTest(t)
-		for range 2 {
-			_, err := limiter.RecordCodeFailure(ctx, limitedEmail, domain.EmailCodeFailureWindow)
-			require.NoError(t, err)
+		for range 3 {
+			require.NoError(t, limiter.ReserveCodeGuess(ctx, limitedEmail, domain.EmailCodeFailureWindow))
 		}
 
-		failures, err := limiter.CodeFailures(ctx, limitedEmail, domain.EmailCodeFailureWindow)
-		require.NoError(t, err)
-		assert.Equal(t, 2, failures)
+		require.NoError(t, limiter.RefundCodeGuess(ctx, limitedEmail))
 
-		shiftEmailSendLimit(t, "failures_window_start", -domain.EmailCodeFailureWindow)
-		failures, err = limiter.CodeFailures(ctx, limitedEmail, domain.EmailCodeFailureWindow)
-		require.NoError(t, err)
-		assert.Equal(t, 0, failures)
+		assert.Equal(t, 2, codeFailures(t))
+	})
+
+	t.Run("success never goes below zero", func(t *testing.T) {
+		limiter := setupEmailSendLimitsRepoTest(t)
+		require.NoError(t, limiter.ReserveCodeGuess(ctx, limitedEmail, domain.EmailCodeFailureWindow))
+
+		require.NoError(t, limiter.RefundCodeGuess(ctx, limitedEmail))
+		require.NoError(t, limiter.RefundCodeGuess(ctx, limitedEmail))
+
+		assert.Equal(t, 0, codeFailures(t))
+	})
+
+	t.Run("success unknown address is a no-op", func(t *testing.T) {
+		limiter := setupEmailSendLimitsRepoTest(t)
+
+		assert.NoError(t, limiter.RefundCodeGuess(ctx, limitedEmail))
 	})
 }
