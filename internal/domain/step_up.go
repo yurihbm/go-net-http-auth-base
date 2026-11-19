@@ -25,9 +25,7 @@ type StepUpChallenge struct {
 	UserUUID    string
 	SessionUUID string
 	CodeHash    string
-	Attempts    int
 	ExpiresAt   int64
-	CreatedAt   int64
 }
 
 type StepUpRepository interface {

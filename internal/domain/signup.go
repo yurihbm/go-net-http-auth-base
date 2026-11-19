@@ -39,10 +39,8 @@ type PendingSignup struct {
 	Provider       OAuthProviderName
 	ProviderUserID string
 	CodeHash       string
-	Attempts       int
 	CodeExpiresAt  int64
 	ExpiresAt      int64
-	CreatedAt      int64
 }
 
 type StartOAuthSignupDTO struct {
