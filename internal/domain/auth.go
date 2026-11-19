@@ -12,7 +12,6 @@ const (
 	TokenAudienceRefresh           TokenAudience = "refresh_token"
 	TokenAudienceExchange          TokenAudience = "exchange_token"
 	TokenAudienceOAuthState        TokenAudience = "oauth_state_token"
-	TokenAudienceEmailChange       TokenAudience = "email_change_token"
 	TokenAudienceEmailChangeRevert TokenAudience = "email_change_revert_token"
 )
 
@@ -21,7 +20,6 @@ const (
 	TokenExpirationRefresh           = time.Hour * 24 * 7 // 7 days
 	TokenExpirationExchange          = time.Minute        // 1 minute
 	TokenExpirationOAuthState        = time.Minute * 5    // 5 minutes
-	TokenExpirationEmailChange       = time.Hour          // 1 hour
 	TokenExpirationEmailChangeRevert = time.Hour * 72     // 72 hours
 )
 

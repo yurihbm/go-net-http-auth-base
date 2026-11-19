@@ -61,7 +61,7 @@ type RequestEmailChangeDTO struct {
 }
 
 type ConfirmEmailChangeDTO struct {
-	Token string `json:"token" validate:"required"`
+	Code string `json:"code" validate:"required,len=6,numeric"`
 }
 
 type RevertEmailChangeDTO struct {
@@ -83,8 +83,8 @@ type UsersService interface {
 	Create(context.Context, NewUserDTO) (*User, error)
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
 	Update(context.Context, Actor, string, UserUpdateDTO) (*User, error)
-	RequestEmailChange(context.Context, Actor, string) error
-	ConfirmEmailChange(context.Context, string) (*User, error)
+	RequestEmailChange(ctx context.Context, actor Actor, sessionUUID string, email string) error
+	ConfirmEmailChange(ctx context.Context, actor Actor, sessionUUID string, code string) (*User, error)
 	RevertEmailChange(context.Context, string) (*User, error)
 	Delete(context.Context, Actor, string) error
 }

@@ -65,7 +65,7 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		registry.On("Get", provider).Return(providerMock, nil)
 
 		service := services.NewAuthService(
-			services.NewUserService(usersRepo, new(mocks.EmailVerificationServiceMock), nil, nil, repositories.NewPostgresTransactor(testDB)),
+			services.NewUserService(usersRepo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, repositories.NewPostgresTransactor(testDB), nil),
 			nil,
 			serviceAuthRepo,
 			repositories.NewSessionsPostgresRepository(db),

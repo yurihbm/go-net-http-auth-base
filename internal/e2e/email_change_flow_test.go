@@ -47,18 +47,35 @@ func TestEmailChangeFlow(t *testing.T) {
 		assert.Equal(t, http.StatusOK, accepted.Status)
 	})
 
-	t.Run("request sends the confirmation link to the new address", func(t *testing.T) {
+	t.Run("request sends the code to the new address", func(t *testing.T) {
 		resp := phone.do(http.MethodPost, "/users/me/email", domain.RequestEmailChangeDTO{Email: newEmail})
 
 		require.Equal(t, http.StatusAccepted, resp.Status)
-		assert.NotEmpty(t, mailbox.linkToken(t, newEmail))
+		assert.Len(t, mailbox.otpCode(t, newEmail), 6)
 	})
 
-	var confirmToken string
-	t.Run("confirm changes the email and signs out every device", func(t *testing.T) {
-		confirmToken = mailbox.linkToken(t, newEmail)
+	t.Run("a second device cannot confirm with the code", func(t *testing.T) {
+		resp := laptop.do(http.MethodPost, "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: mailbox.otpCode(t, newEmail)})
 
-		resp := newClient(t).do(http.MethodPost, "/users/confirm-email-change", domain.ConfirmEmailChangeDTO{Token: confirmToken})
+		assert.Equal(t, http.StatusUnauthorized, resp.Status)
+		assert.Equal(t, "users.emailChange.noChallenge", resp.Body.Error)
+	})
+
+	t.Run("a wrong code is rejected", func(t *testing.T) {
+		wrong := "000000"
+		if mailbox.otpCode(t, newEmail) == wrong {
+			wrong = "111111"
+		}
+
+		resp := phone.do(http.MethodPost, "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: wrong})
+
+		assert.Equal(t, http.StatusUnauthorized, resp.Status)
+		assert.Equal(t, "users.emailChange.invalidCode", resp.Body.Error)
+	})
+
+	code := mailbox.otpCode(t, newEmail)
+	t.Run("confirm in the requesting session changes the email and signs out every device", func(t *testing.T) {
+		resp := phone.do(http.MethodPost, "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: code})
 
 		require.Equal(t, http.StatusOK, resp.Status)
 		cleared := map[string]bool{}
@@ -73,11 +90,14 @@ func TestEmailChangeFlow(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, laptop.do(http.MethodPost, "/auth/refresh", nil).Status)
 	})
 
-	t.Run("replayed confirm token is rejected", func(t *testing.T) {
-		resp := newClient(t).do(http.MethodPost, "/users/confirm-email-change", domain.ConfirmEmailChangeDTO{Token: confirmToken})
+	t.Run("the used code cannot be replayed", func(t *testing.T) {
+		device := newClient(t)
+		require.Equal(t, http.StatusOK, device.login(newEmail, user.Password).Status)
+
+		resp := device.do(http.MethodPost, "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: code})
 
 		assert.Equal(t, http.StatusUnauthorized, resp.Status)
-		assert.Equal(t, "users.emailChange.staleToken", resp.Body.Error)
+		assert.Equal(t, "users.emailChange.noChallenge", resp.Body.Error)
 	})
 
 	t.Run("another change right after is locked", func(t *testing.T) {

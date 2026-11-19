@@ -174,9 +174,9 @@ Every response uses the [standard format](#api-response-format). Authenticated e
 | `POST`   | `/users`                      | -     | Start a sign-up: emails a 6-digit code and sets the `pending_signup` cookie |
 | `POST`   | `/auth/signup/verify`         | -     | Create the account with the code (needs the `pending_signup` cookie); signs in |
 | `POST`   | `/auth/signup/resend`         | -     | Send a new sign-up code (needs the `pending_signup` cookie)         |
-| `POST`   | `/users/confirm-email-change` | -     | Apply an email change with the token from the confirmation link     |
 | `GET`    | `/users/me`                   | User  | Current user                                                        |
-| `POST`   | `/users/me/email`             | User  | Request an email change (confirmation link sent to the new address) |
+| `POST`   | `/users/me/email`             | User  | Request an email change (6-digit code sent to the new address)      |
+| `POST`   | `/users/me/email/confirm`     | User  | Confirm the email change with the code, in the same session; signs out every device |
 | `GET`    | `/users/{uuid}`               | User  | Get a user (self or admin)                                          |
 | `PUT`    | `/users/{uuid}`               | User  | Update a user's name (self or admin)                                |
 | `DELETE` | `/users/{uuid}`               | User  | Delete a user (self or admin)                                       |
@@ -222,7 +222,6 @@ All variables are read and validated once at startup in `config/config.go`; the 
 | `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`                           | -                              | Comma-separated CORS allow lists (exact match)                                                      |
 | `RATE_LIMIT_REQUESTS_PER_SECOND`, `RATE_LIMIT_BURST`                     | `20`, `50`                     | Per-IP token bucket                                                                                 |
 | `RESEND_API_KEY`, `EMAIL_FROM`                                           | - (**required** outside development) | Resend credentials and sender; without a key, emails are only logged                          |
-| `EMAIL_CHANGE_URL`                                                       | - (**required** outside development) | Frontend URL that receives the email change confirmation token                                |
 | `EMAIL_CHANGE_REVERT_URL`                                                | - (**required** outside development) | Frontend URL that receives the "it wasn't me" revert token                                     |
 | `OTEL_*`                                                                 | see [Observability](#-observability) | OpenTelemetry export                                                                          |
 | `TEST_DB_PORT_START`, `TEST_DB_PORT_END`                                 | `15432`, `15499`               | Host port range for the integration test database container (tests only)                            |

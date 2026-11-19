@@ -48,8 +48,10 @@ victim can be tricked into opening.
 - **Rollout in layers:** (1) credentials sign-up (this change); (2) OAuth
   providers that do not attest a verified email go through the same pending
   flow (kind `oauth`) instead of being rejected; (3) the email change is
-  confirmed by a code bound to the session that requested it, which will
-  supersede the link-based confirmation of ADR-008; (4) Microsoft is kept as an
+  confirmed by a 6-digit code mailed to the new address and bound to the
+  session that requested it (`POST /users/me/email/confirm`, same session only),
+  which supersedes the link-based confirmation of ADR-008 (the undo link to the
+  old address stays); (4) Microsoft is kept as an
   identity-only provider that always reports `EmailVerified=false` and is keyed
   by the `sub` from userinfo, which is pairwise per app registration, so its
   email is always proven by code.
@@ -74,8 +76,14 @@ Rejected alternatives:
   the `email_verification_token` audience and `EMAIL_VERIFICATION_URL` are gone.
 - OAuth linking into an existing account only depends on the provider email
   being verified, because every local account is verified.
-- `infra.ExpiredRecordsSweeper` also deletes expired pending sign-ups and
-  `email_send_limits` rows whose windows both ended.
+- `infra.ExpiredRecordsSweeper` also deletes expired pending sign-ups,
+  `email_send_limits` rows whose windows both ended and expired email change
+  challenges.
+- `POST /users/confirm-email-change`, the `email_change_token` audience and
+  `EMAIL_CHANGE_URL` are gone: the email change challenge lives in
+  `email_change_challenges` (one per session, 10 minutes, 5 attempts, 60 seconds
+  cooldown) and confirming it revokes every session, so the client signs in
+  again.
 - Residual risks:
   - Per-address brute force: with 20 wrong codes per address per 24 hours over a
     space of one million codes, an attacker who can keep starting flows has

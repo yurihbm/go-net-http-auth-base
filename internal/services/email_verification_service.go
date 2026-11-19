@@ -13,64 +13,25 @@ import (
 type emailVerificationService struct {
 	tokens               domain.TokenService
 	emailProvider        domain.EmailProvider
-	emailChangeURL       string
 	emailChangeRevertURL string
 }
 
-func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, emailChangeURL string, emailChangeRevertURL string) domain.EmailVerificationService {
+func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, emailChangeRevertURL string) domain.EmailVerificationService {
 	return &emailVerificationService{
 		tokens:               tokens,
 		emailProvider:        emailProvider,
-		emailChangeURL:       emailChangeURL,
 		emailChangeRevertURL: emailChangeRevertURL,
 	}
 }
 
-func (s *emailVerificationService) SendEmailChangeEmail(ctx context.Context, user *domain.User, newEmail string) error {
-	link, err := s.tokenLink(ctx, s.emailChangeURL, domain.GenerateTokenDTO{
-		Subject:  user.UUID,
-		Audience: domain.TokenAudienceEmailChange,
-		Payload: map[string]any{
-			"current_email": user.Email,
-			"new_email":     newEmail,
-			"ver":           user.EmailVersion,
-		},
-	})
-	if err != nil {
-		return err
-	}
-
+func (s *emailVerificationService) SendEmailChangeCode(ctx context.Context, newEmail string, code string) error {
+	minutes := int(domain.EmailChangeCodeTTL.Minutes())
 	return s.emailProvider.Send(ctx, domain.EmailMessage{
 		To:      newEmail,
 		Subject: "Confirm your new email address",
-		Text:    fmt.Sprintf("Confirm your new email address by opening this link: %s", link),
-		HTML:    fmt.Sprintf(`<p>Confirm your new email address by clicking <a href="%s">this link</a>.</p>`, html.EscapeString(link)),
+		Text:    fmt.Sprintf("Your email change code is %s. Enter it in the browser where you requested the change to confirm it as the email of your account. It expires in %d minutes. Never share this code with anyone. If you did not request this change, ignore this email.", code, minutes),
+		HTML:    fmt.Sprintf("<p>Your email change code is <strong>%s</strong>. Enter it in the browser where you requested the change to confirm it as the email of your account. It expires in %d minutes.</p><p>Never share this code with anyone. If you did not request this change, ignore this email.</p>", html.EscapeString(code), minutes),
 	})
-}
-
-func (s *emailVerificationService) VerifyEmailChangeToken(ctx context.Context, token string) (*domain.EmailChange, error) {
-	tokenData, err := s.tokens.VerifyToken(ctx, domain.VerifyTokenDTO{
-		Token:    token,
-		Audience: domain.TokenAudienceEmailChange,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	payload, _ := tokenData.Payload.(map[string]any)
-	currentEmail, _ := payload["current_email"].(string)
-	newEmail, _ := payload["new_email"].(string)
-	version, ok := payload["ver"].(float64)
-	if currentEmail == "" || newEmail == "" || !ok {
-		return nil, ErrInvalidToken
-	}
-
-	return &domain.EmailChange{
-		UserUUID:     tokenData.Subject,
-		CurrentEmail: currentEmail,
-		NewEmail:     newEmail,
-		Version:      int(version),
-	}, nil
 }
 
 func (s *emailVerificationService) SendEmailChangedNotice(ctx context.Context, revert domain.EmailChangeRevert) error {

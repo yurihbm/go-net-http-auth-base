@@ -23,7 +23,7 @@ const (
 func TestUsersService_EmailNormalization(t *testing.T) {
 	t.Run("Create stores the normalized email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil)
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).
 			Return(&domain.User{UUID: "uuid", Email: normalizedEmail}, nil).Once()
@@ -36,7 +36,7 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 
 	t.Run("CreateOAuth stores the normalized email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil)
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).
 			Return(&domain.User{UUID: "uuid", Email: normalizedEmail}, nil).Once()
@@ -49,7 +49,7 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 
 	t.Run("GetByEmail looks up the normalized email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil)
 		repo.On("FindByEmail", normalizedEmail).Return(&domain.User{UUID: "uuid", Email: normalizedEmail}, nil).Once()
 
 		user, err := service.GetByEmail(context.Background(), messyEmail)
@@ -62,12 +62,12 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 
 func newAuthServiceOverRealUsers(repo *mocks.UsersRepositoryMock, authRepo *mocks.AuthRepositoryMock, registry *mocks.OAuthProviderRegistryMock, emailProvider *mocks.EmailProviderMock) domain.AuthService {
 	tokens := services.NewTokenService(normalizationKey)
-	emailVerification := services.NewEmailVerificationService(tokens, emailProvider, emailChangeURL, emailChangeRevertURL)
+	emailVerification := services.NewEmailVerificationService(tokens, emailProvider, emailChangeRevertURL)
 	sessionsRepo := new(mocks.SessionsRepositoryMock)
 	sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil)
 	sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil)
 	sessionsRepo.On("DeleteOldestBeyond", mock.Anything, mock.Anything).Return(nil)
-	return services.NewAuthService(services.NewUserService(repo, emailVerification, nil, nil, newTransactorMock()), nil, authRepo, sessionsRepo, registry, newTransactorMock(), tokens, testSessionMaxAge, testMaxSessions)
+	return services.NewAuthService(services.NewUserService(repo, emailVerification, nil, nil, nil, nil, newTransactorMock(), nil), nil, authRepo, sessionsRepo, registry, newTransactorMock(), tokens, testSessionMaxAge, testMaxSessions)
 }
 
 func TestAuthService_EmailNormalization(t *testing.T) {
@@ -108,7 +108,7 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 			stored = args.Get(0).(domain.User)
 			stored.UUID = "local-uuid"
 		}).Return(&domain.User{UUID: "local-uuid", Email: normalizedEmail}, nil).Once()
-		_, err := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock()).Create(context.Background(), domain.NewUserDTO{Name: "User", Email: messyEmail, PasswordHash: "hash"})
+		_, err := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil).Create(context.Background(), domain.NewUserDTO{Name: "User", Email: messyEmail, PasswordHash: "hash"})
 		require.NoError(t, err)
 		require.Equal(t, normalizedEmail, stored.Email)
 

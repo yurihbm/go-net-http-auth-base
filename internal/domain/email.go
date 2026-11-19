@@ -13,13 +13,6 @@ type EmailProvider interface {
 	Send(ctx context.Context, msg EmailMessage) error
 }
 
-type EmailChange struct {
-	UserUUID     string
-	CurrentEmail string
-	NewEmail     string
-	Version      int
-}
-
 type EmailChangeRevert struct {
 	UserUUID  string
 	OldEmail  string
@@ -31,8 +24,7 @@ type EmailChangeRevert struct {
 type EmailVerificationService interface {
 	SendSignupCode(ctx context.Context, email string, code string) error
 	SendOAuthSignupCode(ctx context.Context, email string, code string, provider OAuthProviderName) error
-	SendEmailChangeEmail(ctx context.Context, user *User, newEmail string) error
-	VerifyEmailChangeToken(ctx context.Context, token string) (*EmailChange, error)
+	SendEmailChangeCode(ctx context.Context, newEmail string, code string) error
 	SendStepUpCode(ctx context.Context, email string, code string) error
 	SendEmailChangedNotice(ctx context.Context, revert EmailChangeRevert) error
 	VerifyEmailChangeRevertToken(ctx context.Context, token string) (*EmailChangeRevert, error)
