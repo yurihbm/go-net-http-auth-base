@@ -15,10 +15,7 @@ import (
 	"go-net-http-auth-base/internal/domain"
 )
 
-var (
-	ErrStepUpInvalidCode = domain.NewUnauthorizedError("auth.stepUp.invalidCode")
-	ErrStepUpUserLocked  = domain.NewTooManyRequestsError("auth.stepUp.userLocked")
-)
+var ErrStepUpInvalidCode = domain.NewUnauthorizedError("auth.stepUp.invalidCode")
 
 type stepUpService struct {
 	challenges domain.StepUpRepository
@@ -61,7 +58,7 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 		return err
 	}
 	if isStepUpLocked(user) {
-		return ErrStepUpUserLocked
+		return domain.ErrStepUpUserLocked
 	}
 
 	code, err := generateStepUpCode()
@@ -89,22 +86,20 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 }
 
 func (s *stepUpService) VerifyCode(ctx context.Context, userUUID string, sessionUUID string, code string) (int64, error) {
-	user, err := s.users.FindByUUID(ctx, userUUID)
-	if err != nil {
+	if err := s.users.ReserveStepUpGuess(ctx, userUUID, domain.StepUpUserFailureWindow); err != nil {
 		return 0, err
-	}
-	if isStepUpLocked(user) {
-		return 0, ErrStepUpUserLocked
 	}
 
 	challenge, err := s.challenges.Attempt(ctx, userUUID, sessionUUID, domain.StepUpMaxAttempts)
 	if err != nil {
+		s.refundGuess(ctx, userUUID)
 		return 0, err
 	}
 
 	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.hashCode(sessionUUID, code))) {
 		return 0, s.rejectWrongCode(ctx, userUUID, sessionUUID)
 	}
+	s.refundGuess(ctx, userUUID)
 
 	until := time.Now().Add(domain.StepUpElevationWindow)
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
@@ -134,10 +129,6 @@ func (s *stepUpService) IsElevated(ctx context.Context, userUUID string, session
 }
 
 func (s *stepUpService) rejectWrongCode(ctx context.Context, userUUID string, sessionUUID string) error {
-	if _, err := s.users.RecordStepUpFailure(ctx, userUUID, domain.StepUpUserFailureWindow); err != nil {
-		return err
-	}
-
 	failures, err := s.sessions.IncrementStepUpFailures(ctx, userUUID, sessionUUID)
 	if err != nil {
 		return err
@@ -150,6 +141,12 @@ func (s *stepUpService) rejectWrongCode(ctx context.Context, userUUID string, se
 		return err
 	}
 	return domain.ErrStepUpSessionRevoked
+}
+
+func (s *stepUpService) refundGuess(ctx context.Context, userUUID string) {
+	if err := s.users.RefundStepUpGuess(ctx, userUUID); err != nil {
+		slog.ErrorContext(ctx, "step-up guess refund failed", "error", err, "user_uuid", userUUID)
+	}
 }
 
 func (s *stepUpService) hashCode(sessionUUID string, code string) string {
