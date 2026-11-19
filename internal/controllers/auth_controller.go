@@ -217,7 +217,7 @@ func (c *AuthController) RequestStepUp(w http.ResponseWriter, r *http.Request) {
 // @Tags			auth
 // @Accept			json
 // @Produce		json
-// @Param			body	body		domain.StepUpVerifyDTO					true	"Code"
+// @Param			body	body		domain.CodeDTO					true	"Code"
 // @Success		200		{object}	api.ResponseBody[map[string]int64]	"Session elevated; step_up_until is a unix timestamp"
 // @Failure		400		{object}	api.ResponseBody[any]					"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]					"Invalid code (auth.stepUp.invalidCode), no active challenge (auth.stepUp.noChallenge) or session revoked after too many failures (auth.stepUp.sessionRevoked, clears the auth cookies)"
@@ -225,7 +225,7 @@ func (c *AuthController) RequestStepUp(w http.ResponseWriter, r *http.Request) {
 // @Failure		500		{object}	api.ResponseBody[any]					"Internal server error"
 // @Router			/auth/step-up/verify [post]
 func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
-	dto, err := api.DecodeAndValidate[domain.StepUpVerifyDTO](r)
+	dto, err := api.DecodeAndValidate[domain.CodeDTO](r)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
@@ -255,7 +255,7 @@ func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
 // @Tags			auth
 // @Accept			json
 // @Produce		json
-// @Param			body	body		domain.SignupVerifyDTO			true	"Code"
+// @Param			body	body		domain.CodeDTO			true	"Code"
 // @Success		201		{object}	api.ResponseBody[domain.User]	"Account created and logged in (auth.signup.success)"
 // @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]			"Wrong code (auth.signup.invalidCode), or no pending sign-up: missing cookie, expired, already used or out of attempts (auth.signup.noPending)"
@@ -270,7 +270,7 @@ func (c *AuthController) VerifySignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dto, err := api.DecodeAndValidate[domain.SignupVerifyDTO](r)
+	dto, err := api.DecodeAndValidate[domain.CodeDTO](r)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return

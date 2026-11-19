@@ -314,7 +314,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.SignupVerifyDTO"
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.CodeDTO"
                         }
                     }
                 ],
@@ -416,7 +416,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.StepUpVerifyDTO"
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.CodeDTO"
                         }
                     }
                 ],
@@ -1294,6 +1294,17 @@ const docTemplate = `{
                 }
             }
         },
+        "go-net-http-auth-base_internal_domain.CodeDTO": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
         "go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO": {
             "type": "object",
             "required": [
@@ -1358,28 +1369,6 @@ const docTemplate = `{
             ],
             "properties": {
                 "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "go-net-http-auth-base_internal_domain.SignupVerifyDTO": {
-            "type": "object",
-            "required": [
-                "code"
-            ],
-            "properties": {
-                "code": {
-                    "type": "string"
-                }
-            }
-        },
-        "go-net-http-auth-base_internal_domain.StepUpVerifyDTO": {
-            "type": "object",
-            "required": [
-                "code"
-            ],
-            "properties": {
-                "code": {
                     "type": "string"
                 }
             }

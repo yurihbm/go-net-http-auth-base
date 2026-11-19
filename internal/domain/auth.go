@@ -67,6 +67,10 @@ type CredentialsLoginDTO struct {
 	Password string `json:"password" validate:"required"`
 }
 
+type CodeDTO struct {
+	Code string `json:"code" validate:"required,len=6,numeric"`
+}
+
 type AuthTokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`

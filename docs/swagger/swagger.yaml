@@ -111,6 +111,13 @@ definitions:
       uuid:
         type: string
     type: object
+  go-net-http-auth-base_internal_domain.CodeDTO:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
   go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO:
     properties:
       token:
@@ -155,20 +162,6 @@ definitions:
         type: string
     required:
     - token
-    type: object
-  go-net-http-auth-base_internal_domain.SignupVerifyDTO:
-    properties:
-      code:
-        type: string
-    required:
-    - code
-    type: object
-  go-net-http-auth-base_internal_domain.StepUpVerifyDTO:
-    properties:
-      code:
-        type: string
-    required:
-    - code
     type: object
   go-net-http-auth-base_internal_domain.User:
     properties:
@@ -524,7 +517,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/go-net-http-auth-base_internal_domain.SignupVerifyDTO'
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.CodeDTO'
       produces:
       - application/json
       responses:
@@ -596,7 +589,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/go-net-http-auth-base_internal_domain.StepUpVerifyDTO'
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.CodeDTO'
       produces:
       - application/json
       responses:

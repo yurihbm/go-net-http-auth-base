@@ -496,7 +496,7 @@ func TestAuthController_VerifyStepUp(t *testing.T) {
 		sessionUUID = "session-uuid"
 		until       = int64(1700000000)
 	)
-	dto := domain.StepUpVerifyDTO{Code: "123456"}
+	dto := domain.CodeDTO{Code: "123456"}
 
 	t.Run("success", func(t *testing.T) {
 		controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
@@ -519,7 +519,7 @@ func TestAuthController_VerifyStepUp(t *testing.T) {
 	t.Run("error - validation", func(t *testing.T) {
 		controller, _, stepUpMock, _ := newTestAuthControllerWithStepUp()
 
-		w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: "12"})
+		w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.CodeDTO{Code: "12"})
 		controller.VerifyStepUp(w, withSession(req, userUUID, sessionUUID))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -547,7 +547,7 @@ func TestAuthController_VerifyStepUp_SessionRevoked(t *testing.T) {
 	stepUpMock.On("VerifyCode", "user-uuid", "session-uuid", "123456").
 		Return(int64(0), domain.ErrStepUpSessionRevoked).Once()
 
-	w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: "123456"})
+	w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.CodeDTO{Code: "123456"})
 	controller.VerifyStepUp(w, withSession(req, "user-uuid", "session-uuid"))
 
 	var response api.ResponseBody[any]
@@ -562,7 +562,7 @@ func TestAuthController_VerifyStepUp_SessionRevoked(t *testing.T) {
 }
 
 func TestAuthController_VerifySignup(t *testing.T) {
-	dto := domain.SignupVerifyDTO{Code: "123456"}
+	dto := domain.CodeDTO{Code: "123456"}
 	user := &domain.User{UUID: "user-uuid", Name: "New User", Email: "new@example.com", Role: domain.RoleUser}
 	result := &domain.SignupResult{User: user, Tokens: domain.AuthTokens{AccessToken: "access", RefreshToken: "refresh"}}
 
@@ -637,7 +637,7 @@ func TestAuthController_VerifySignup(t *testing.T) {
 	t.Run("error - invalid code format", func(t *testing.T) {
 		controller, authMock, _, _ := newTestAuthControllerWithSignup(true)
 
-		w, req := getControllerArgs("POST", "/auth/signup/verify", domain.SignupVerifyDTO{Code: "12ab"})
+		w, req := getControllerArgs("POST", "/auth/signup/verify", domain.CodeDTO{Code: "12ab"})
 		req = withPendingSignupCookie(req, true, "pending-uuid")
 
 		controller.VerifySignup(w, req)
