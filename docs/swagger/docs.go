@@ -258,7 +258,7 @@ const docTemplate = `{
         },
         "/auth/signup/resend": {
             "post": {
-                "description": "Emails a new 6-digit code for the pending sign-up and invalidates the previous one. Requires the ` + "`" + `pending_signup` + "`" + ` cookie set by POST /users. One resend per 60 seconds; the sign-up itself still expires 1 hour after POST /users.",
+                "description": "Emails a new 6-digit code for the pending sign-up and invalidates the previous one. Requires the ` + "`" + `pending_signup` + "`" + ` cookie set by POST /users. One email per address per 60 seconds; the sign-up itself still expires 1 hour after POST /users.",
                 "produces": [
                     "application/json"
                 ],
@@ -280,7 +280,7 @@ const docTemplate = `{
                         }
                     },
                     "429": {
-                        "description": "Cooldown (auth.signup.cooldown) or too many emails to this address (auth.email.sendLimit)",
+                        "description": "An email went to this address in the last 60 seconds, or 5 in the last hour (auth.email.sendLimit)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }

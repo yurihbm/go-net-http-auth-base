@@ -104,7 +104,6 @@ CREATE TABLE pending_signups (
     attempts int NOT NULL DEFAULT 0,
     code_expires_at timestamptz NOT NULL,
     expires_at timestamptz NOT NULL,
-    last_sent_at timestamptz DEFAULT now() NOT NULL,
     created_at timestamptz DEFAULT now() NOT NULL,
     CONSTRAINT pending_signups_kind_fields CHECK (
         (kind = 'credentials' AND password_hash IS NOT NULL AND provider IS NULL AND provider_user_id IS NULL)
@@ -113,8 +112,6 @@ CREATE TABLE pending_signups (
 );
 
 CREATE INDEX idx_pending_signups_expires_at ON pending_signups (expires_at);
-
-CREATE INDEX idx_pending_signups_email_lower ON pending_signups (lower(email));
 
 CREATE TABLE email_send_limits (
     email text NOT NULL PRIMARY KEY,

@@ -37,7 +37,8 @@ victim can be tricked into opening.
   RETURNING`, single use, wins a double submit), creates the user (with the
   existing email reservation check) and starts the session. If the email was
   taken meanwhile, the transaction rolls back and the pending sign-up is kept.
-  `POST /auth/signup/resend` replaces the code (60 seconds cooldown).
+  `POST /auth/signup/resend` replaces the code, limited by the per-address
+  send limits below.
 - **Per-address limits** in `email_send_limits`, independent of the requester:
   one email per address every 60 seconds and 5 per hour (`429
   auth.email.sendLimit`), and 20 wrong codes per address in 24 hours (`429
