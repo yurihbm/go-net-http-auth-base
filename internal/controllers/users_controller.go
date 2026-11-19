@@ -40,10 +40,10 @@ func NewUsersController(
 
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users", c.CreateUser)
-	router.HandleFunc("POST /users/confirm-email-change", c.ConfirmEmailChange)
 	router.HandleFunc("POST /users/revert-email-change", c.RevertEmailChange)
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
 	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.RequestEmailChange)))
+	router.HandleFunc("POST /users/me/email/confirm", c.authMiddleware.Use(c.ConfirmEmailChange))
 	router.HandleFunc("GET /users/{uuid}", c.authMiddleware.Use(c.GetUserByUUID))
 	router.HandleFunc("PUT /users/{uuid}", c.authMiddleware.Use(c.UpdateUser))
 	router.HandleFunc("DELETE /users/{uuid}", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.DeleteUser)))
@@ -98,17 +98,18 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary		Request an email change
-// @Description	Sends a confirmation link to the new address; the email only changes after POST /users/confirm-email-change. Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify).
+// @Description	Emails a 6-digit code to the new address; the email only changes after POST /users/me/email/confirm succeeds in the same session. One email per address every 60 seconds and 5 per hour, and one request per session every 60 seconds. Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify).
 // @Tags			users
 // @Accept			json
 // @Produce		json
 // @Param			body	body		domain.RequestEmailChangeDTO	true	"New email address"
-// @Success		202		{object}	api.ResponseBody[any]			"Confirmation sent"
+// @Success		202		{object}	api.ResponseBody[any]			"Code sent"
 // @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]			"Unauthorized"
 // @Failure		403		{object}	api.ResponseBody[any]			"Step-up required (auth.stepUp.required)"
 // @Failure		409		{object}	api.ResponseBody[any]			"Conflict"
-// @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
+// @Failure		429		{object}	api.ResponseBody[any]			"Cooldown (users.emailChange.cooldown) or too many emails to the address (auth.email.sendLimit)"
+// @Failure		500		{object}	api.ResponseBody[any]			"Internal server error, or the email could not be sent (users.emailChange.sendFailed)"
 // @Router			/users/me/email [post]
 func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Request) {
 	dto, err := api.DecodeAndValidate[domain.RequestEmailChangeDTO](r)
@@ -118,7 +119,8 @@ func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Requ
 	}
 
 	actor := actorFromRequest(r)
-	if err := c.userService.RequestEmailChange(r.Context(), actor, dto.Email); err != nil {
+	_, sessionUUID := sessionFromRequest(r)
+	if err := c.userService.RequestEmailChange(r.Context(), actor, sessionUUID, dto.Email); err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 			ActorUUID:     actorUUID(r),
@@ -146,18 +148,19 @@ func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Requ
 }
 
 // @Summary		Confirm an email change
-// @Description	Applies the new email using the token from the confirmation link and marks it as verified.
+// @Description	Applies the new email with the code sent to it by POST /users/me/email, marks it as verified, signs out every device and clears the auth cookies. Only the session that requested the change can confirm it. Requires the `access_token` cookie set by POST /auth/login.
 // @Tags			users
 // @Accept			json
 // @Produce		json
-// @Param			body	body		domain.ConfirmEmailChangeDTO	true	"Confirmation token"
+// @Param			body	body		domain.ConfirmEmailChangeDTO	true	"Code"
 // @Success		200		{object}	api.ResponseBody[domain.User]	"Email changed"
 // @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
-// @Failure		401		{object}	api.ResponseBody[any]			"Unauthorized"
+// @Failure		401		{object}	api.ResponseBody[any]			"Invalid code (users.emailChange.invalidCode), no active challenge for this session (users.emailChange.noChallenge) or stale request (users.emailChange.staleToken)"
 // @Failure		404		{object}	api.ResponseBody[any]			"Not found"
-// @Failure		409		{object}	api.ResponseBody[any]			"Conflict"
+// @Failure		409		{object}	api.ResponseBody[any]			"Conflict, or locked after a recent change (users.emailChange.locked)"
+// @Failure		429		{object}	api.ResponseBody[any]			"Too many failed codes for the address in 24 hours (auth.email.codeLocked)"
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
-// @Router			/users/confirm-email-change [post]
+// @Router			/users/me/email/confirm [post]
 func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	dto, err := api.DecodeAndValidate[domain.ConfirmEmailChangeDTO](r)
 	if err != nil {
@@ -165,13 +168,25 @@ func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	user, err := c.userService.ConfirmEmailChange(r.Context(), dto.Token)
+	actor := actorFromRequest(r)
+	_, sessionUUID := sessionFromRequest(r)
+	user, err := c.userService.ConfirmEmailChange(r.Context(), actor, sessionUUID, dto.Code)
 	if err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			ActorUUID:     actorUUID(r),
+			Action:        domain.AuditActionEmailChange,
+			ResourceType:  domain.AuditResourceUser,
+			ResourceUUID:  actor.UUID,
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
 		api.HandleError(r.Context(), w, err)
 		return
 	}
 
 	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    actorUUID(r),
 		Action:       domain.AuditActionEmailChange,
 		ResourceType: domain.AuditResourceUser,
 		ResourceUUID: user.UUID,
