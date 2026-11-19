@@ -11,13 +11,13 @@ import (
 	"go-net-http-auth-base/internal/infra"
 )
 
-func TestExpiredSessionsSweeper_RunMaintenance(t *testing.T) {
+func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
 	ctx := context.Background()
-	sweeper := infra.NewExpiredSessionsSweeper(testDB)
+	sweeper := infra.NewExpiredRecordsSweeper(testDB)
 
 	reset := func(t *testing.T) string {
 		t.Helper()
