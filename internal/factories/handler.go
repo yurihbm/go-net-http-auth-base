@@ -11,7 +11,7 @@ import (
 
 func NewHandler(ctx context.Context, deps *Dependencies, cfg *config.Config, tel *telemetry.Telemetry) http.Handler {
 	mux := http.NewServeMux()
-	UsersFactory(deps).RegisterRoutes(mux)
+	UsersFactory(deps, cfg).RegisterRoutes(mux)
 	AuthFactory(deps, cfg).RegisterRoutes(mux)
 	HealthFactory(deps).RegisterRoutes(mux)
 	AuditFactory(deps).RegisterRoutes(mux)

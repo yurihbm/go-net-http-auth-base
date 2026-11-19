@@ -66,6 +66,7 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 
 		service := services.NewAuthService(
 			services.NewUserService(usersRepo, new(mocks.EmailVerificationServiceMock), nil, nil, repositories.NewPostgresTransactor(testDB)),
+			nil,
 			serviceAuthRepo,
 			repositories.NewSessionsPostgresRepository(db),
 			registry,
@@ -94,7 +95,6 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		created, err := usersRepo.FindByEmail(context.Background(), email)
 		require.NoError(t, err)
 		assert.Equal(t, created.UUID, result.User.UUID)
-		assert.True(t, created.EmailVerified)
 		linked, err := authRepo.GetUserOAuthProviderByProviderAndProviderUserID(context.Background(), provider, providerUserID)
 		require.NoError(t, err)
 		assert.Equal(t, created.UUID, linked.UserUUID)
@@ -126,18 +126,18 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		assert.Equal(t, 1, links)
 	})
 
-	t.Run("refuses to link an unverified local account", func(t *testing.T) {
+	t.Run("links an existing local account", func(t *testing.T) {
 		service, usersRepo, authRepo, state := setup(t, nil)
-		_, err := usersRepo.Create(context.Background(), domain.User{Name: "Squatter", Email: email, Role: domain.RoleUser})
+		existing, err := usersRepo.Create(context.Background(), domain.User{Name: "Local", Email: email, Role: domain.RoleUser})
 		require.NoError(t, err)
 
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
-		assert.Equal(t, "auth.providerCallback.localEmailNotVerified", err.Error())
-		assert.Nil(t, result)
-		_, err = authRepo.GetUserOAuthProviderByProviderAndProviderUserID(context.Background(), provider, providerUserID)
-		var notFoundErr *domain.NotFoundError
-		assert.True(t, errors.As(err, &notFoundErr))
+		require.NoError(t, err)
+		assert.Equal(t, existing.UUID, result.User.UUID)
+		linked, err := authRepo.GetUserOAuthProviderByProviderAndProviderUserID(context.Background(), provider, providerUserID)
+		require.NoError(t, err)
+		assert.Equal(t, existing.UUID, linked.UserUUID)
 	})
 
 	t.Run("leaves no orphaned user when linking fails", func(t *testing.T) {

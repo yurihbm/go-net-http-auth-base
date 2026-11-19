@@ -39,12 +39,13 @@ var oauthProviderErrorCodes = []string{
 const defaultOAuthProviderErrorCode = "access_denied"
 
 type AuthController struct {
-	authService       domain.AuthService
-	stepUpService     domain.StepUpService
-	auditService      domain.AuditService
-	authMiddleware    middlewares.HandlerMiddleware
-	isSecureCookie    bool
-	callbackAllowList []string
+	authService          domain.AuthService
+	stepUpService        domain.StepUpService
+	pendingSignupService domain.PendingSignupService
+	auditService         domain.AuditService
+	authMiddleware       middlewares.HandlerMiddleware
+	isSecureCookie       bool
+	callbackAllowList    []string
 }
 
 var _ Controller = (*AuthController)(nil)
@@ -52,6 +53,7 @@ var _ Controller = (*AuthController)(nil)
 func NewAuthController(
 	authService domain.AuthService,
 	stepUpService domain.StepUpService,
+	pendingSignupService domain.PendingSignupService,
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	isSecureCookie bool,
@@ -60,6 +62,7 @@ func NewAuthController(
 	return &AuthController{
 		authService,
 		stepUpService,
+		pendingSignupService,
 		auditService,
 		authMiddleware,
 		isSecureCookie,
@@ -74,6 +77,8 @@ func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /auth/logout-others", c.authMiddleware.Use(c.LogoutOthers))
 	router.HandleFunc("POST /auth/step-up", c.authMiddleware.Use(c.RequestStepUp))
 	router.HandleFunc("POST /auth/step-up/verify", c.authMiddleware.Use(c.VerifyStepUp))
+	router.HandleFunc("POST /auth/signup/verify", c.VerifySignup)
+	router.HandleFunc("POST /auth/signup/resend", c.ResendSignup)
 	router.HandleFunc("GET /auth/{provider}/login", c.LoginWithOAuthProvider)
 	router.HandleFunc("GET /auth/{provider}/callback", c.OAuthProviderCallback)
 }
@@ -117,7 +122,7 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 		Status:       domain.AuditStatusSuccess,
 	})
 
-	c.setAuthCookies(w, tokens)
+	api.SetAuthCookies(w, tokens, c.isSecureCookie)
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
 		Message: "auth.login.success",
@@ -245,6 +250,96 @@ func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary		Finish a sign-up
+// @Description	Creates the account from the pending sign-up with the 6-digit code emailed by POST /users. Requires the `pending_signup` cookie set by POST /users, so the code only works in the browser that started the sign-up. A code allows 5 attempts and expires after 10 minutes. On success sets the `access_token` and `refresh_token` cookies and clears the `pending_signup` cookie.
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.SignupVerifyDTO			true	"Code"
+// @Success		201		{object}	api.ResponseBody[domain.User]	"Account created and logged in (auth.signup.success)"
+// @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]			"Wrong code (auth.signup.invalidCode), or no pending sign-up: missing cookie, expired, already used or out of attempts (auth.signup.noPending)"
+// @Failure		409		{object}	api.ResponseBody[any]			"Email already in use (users.email.conflict)"
+// @Failure		429		{object}	api.ResponseBody[any]			"Too many wrong codes for this address in 24 hours (auth.email.codeLocked)"
+// @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
+// @Router			/auth/signup/verify [post]
+func (c *AuthController) VerifySignup(w http.ResponseWriter, r *http.Request) {
+	pendingUUID, ok := c.pendingSignupUUID(r)
+	if !ok {
+		api.HandleError(r.Context(), w, domain.ErrSignupNoPending)
+		return
+	}
+
+	dto, err := api.DecodeAndValidate[domain.SignupVerifyDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	result, err := c.authService.CompleteSignup(r.Context(), pendingUUID, dto.Code)
+	if err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			Action:        domain.AuditActionUserCreate,
+			ResourceType:  domain.AuditResourceUser,
+			ResourceUUID:  "",
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    &result.User.UUID,
+		Action:       domain.AuditActionUserCreate,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: result.User.UUID,
+		Status:       domain.AuditStatusSuccess,
+	})
+
+	api.DeletePendingSignupCookie(w, c.isSecureCookie)
+	api.SetAuthCookies(w, result.Tokens, c.isSecureCookie)
+	api.WriteJSONResponse(w, http.StatusCreated, api.ResponseBody[domain.User]{
+		Data:    *result.User,
+		Message: "auth.signup.success",
+	})
+}
+
+// @Summary		Resend the sign-up code
+// @Description	Emails a new 6-digit code for the pending sign-up and invalidates the previous one. Requires the `pending_signup` cookie set by POST /users. One resend per 60 seconds; the sign-up itself still expires 1 hour after POST /users.
+// @Tags			auth
+// @Produce		json
+// @Success		202	{object}	api.ResponseBody[any]	"Code sent (auth.signup.codeResent)"
+// @Failure		401	{object}	api.ResponseBody[any]	"No pending sign-up (auth.signup.noPending)"
+// @Failure		429	{object}	api.ResponseBody[any]	"Cooldown (auth.signup.cooldown) or too many emails to this address (auth.email.sendLimit)"
+// @Failure		500	{object}	api.ResponseBody[any]	"Internal server error, or the email could not be sent (auth.signup.sendFailed)"
+// @Router			/auth/signup/resend [post]
+func (c *AuthController) ResendSignup(w http.ResponseWriter, r *http.Request) {
+	pendingUUID, ok := c.pendingSignupUUID(r)
+	if !ok {
+		api.HandleError(r.Context(), w, domain.ErrSignupNoPending)
+		return
+	}
+
+	if err := c.pendingSignupService.Resend(r.Context(), pendingUUID); err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
+		Message: "auth.signup.codeResent",
+	})
+}
+
+func (c *AuthController) pendingSignupUUID(r *http.Request) (string, bool) {
+	cookie, err := r.Cookie(api.PendingSignupCookieName(c.isSecureCookie))
+	if err != nil || cookie.Value == "" {
+		return "", false
+	}
+	return cookie.Value, true
+}
+
 func (c *AuthController) auditAuthSuccess(r *http.Request, action string) {
 	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),
@@ -294,7 +389,7 @@ func (c *AuthController) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c.setAuthCookies(w, tokens)
+	api.SetAuthCookies(w, tokens, c.isSecureCookie)
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
 		Message: "auth.refresh.success",
@@ -424,7 +519,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	})
 
 	c.deleteOAuthFlowCookies(w, providerName)
-	c.setAuthCookies(w, result.Tokens)
+	api.SetAuthCookies(w, result.Tokens, c.isSecureCookie)
 
 	http.Redirect(w, r, result.RedirectURI, http.StatusFound)
 }
@@ -521,28 +616,4 @@ func (c *AuthController) oauthFlowCookieValue(r *http.Request, baseName string) 
 		return ""
 	}
 	return cookie.Value
-}
-
-func (c *AuthController) setAuthCookies(w http.ResponseWriter, tokens domain.AuthTokens) {
-	isSecure := c.isSecureCookie
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     api.AccessTokenCookieName,
-		Value:    tokens.AccessToken,
-		Path:     api.AccessTokenCookiePath,
-		HttpOnly: true,
-		MaxAge:   int(domain.TokenExpirationAccess.Seconds()),
-		SameSite: http.SameSiteStrictMode,
-		Secure:   isSecure,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     api.RefreshTokenCookieName,
-		Value:    tokens.RefreshToken,
-		Path:     api.RefreshTokenCookiePath,
-		HttpOnly: true,
-		MaxAge:   int(domain.TokenExpirationRefresh.Seconds()),
-		SameSite: http.SameSiteStrictMode,
-		Secure:   isSecure,
-	})
 }

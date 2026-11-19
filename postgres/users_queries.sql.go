@@ -12,26 +12,20 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, email, password_hash, email_verified)
-    VALUES ($1, $2, $3, $4)
+INSERT INTO users (name, email, password_hash)
+    VALUES ($1, $2, $3)
 RETURNING
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	Name          string
-	Email         string
-	PasswordHash  pgtype.Text
-	EmailVerified bool
+	Name         string
+	Email        string
+	PasswordHash pgtype.Text
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser,
-		arg.Name,
-		arg.Email,
-		arg.PasswordHash,
-		arg.EmailVerified,
-	)
+	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Email, arg.PasswordHash)
 	var i User
 	err := row.Scan(
 		&i.Uuid,
@@ -39,7 +33,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
-		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
 		&i.StepUpFailures,
@@ -65,7 +58,7 @@ func (q *Queries) DeleteUser(ctx context.Context, uuid pgtype.UUID) error {
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
 FROM
     users
 WHERE
@@ -81,7 +74,6 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
-		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
 		&i.StepUpFailures,
@@ -95,7 +87,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 
 const getUserByUUID = `-- name: GetUserByUUID :one
 SELECT
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
 FROM
     users
 WHERE
@@ -111,7 +103,6 @@ func (q *Queries) GetUserByUUID(ctx context.Context, uuid pgtype.UUID) (User, er
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
-		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
 		&i.StepUpFailures,
@@ -150,7 +141,7 @@ func (q *Queries) IsEmailReserved(ctx context.Context, arg IsEmailReservedParams
 
 const listUsers = `-- name: ListUsers :many
 SELECT
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
 FROM
     users
 ORDER BY
@@ -178,7 +169,6 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Email,
 			&i.PasswordHash,
 			&i.Role,
-			&i.EmailVerified,
 			&i.EmailVersion,
 			&i.EmailChangedAt,
 			&i.StepUpFailures,
@@ -195,20 +185,6 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 		return nil, err
 	}
 	return items, nil
-}
-
-const markUserEmailVerified = `-- name: MarkUserEmailVerified :exec
-UPDATE
-    users
-SET
-    email_verified = true
-WHERE
-    uuid = $1
-`
-
-func (q *Queries) MarkUserEmailVerified(ctx context.Context, uuid pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, markUserEmailVerified, uuid)
-	return err
 }
 
 const refundUserStepUpGuess = `-- name: RefundUserStepUpGuess :exec
@@ -272,7 +248,7 @@ SET
 WHERE
     uuid = $1
 RETURNING
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
 `
 
 type UpdateUserParams struct {
@@ -290,7 +266,6 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
-		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
 		&i.StepUpFailures,
@@ -307,7 +282,6 @@ UPDATE
     users
 SET
     email = $2,
-    email_verified = true,
     email_version = email_version + 1,
     email_changed_at = $3,
     previous_email = CASE WHEN $3::timestamptz IS NULL THEN NULL ELSE email END
@@ -315,7 +289,7 @@ WHERE
     uuid = $1
     AND email_version = $4
 RETURNING
-    uuid, name, email, password_hash, role, email_verified, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
 `
 
 type UpdateUserEmailParams struct {
@@ -339,7 +313,6 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 		&i.Email,
 		&i.PasswordHash,
 		&i.Role,
-		&i.EmailVerified,
 		&i.EmailVersion,
 		&i.EmailChangedAt,
 		&i.StepUpFailures,

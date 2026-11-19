@@ -18,6 +18,8 @@ const (
 	OAuthNonceCookieName    = "oauth_nonce"
 	OAuthVerifierCookieName = "oauth_code_verifier"
 
+	pendingSignupCookieName = "pending_signup"
+
 	hostCookiePrefix = "__Host-"
 )
 
@@ -33,6 +35,55 @@ func OAuthFlowCookiePath(provider domain.OAuthProviderName, secure bool) string 
 		return "/"
 	}
 	return "/auth/" + string(provider) + "/callback"
+}
+
+func PendingSignupCookieName(secure bool) string {
+	if secure {
+		return hostCookiePrefix + pendingSignupCookieName
+	}
+	return pendingSignupCookieName
+}
+
+func SetPendingSignupCookie(w http.ResponseWriter, pendingUUID string, secure bool) {
+	http.SetCookie(w, newPendingSignupCookie(pendingUUID, int(domain.PendingSignupTTL.Seconds()), secure))
+}
+
+func DeletePendingSignupCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, newPendingSignupCookie("", -1, secure))
+}
+
+func newPendingSignupCookie(value string, maxAge int, secure bool) *http.Cookie {
+	return &http.Cookie{
+		Name:     PendingSignupCookieName(secure),
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   maxAge,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+	}
+}
+
+func SetAuthCookies(w http.ResponseWriter, tokens domain.AuthTokens, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AccessTokenCookieName,
+		Value:    tokens.AccessToken,
+		Path:     AccessTokenCookiePath,
+		HttpOnly: true,
+		MaxAge:   int(domain.TokenExpirationAccess.Seconds()),
+		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     RefreshTokenCookieName,
+		Value:    tokens.RefreshToken,
+		Path:     RefreshTokenCookiePath,
+		HttpOnly: true,
+		MaxAge:   int(domain.TokenExpirationRefresh.Seconds()),
+		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+	})
 }
 
 func DeleteAuthCookies(w http.ResponseWriter) {

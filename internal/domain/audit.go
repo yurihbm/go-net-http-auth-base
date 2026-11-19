@@ -29,7 +29,7 @@ const (
 	AuditActionLogin              = "LOGIN"
 	AuditActionOAuthLogin         = "OAUTH_LOGIN"
 	AuditActionLogout             = "LOGOUT"
-	AuditActionVerifyEmail        = "VERIFY_EMAIL"
+	AuditActionSignupRequest      = "SIGNUP_REQUEST"
 	AuditActionEmailChangeRequest = "EMAIL_CHANGE_REQUEST"
 	AuditActionEmailChange        = "EMAIL_CHANGE"
 	AuditActionEmailChangeRevert  = "EMAIL_CHANGE_REVERT"

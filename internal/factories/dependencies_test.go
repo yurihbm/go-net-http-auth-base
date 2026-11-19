@@ -25,14 +25,12 @@ func TestNewEmailProvider(t *testing.T) {
 }
 
 func TestNewDependencies(t *testing.T) {
-	deps, err := NewDependencies(nil, &config.Config{
-		JWTSecret: "test-secret-key",
-		Email:     config.EmailConfig{VerificationURL: "https://app.test/verify-email"},
-	})
+	deps, err := NewDependencies(nil, &config.Config{JWTSecret: "test-secret-key"})
 
 	require.NoError(t, err)
 	assert.NotNil(t, deps.UsersService)
 	assert.NotNil(t, deps.AuthService)
+	assert.NotNil(t, deps.PendingSignupService)
 	assert.NotNil(t, deps.AuditService)
 	assert.NotNil(t, deps.AuthMiddleware)
 }

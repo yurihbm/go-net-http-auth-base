@@ -53,7 +53,7 @@ func TestAuthFactory(t *testing.T) {
 }
 
 func TestUsersFactory(t *testing.T) {
-	controller := factories.UsersFactory(newTestDependencies(t))
+	controller := factories.UsersFactory(newTestDependencies(t), newTestConfig())
 	assert.NotNil(t, controller)
 	assert.IsType(t, &controllers.UsersController{}, controller)
 }

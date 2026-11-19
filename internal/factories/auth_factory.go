@@ -9,6 +9,7 @@ func AuthFactory(deps *Dependencies, cfg *config.Config) controllers.Controller 
 	return controllers.NewAuthController(
 		deps.AuthService,
 		deps.StepUpService,
+		deps.PendingSignupService,
 		deps.AuditService,
 		deps.AuthMiddleware,
 		!cfg.IsDevelopment(),

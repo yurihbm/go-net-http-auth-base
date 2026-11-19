@@ -2,6 +2,7 @@ package infra_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 
 	reset := func(t *testing.T) string {
 		t.Helper()
-		_, err := testDB.Exec(ctx, "TRUNCATE TABLE step_up_challenges, user_sessions, users RESTART IDENTITY CASCADE")
+		_, err := testDB.Exec(ctx, "TRUNCATE TABLE email_send_limits, pending_signups, step_up_challenges, user_sessions, users RESTART IDENTITY CASCADE")
 		require.NoError(t, err)
 		var userUUID string
 		err = testDB.QueryRow(ctx,
@@ -49,6 +50,32 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 			`INSERT INTO step_up_challenges (user_uuid, session_uuid, code_hash, expires_at)
 			VALUES ($1, $2, 'hash', now() + $3::interval)`,
 			userUUID, sessionUUID, expiresIn.String(),
+		)
+		require.NoError(t, err)
+	}
+
+	insertPendingSignup := func(t *testing.T, expiresIn time.Duration) string {
+		t.Helper()
+		var pendingUUID string
+		err := testDB.QueryRow(ctx,
+			`INSERT INTO pending_signups (kind, name, email, password_hash, code_hash, code_expires_at, expires_at)
+			VALUES ('credentials', 'Pending', 'pending@example.com', 'hash', 'code', now(), now() + $1::interval) RETURNING uuid::text`,
+			expiresIn.String(),
+		).Scan(&pendingUUID)
+		require.NoError(t, err)
+		return pendingUUID
+	}
+
+	insertEmailSendLimit := func(t *testing.T, email string, windowAgo time.Duration, failuresWindowAgo *time.Duration) {
+		t.Helper()
+		var failuresWindowStart any
+		if failuresWindowAgo != nil {
+			failuresWindowStart = failuresWindowAgo.String()
+		}
+		_, err := testDB.Exec(ctx,
+			`INSERT INTO email_send_limits (email, window_start, sends, last_sent_at, failures, failures_window_start)
+			VALUES ($1, now() - $2::interval, 1, now() - $2::interval, 1, now() - $3::interval)`,
+			email, windowAgo.String(), failuresWindowStart,
 		)
 		require.NoError(t, err)
 	}
@@ -120,5 +147,56 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 
 		assert.Equal(t, 8, count(t, "user_sessions"))
 		assert.Equal(t, 1, count(t, "step_up_challenges"))
+	})
+
+	t.Run("deletes expired pending signups and keeps live ones", func(t *testing.T) {
+		reset(t)
+		insertPendingSignup(t, -time.Minute)
+		live := insertPendingSignup(t, time.Hour)
+
+		require.NoError(t, sweeper.RunMaintenance(ctx))
+
+		assert.Equal(t, 1, count(t, "pending_signups"))
+		var pendingUUID string
+		require.NoError(t, testDB.QueryRow(ctx, "SELECT uuid::text FROM pending_signups").Scan(&pendingUUID))
+		assert.Equal(t, live, pendingUUID)
+	})
+
+	t.Run("deletes email send limits only when both windows expired", func(t *testing.T) {
+		reset(t)
+		stale := domain.EmailCodeFailureWindow + time.Minute
+		recent := time.Minute
+		insertEmailSendLimit(t, "stale@example.com", domain.EmailSendWindow+time.Minute, &stale)
+		insertEmailSendLimit(t, "no-failures@example.com", domain.EmailSendWindow+time.Minute, nil)
+		insertEmailSendLimit(t, "recent-send@example.com", time.Minute, &stale)
+		insertEmailSendLimit(t, "recent-failure@example.com", domain.EmailSendWindow+time.Minute, &recent)
+
+		require.NoError(t, sweeper.RunMaintenance(ctx))
+
+		rows, err := testDB.Query(ctx, "SELECT email FROM email_send_limits ORDER BY email")
+		require.NoError(t, err)
+		var kept []string
+		for rows.Next() {
+			var email string
+			require.NoError(t, rows.Scan(&email))
+			kept = append(kept, email)
+		}
+		require.NoError(t, rows.Err())
+		assert.Equal(t, []string{"recent-failure@example.com", "recent-send@example.com"}, kept)
+	})
+
+	t.Run("deletes more pending signups and send limits than one batch", func(t *testing.T) {
+		reset(t)
+		for range 7 {
+			insertPendingSignup(t, -time.Minute)
+		}
+		for i := range 7 {
+			insertEmailSendLimit(t, fmt.Sprintf("stale-%d@example.com", i), domain.EmailSendWindow+time.Minute, nil)
+		}
+
+		require.NoError(t, sweeper.RunMaintenanceWithBatchSize(ctx, 3))
+
+		assert.Equal(t, 0, count(t, "pending_signups"))
+		assert.Equal(t, 0, count(t, "email_send_limits"))
 	})
 }
