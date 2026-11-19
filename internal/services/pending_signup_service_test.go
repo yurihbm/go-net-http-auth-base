@@ -272,35 +272,47 @@ func TestPendingSignupService_Attempt(t *testing.T) {
 	pending := &domain.PendingSignup{UUID: signupPendingUUID, Email: signupEmail}
 	attempted := &domain.PendingSignup{UUID: signupPendingUUID, Email: signupEmail, CodeHash: signupHash(signupPendingUUID, code), Attempts: 1}
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("success refunds the reserved guess", func(t *testing.T) {
 		service, m := newTestPendingSignupService()
 		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
-		m.limiter.On("CodeFailures", signupEmail, domain.EmailCodeFailureWindow).Return(0, nil).Once()
+		m.limiter.On("ReserveCodeGuess", signupEmail, domain.EmailCodeFailureWindow).Return(nil).Once()
 		m.pending.On("Attempt", signupPendingUUID, domain.SignupMaxAttempts).Return(attempted, nil).Once()
+		m.limiter.On("RefundCodeGuess", signupEmail).Return(nil).Once()
 
 		err := service.Attempt(context.Background(), signupPendingUUID, code)
 
 		require.NoError(t, err)
-		m.limiter.AssertNotCalled(t, "RecordCodeFailure", mock.Anything, mock.Anything)
+		m.limiter.AssertExpectations(t)
 	})
 
-	t.Run("error - wrong code records a failure", func(t *testing.T) {
+	t.Run("success when the refund fails", func(t *testing.T) {
 		service, m := newTestPendingSignupService()
 		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
-		m.limiter.On("CodeFailures", signupEmail, domain.EmailCodeFailureWindow).Return(3, nil).Once()
+		m.limiter.On("ReserveCodeGuess", signupEmail, domain.EmailCodeFailureWindow).Return(nil).Once()
 		m.pending.On("Attempt", signupPendingUUID, domain.SignupMaxAttempts).Return(attempted, nil).Once()
-		m.limiter.On("RecordCodeFailure", signupEmail, domain.EmailCodeFailureWindow).Return(4, nil).Once()
+		m.limiter.On("RefundCodeGuess", signupEmail).Return(errors.New("db down")).Once()
+
+		err := service.Attempt(context.Background(), signupPendingUUID, code)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("error - wrong code keeps the reserved guess", func(t *testing.T) {
+		service, m := newTestPendingSignupService()
+		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
+		m.limiter.On("ReserveCodeGuess", signupEmail, domain.EmailCodeFailureWindow).Return(nil).Once()
+		m.pending.On("Attempt", signupPendingUUID, domain.SignupMaxAttempts).Return(attempted, nil).Once()
 
 		err := service.Attempt(context.Background(), signupPendingUUID, "654321")
 
 		assert.Equal(t, domain.ErrSignupInvalidCode, err)
-		m.limiter.AssertExpectations(t)
+		m.limiter.AssertNotCalled(t, "RefundCodeGuess", mock.Anything)
 	})
 
 	t.Run("error - code locked for the address", func(t *testing.T) {
 		service, m := newTestPendingSignupService()
 		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
-		m.limiter.On("CodeFailures", signupEmail, domain.EmailCodeFailureWindow).Return(domain.EmailMaxCodeFailures, nil).Once()
+		m.limiter.On("ReserveCodeGuess", signupEmail, domain.EmailCodeFailureWindow).Return(domain.ErrEmailCodeLocked).Once()
 
 		err := service.Attempt(context.Background(), signupPendingUUID, code)
 
@@ -315,18 +327,20 @@ func TestPendingSignupService_Attempt(t *testing.T) {
 		err := service.Attempt(context.Background(), signupPendingUUID, code)
 
 		assert.Equal(t, domain.ErrSignupNoPending, err)
+		m.limiter.AssertNotCalled(t, "ReserveCodeGuess", mock.Anything, mock.Anything)
 	})
 
-	t.Run("error - attempts exhausted or code expired", func(t *testing.T) {
+	t.Run("error - attempts exhausted or code expired refunds the guess", func(t *testing.T) {
 		service, m := newTestPendingSignupService()
 		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
-		m.limiter.On("CodeFailures", signupEmail, domain.EmailCodeFailureWindow).Return(0, nil).Once()
+		m.limiter.On("ReserveCodeGuess", signupEmail, domain.EmailCodeFailureWindow).Return(nil).Once()
 		m.pending.On("Attempt", signupPendingUUID, domain.SignupMaxAttempts).Return(nil, domain.ErrSignupNoPending).Once()
+		m.limiter.On("RefundCodeGuess", signupEmail).Return(nil).Once()
 
 		err := service.Attempt(context.Background(), signupPendingUUID, code)
 
 		assert.Equal(t, domain.ErrSignupNoPending, err)
-		m.limiter.AssertNotCalled(t, "RecordCodeFailure", mock.Anything, mock.Anything)
+		m.limiter.AssertExpectations(t)
 	})
 }
 

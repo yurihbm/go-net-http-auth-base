@@ -41,30 +41,21 @@ func (q *Queries) DeleteStaleEmailSendLimitsBatch(ctx context.Context, arg Delet
 	return result.RowsAffected(), nil
 }
 
-const getEmailCodeFailures = `-- name: GetEmailCodeFailures :one
-SELECT
-    COALESCE((
-        SELECT
-            l.failures
-        FROM email_send_limits l
-        WHERE
-            l.email = $1
-            AND l.failures_window_start > now() - $2::interval), 0)::int AS failures
+const refundEmailCodeGuess = `-- name: RefundEmailCodeGuess :exec
+UPDATE
+    email_send_limits
+SET
+    failures = GREATEST(failures - 1, 0)
+WHERE
+    email = $1
 `
 
-type GetEmailCodeFailuresParams struct {
-	Email         string
-	FailureWindow pgtype.Interval
+func (q *Queries) RefundEmailCodeGuess(ctx context.Context, email string) error {
+	_, err := q.db.Exec(ctx, refundEmailCodeGuess, email)
+	return err
 }
 
-func (q *Queries) GetEmailCodeFailures(ctx context.Context, arg GetEmailCodeFailuresParams) (int32, error) {
-	row := q.db.QueryRow(ctx, getEmailCodeFailures, arg.Email, arg.FailureWindow)
-	var failures int32
-	err := row.Scan(&failures)
-	return failures, err
-}
-
-const recordEmailCodeFailure = `-- name: RecordEmailCodeFailure :one
+const reserveEmailCodeGuess = `-- name: ReserveEmailCodeGuess :one
 INSERT INTO email_send_limits (email, failures, failures_window_start)
     VALUES ($1, 1, now())
 ON CONFLICT (email)
@@ -81,17 +72,21 @@ ON CONFLICT (email)
         ELSE
             email_send_limits.failures_window_start
         END
+    WHERE email_send_limits.failures_window_start IS NULL
+        OR email_send_limits.failures_window_start < now() - $2::interval
+        OR email_send_limits.failures < $3::int
     RETURNING
         failures
 `
 
-type RecordEmailCodeFailureParams struct {
+type ReserveEmailCodeGuessParams struct {
 	Email         string
 	FailureWindow pgtype.Interval
+	MaxFailures   int32
 }
 
-func (q *Queries) RecordEmailCodeFailure(ctx context.Context, arg RecordEmailCodeFailureParams) (int32, error) {
-	row := q.db.QueryRow(ctx, recordEmailCodeFailure, arg.Email, arg.FailureWindow)
+func (q *Queries) ReserveEmailCodeGuess(ctx context.Context, arg ReserveEmailCodeGuessParams) (int32, error) {
+	row := q.db.QueryRow(ctx, reserveEmailCodeGuess, arg.Email, arg.FailureWindow, arg.MaxFailures)
 	var failures int32
 	err := row.Scan(&failures)
 	return failures, err
