@@ -6,6 +6,8 @@ DROP TABLE IF EXISTS pending_signups;
 
 DROP TYPE IF EXISTS pending_signup_kind;
 
+DROP TABLE IF EXISTS email_change_challenges;
+
 DROP TABLE IF EXISTS step_up_challenges;
 
 DROP TABLE IF EXISTS user_sessions;

@@ -168,6 +168,18 @@ type AuditLogsDefault struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type EmailChangeChallenge struct {
+	Uuid         pgtype.UUID
+	SessionUuid  pgtype.UUID
+	UserUuid     pgtype.UUID
+	NewEmail     string
+	EmailVersion int32
+	CodeHash     string
+	Attempts     int32
+	ExpiresAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+}
+
 type EmailSendLimit struct {
 	Email               string
 	WindowStart         pgtype.Timestamptz

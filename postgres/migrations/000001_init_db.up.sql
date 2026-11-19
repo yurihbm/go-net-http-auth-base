@@ -87,6 +87,22 @@ CREATE INDEX idx_step_up_challenges_user ON step_up_challenges (user_uuid);
 
 CREATE INDEX idx_step_up_challenges_expires_at ON step_up_challenges (expires_at);
 
+CREATE TABLE email_change_challenges (
+    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    session_uuid uuid NOT NULL UNIQUE REFERENCES user_sessions (uuid) ON DELETE CASCADE,
+    user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
+    new_email text NOT NULL,
+    email_version int NOT NULL,
+    code_hash text NOT NULL,
+    attempts int NOT NULL DEFAULT 0,
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL
+);
+
+CREATE INDEX idx_email_change_challenges_user ON email_change_challenges (user_uuid);
+
+CREATE INDEX idx_email_change_challenges_expires_at ON email_change_challenges (expires_at);
+
 CREATE TYPE pending_signup_kind AS ENUM (
     'credentials',
     'oauth'

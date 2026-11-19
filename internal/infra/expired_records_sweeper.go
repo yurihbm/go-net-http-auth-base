@@ -32,6 +32,13 @@ func (s *ExpiredRecordsSweeper) RunMaintenanceWithBatchSize(ctx context.Context,
 		return err
 	}
 
+	emailChangeChallenges, err := sweepInBatches(batchSize, func() (int64, error) {
+		return s.q.DeleteExpiredEmailChangeChallengesBatch(ctx, batchSize)
+	})
+	if err != nil {
+		return err
+	}
+
 	idleTimeout := pgtype.Interval{Microseconds: domain.TokenExpirationRefresh.Microseconds(), Valid: true}
 	sessions, err := sweepInBatches(batchSize, func() (int64, error) {
 		return s.q.DeleteExpiredUserSessionsBatch(ctx, postgres.DeleteExpiredUserSessionsBatchParams{
@@ -64,6 +71,7 @@ func (s *ExpiredRecordsSweeper) RunMaintenanceWithBatchSize(ctx context.Context,
 	slog.InfoContext(ctx, "expired records swept",
 		"sessions", sessions,
 		"step_up_challenges", challenges,
+		"email_change_challenges", emailChangeChallenges,
 		"pending_signups", pendingSignups,
 		"email_send_limits", emailSendLimits,
 	)
