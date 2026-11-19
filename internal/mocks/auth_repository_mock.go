@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 
@@ -41,4 +42,9 @@ func (m *AuthRepositoryMock) ListUserOAuthProvidersByUserUUID(ctx context.Contex
 		return args.Get(0).([]domain.UserOAuthProvider), args.Error(1)
 	}
 	return nil, args.Error(1)
+}
+
+func (m *AuthRepositoryMock) DeleteOAuthProvidersCreatedSince(ctx context.Context, userUUID string, since time.Time) error {
+	args := m.Called(userUUID, since)
+	return args.Error(0)
 }

@@ -15,7 +15,7 @@ const createUserSession = `-- name: CreateUserSession :one
 INSERT INTO user_sessions (user_uuid, current_jti, expires_at)
     VALUES ($1, $2, $3)
 RETURNING
-    uuid, user_uuid, current_jti, created_at, last_used_at, expires_at
+    uuid, user_uuid, current_jti, created_at, last_used_at, expires_at, step_up_until
 `
 
 type CreateUserSessionParams struct {
@@ -34,6 +34,7 @@ func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionPa
 		&i.CreatedAt,
 		&i.LastUsedAt,
 		&i.ExpiresAt,
+		&i.StepUpUntil,
 	)
 	return i, err
 }
@@ -84,6 +85,24 @@ func (q *Queries) DeleteOldestUserSessionsBeyond(ctx context.Context, arg Delete
 	return err
 }
 
+const deleteOtherUserSessionsByUser = `-- name: DeleteOtherUserSessionsByUser :exec
+DELETE FROM
+    user_sessions
+WHERE
+    user_uuid = $1
+    AND uuid <> $2
+`
+
+type DeleteOtherUserSessionsByUserParams struct {
+	UserUuid pgtype.UUID
+	KeepUuid pgtype.UUID
+}
+
+func (q *Queries) DeleteOtherUserSessionsByUser(ctx context.Context, arg DeleteOtherUserSessionsByUserParams) error {
+	_, err := q.db.Exec(ctx, deleteOtherUserSessionsByUser, arg.UserUuid, arg.KeepUuid)
+	return err
+}
+
 const deleteUserSession = `-- name: DeleteUserSession :exec
 DELETE FROM
     user_sessions
@@ -102,9 +121,21 @@ func (q *Queries) DeleteUserSession(ctx context.Context, arg DeleteUserSessionPa
 	return err
 }
 
+const deleteUserSessionsByUser = `-- name: DeleteUserSessionsByUser :exec
+DELETE FROM
+    user_sessions
+WHERE
+    user_uuid = $1
+`
+
+func (q *Queries) DeleteUserSessionsByUser(ctx context.Context, userUuid pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserSessionsByUser, userUuid)
+	return err
+}
+
 const getUserSession = `-- name: GetUserSession :one
 SELECT
-    uuid, user_uuid, current_jti, created_at, last_used_at, expires_at
+    uuid, user_uuid, current_jti, created_at, last_used_at, expires_at, step_up_until
 FROM
     user_sessions
 WHERE
@@ -127,6 +158,7 @@ func (q *Queries) GetUserSession(ctx context.Context, arg GetUserSessionParams) 
 		&i.CreatedAt,
 		&i.LastUsedAt,
 		&i.ExpiresAt,
+		&i.StepUpUntil,
 	)
 	return i, err
 }
@@ -157,6 +189,30 @@ func (q *Queries) RotateUserSessionJTI(ctx context.Context, arg RotateUserSessio
 		arg.NextJti,
 		arg.CurrentJti,
 	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setUserSessionStepUp = `-- name: SetUserSessionStepUp :execrows
+UPDATE
+    user_sessions
+SET
+    step_up_until = $3
+WHERE
+    uuid = $1
+    AND user_uuid = $2
+`
+
+type SetUserSessionStepUpParams struct {
+	Uuid        pgtype.UUID
+	UserUuid    pgtype.UUID
+	StepUpUntil pgtype.Timestamptz
+}
+
+func (q *Queries) SetUserSessionStepUp(ctx context.Context, arg SetUserSessionStepUpParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserSessionStepUp, arg.Uuid, arg.UserUuid, arg.StepUpUntil)
 	if err != nil {
 		return 0, err
 	}

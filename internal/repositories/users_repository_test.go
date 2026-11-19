@@ -6,6 +6,7 @@ import (
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/repositories"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -196,25 +197,48 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 	repo := setupUsersRepoTest(t)
 	createdUser := seedUser(t, repo)
 
-	t.Run("success sets the email as verified", func(t *testing.T) {
+	t.Run("success sets the email as verified and bumps the version", func(t *testing.T) {
 		require.False(t, createdUser.EmailVerified)
+		require.Equal(t, 0, createdUser.EmailVersion)
+		require.Zero(t, createdUser.EmailChangedAt)
+		changedAt := time.Now()
 
-		returnedUser, err := repo.UpdateEmail(context.Background(), createdUser.UUID, "john.new@example.com")
+		returnedUser, err := repo.UpdateEmail(context.Background(), createdUser.UUID, "john.new@example.com", 0, &changedAt)
 
 		require.NoError(t, err)
 		assert.Equal(t, "john.new@example.com", returnedUser.Email)
 		assert.True(t, returnedUser.EmailVerified)
+		assert.Equal(t, 1, returnedUser.EmailVersion)
+		assert.Equal(t, changedAt.Unix(), returnedUser.EmailChangedAt)
 		found, err := repo.FindByUUID(context.Background(), createdUser.UUID)
 		require.NoError(t, err)
 		assert.Equal(t, "john.new@example.com", found.Email)
 		assert.True(t, found.EmailVerified)
+		assert.Equal(t, 1, found.EmailVersion)
+	})
+
+	t.Run("success with a nil changedAt clears it", func(t *testing.T) {
+		returnedUser, err := repo.UpdateEmail(context.Background(), createdUser.UUID, "john.revert@example.com", 1, nil)
+
+		require.NoError(t, err)
+		assert.Equal(t, 2, returnedUser.EmailVersion)
+		assert.Zero(t, returnedUser.EmailChangedAt)
+	})
+
+	t.Run("error - stale version", func(t *testing.T) {
+		returnedUser, err := repo.UpdateEmail(context.Background(), createdUser.UUID, "john.stale@example.com", 0, nil)
+
+		assert.Nil(t, returnedUser)
+		var unauthorizedErr *domain.UnauthorizedError
+		require.True(t, errors.As(err, &unauthorizedErr))
+		assert.Equal(t, "users.emailChange.staleToken", unauthorizedErr.Error())
 	})
 
 	t.Run("error - email taken", func(t *testing.T) {
 		_, err := repo.Create(context.Background(), domain.User{Name: "Taken", Email: "taken@example.com", PasswordHash: "hash"})
 		require.NoError(t, err)
 
-		returnedUser, err := repo.UpdateEmail(context.Background(), createdUser.UUID, "Taken@Example.com")
+		returnedUser, err := repo.UpdateEmail(context.Background(), createdUser.UUID, "Taken@Example.com", 2, nil)
 
 		assert.Nil(t, returnedUser)
 		var conflictErr *domain.ConflictError
@@ -222,15 +246,15 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 	})
 
 	t.Run("error - user not found", func(t *testing.T) {
-		returnedUser, err := repo.UpdateEmail(context.Background(), uuid.NewString(), "ghost@example.com")
+		returnedUser, err := repo.UpdateEmail(context.Background(), uuid.NewString(), "ghost@example.com", 0, nil)
 
 		assert.Nil(t, returnedUser)
-		var notFoundErr *domain.NotFoundError
-		assert.True(t, errors.As(err, &notFoundErr))
+		var unauthorizedErr *domain.UnauthorizedError
+		assert.True(t, errors.As(err, &unauthorizedErr))
 	})
 
 	t.Run("error - invalid uuid", func(t *testing.T) {
-		returnedUser, err := repo.UpdateEmail(context.Background(), "invalid", "ghost@example.com")
+		returnedUser, err := repo.UpdateEmail(context.Background(), "invalid", "ghost@example.com", 0, nil)
 
 		assert.Nil(t, returnedUser)
 		var validationErr *domain.ValidationError
