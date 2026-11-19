@@ -403,7 +403,7 @@ type emailChangeFixture struct {
 	repo              *mocks.UsersRepositoryMock
 	sessions          *mocks.SessionsRepositoryMock
 	authRepo          *mocks.AuthRepositoryMock
-	challenges        *mocks.EmailChangeRepositoryMock
+	challenges        *mocks.SessionChallengeRepositoryMock
 	limiter           *mocks.EmailSendLimiterMock
 	transactor        *mocks.TransactorMock
 	emailVerification *mocks.EmailVerificationServiceMock
@@ -414,7 +414,7 @@ func newEmailChangeFixture() emailChangeFixture {
 		repo:              new(mocks.UsersRepositoryMock),
 		sessions:          new(mocks.SessionsRepositoryMock),
 		authRepo:          new(mocks.AuthRepositoryMock),
-		challenges:        new(mocks.EmailChangeRepositoryMock),
+		challenges:        new(mocks.SessionChallengeRepositoryMock),
 		limiter:           new(mocks.EmailSendLimiterMock),
 		transactor:        newTransactorMock(),
 		emailVerification: new(mocks.EmailVerificationServiceMock),
@@ -434,15 +434,16 @@ func TestUsersService_RequestEmailChange(t *testing.T) {
 	}
 	expectUpsert := func(f emailChangeFixture) *string {
 		var code string
-		f.challenges.On("Upsert", mock.MatchedBy(func(c domain.EmailChangeChallenge) bool {
+		f.challenges.On("Upsert", mock.MatchedBy(func(c domain.SessionChallenge) bool {
 			return c.UserUUID == selfActor.UUID &&
 				c.SessionUUID == sessionUUID &&
+				c.Purpose == domain.SessionChallengeEmailChange &&
 				c.NewEmail == "new@example.com" &&
 				c.EmailVersion == 2 &&
 				c.CodeHash != "" &&
 				time.Until(time.Unix(c.ExpiresAt, 0)) > domain.EmailChangeCodeTTL-time.Minute
-		}), domain.EmailChangeCooldown).Return(&domain.EmailChangeChallenge{}, nil).Once().Run(func(args mock.Arguments) {
-			challenge := args.Get(0).(domain.EmailChangeChallenge)
+		}), domain.EmailChangeCooldown).Return(nil).Once().Run(func(args mock.Arguments) {
+			challenge := args.Get(0).(domain.SessionChallenge)
 			f.emailVerification.On("SendEmailChangeCode", "new@example.com", mock.MatchedBy(func(sent string) bool {
 				code = sent
 				return services.HashOTP(emailChangeKey, "email-change:"+sessionUUID, sent) == challenge.CodeHash
@@ -559,7 +560,7 @@ func TestUsersService_RequestEmailChange(t *testing.T) {
 		f := newEmailChangeFixture()
 		cooldown := domain.NewTooManyRequestsError("users.emailChange.cooldown")
 		expectAvailable(f, "new@example.com")
-		f.challenges.On("Upsert", mock.Anything, domain.EmailChangeCooldown).Return(nil, cooldown).Once()
+		f.challenges.On("Upsert", mock.Anything, domain.EmailChangeCooldown).Return(cooldown).Once()
 
 		err := f.service.RequestEmailChange(context.Background(), selfActor, sessionUUID, "new@example.com")
 
@@ -584,10 +585,10 @@ func TestUsersService_RequestEmailChange(t *testing.T) {
 		f := newEmailChangeFixture()
 		sendErr := errors.New("smtp down")
 		expectAvailable(f, "new@example.com")
-		f.challenges.On("Upsert", mock.Anything, domain.EmailChangeCooldown).Return(&domain.EmailChangeChallenge{}, nil).Once()
+		f.challenges.On("Upsert", mock.Anything, domain.EmailChangeCooldown).Return(nil).Once()
 		expectReserve(f, nil)
 		f.emailVerification.On("SendEmailChangeCode", "new@example.com", mock.Anything).Return(sendErr).Once()
-		f.challenges.On("Delete", sessionUUID).Return(nil).Once()
+		f.challenges.On("Delete", sessionUUID, domain.SessionChallengeEmailChange).Return(nil).Once()
 
 		err := f.service.RequestEmailChange(context.Background(), selfActor, sessionUUID, "new@example.com")
 
@@ -602,10 +603,10 @@ func TestUsersService_RequestEmailChange(t *testing.T) {
 		f := newEmailChangeFixture()
 		sendErr := errors.New("smtp down")
 		expectAvailable(f, "new@example.com")
-		f.challenges.On("Upsert", mock.Anything, domain.EmailChangeCooldown).Return(&domain.EmailChangeChallenge{}, nil).Once()
+		f.challenges.On("Upsert", mock.Anything, domain.EmailChangeCooldown).Return(nil).Once()
 		expectReserve(f, nil)
 		f.emailVerification.On("SendEmailChangeCode", "new@example.com", mock.Anything).Return(sendErr).Once()
-		f.challenges.On("Delete", sessionUUID).Return(errors.New("db error")).Once()
+		f.challenges.On("Delete", sessionUUID, domain.SessionChallengeEmailChange).Return(errors.New("db error")).Once()
 
 		err := f.service.RequestEmailChange(context.Background(), selfActor, sessionUUID, "new@example.com")
 
@@ -618,9 +619,10 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 	const code = "123456"
 	user := &domain.User{UUID: "user-uuid", Email: "old@example.com", EmailVersion: 3}
 	actor := domain.Actor{UUID: "user-uuid", Role: domain.RoleUser}
-	challenge := &domain.EmailChangeChallenge{
+	challenge := &domain.SessionChallenge{
 		UserUUID:     "user-uuid",
 		SessionUUID:  sessionUUID,
+		Purpose:      domain.SessionChallengeEmailChange,
 		NewEmail:     "new@example.com",
 		EmailVersion: 3,
 		CodeHash:     services.HashOTP(emailChangeKey, "email-change:"+sessionUUID, code),
@@ -630,7 +632,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 	notice := domain.EmailChangeRevert{UserUUID: "user-uuid", OldEmail: "old@example.com", NewEmail: "new@example.com", Version: 4, ChangedAt: changedAt}
 
 	expectAttempt := func(f emailChangeFixture) {
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
 		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(nil).Once()
 		f.limiter.On("RefundCodeGuess", "new@example.com").Return(nil).Maybe()
 	}
@@ -698,12 +700,12 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 		var unauthorizedErr *domain.UnauthorizedError
 		assert.True(t, errors.As(err, &unauthorizedErr))
 		assert.Nil(t, result)
-		f.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything)
+		f.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("error - no challenge for the session", func(t *testing.T) {
 		f := newEmailChangeFixture()
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.EmailChangeMaxAttempts).Return(nil, domain.ErrEmailChangeNoChallenge).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(nil, domain.ErrEmailChangeNoChallenge).Once()
 
 		result, err := f.service.ConfirmEmailChange(context.Background(), actor, sessionUUID, code)
 
@@ -730,7 +732,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 
 	t.Run("success - a failed guess refund is only logged", func(t *testing.T) {
 		f := newEmailChangeFixture()
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
 		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(nil).Once()
 		f.limiter.On("RefundCodeGuess", "new@example.com").Return(errors.New("db error")).Once()
 		expectUpdate(f)
@@ -745,7 +747,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 
 	t.Run("error - address locked after too many wrong codes", func(t *testing.T) {
 		f := newEmailChangeFixture()
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
 		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(domain.ErrEmailCodeLocked).Once()
 
 		result, err := f.service.ConfirmEmailChange(context.Background(), actor, sessionUUID, code)
@@ -758,7 +760,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 	t.Run("error - guess reservation fails", func(t *testing.T) {
 		f := newEmailChangeFixture()
 		dbErr := errors.New("db error")
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
 		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(dbErr).Once()
 
 		_, err := f.service.ConfirmEmailChange(context.Background(), actor, sessionUUID, code)

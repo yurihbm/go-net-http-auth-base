@@ -55,9 +55,9 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 
 | Key                                  | Type                   | Where                                                                  |
 | :----------------------------------- | :--------------------- | :--------------------------------------------------------------------- |
-| `auth.stepUp.cooldown`               | `TooManyRequestsError` | `StepUpRepository.Upsert`: a code was already issued in the last 60s   |
-| `auth.stepUp.noChallenge`            | `UnauthorizedError`    | `StepUpRepository.Attempt`: no challenge, expired, or attempts exhausted |
-| `auth.stepUp.internalServerError`    | `InternalServerError`  | Unexpected `StepUpRepository` failures                                 |
+| `auth.stepUp.cooldown`               | `TooManyRequestsError` | `SessionChallengeRepository.Upsert` (step-up): a code was already issued in the last 60s   |
+| `auth.stepUp.noChallenge`            | `UnauthorizedError`    | `SessionChallengeRepository.Attempt` (step-up): no challenge, expired, or attempts exhausted |
+| `auth.stepUp.internalServerError`    | `InternalServerError`  | Unexpected `SessionChallengeRepository` (step-up) failures                                 |
 | `auth.stepUp.invalidCode`            | `UnauthorizedError`    | `StepUpService.VerifyCode`: the code does not match                    |
 | `auth.stepUp.sessionRevoked`         | `UnauthorizedError`    | `StepUpService.VerifyCode`: 10 wrong codes on one session; the session is deleted |
 | `auth.stepUp.userLocked`             | `TooManyRequestsError` | `StepUpService.RequestCode`, `UsersRepository.ReserveStepUpGuess` (`VerifyCode`): 20 wrong codes across the user's sessions in 24h |
@@ -65,12 +65,12 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.stepUp.sendFailed`             | `InternalServerError`  | `StepUpService.RequestCode`: the code email could not be sent          |
 | `auth.stepUp.codeGenerationFailed`   | `InternalServerError`  | `StepUpService.RequestCode`: the random source failed                  |
 | `users.emailChange.staleToken`       | `UnauthorizedError`    | `UsersService.ConfirmEmailChange` (the challenge's `email_version` no longer matches), `RevertEmailChange` (token email or `email_version` no longer matches), `UsersRepository.UpdateEmail` (`email_version` no longer matches) |
-| `users.emailChange.noChallenge`      | `UnauthorizedError`    | `EmailChangeRepository.Attempt`: the session has no challenge, it expired, attempts are exhausted, or it was already used |
+| `users.emailChange.noChallenge`      | `UnauthorizedError`    | `SessionChallengeRepository.Attempt` (email change): the session has no challenge, it expired, attempts are exhausted, or it was already used |
 | `users.emailChange.invalidCode`      | `UnauthorizedError`    | `UsersService.ConfirmEmailChange`: the code does not match (counted per new address) |
-| `users.emailChange.cooldown`         | `TooManyRequestsError` | `EmailChangeRepository.Upsert`: a code was already issued for this session in the last 60s |
+| `users.emailChange.cooldown`         | `TooManyRequestsError` | `SessionChallengeRepository.Upsert` (email change): a code was already issued for this session in the last 60s |
 | `users.emailChange.sendFailed`       | `InternalServerError`  | `UsersService.RequestEmailChange`: the code email could not be sent (the challenge is deleted) |
 | `users.emailChange.codeGenerationFailed` | `InternalServerError` | `UsersService.RequestEmailChange`: the random source failed |
-| `users.emailChange.internalServerError` | `InternalServerError` | Unexpected `EmailChangeRepository` failures |
+| `users.emailChange.internalServerError` | `InternalServerError` | Unexpected `SessionChallengeRepository` (email change) failures |
 | `users.emailChange.locked`           | `ConflictError`        | `UsersService.RequestEmailChange`/`ConfirmEmailChange`/`Delete`: the email changed less than 72h ago (`Delete` only blocks a user deleting their own account) |
 
 ### Sign-up keys

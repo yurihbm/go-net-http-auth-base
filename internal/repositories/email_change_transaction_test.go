@@ -61,7 +61,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 
 	type fixture struct {
 		service           domain.UsersService
-		emailChanges      domain.EmailChangeRepository
+		emailChanges      domain.SessionChallengeRepository
 		limiter           domain.EmailSendLimiter
 		usersRepo         domain.UsersRepository
 		sessionsRepo      domain.SessionsRepository
@@ -80,7 +80,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 		usersRepo := repositories.NewUsersPostgresRepository(db)
 		sessionsRepo := repositories.NewSessionsPostgresRepository(db)
 		authRepo := repositories.NewAuthPostgresRepository(db)
-		emailChanges := repositories.NewEmailChangePostgresRepository(db)
+		emailChanges := repositories.NewSessionChallengesPostgresRepository(db)
 		limiter := repositories.NewEmailSendLimitsPostgresRepository(db)
 		emailVerification := new(mocks.EmailVerificationServiceMock)
 
@@ -138,7 +138,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 		assert.Equal(t, 1, stored.EmailVersion)
 		assert.NotZero(t, stored.EmailChangedAt)
 		assert.False(t, sessionExists(t, f.sessionsRepo, f.user.UUID, f.session.UUID))
-		_, err = f.emailChanges.Attempt(context.Background(), f.user.UUID, f.session.UUID, domain.EmailChangeMaxAttempts)
+		_, err = f.emailChanges.Attempt(context.Background(), f.user.UUID, f.session.UUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts)
 		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
 	})
 
@@ -158,7 +158,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 		assert.Zero(t, stored.EmailChangedAt)
 		assert.True(t, sessionExists(t, f.sessionsRepo, f.user.UUID, f.session.UUID))
 		f.emailVerification.AssertNotCalled(t, "SendEmailChangedNotice", mock.Anything)
-		challenge, err := f.emailChanges.Attempt(context.Background(), f.user.UUID, f.session.UUID, domain.EmailChangeMaxAttempts)
+		challenge, err := f.emailChanges.Attempt(context.Background(), f.user.UUID, f.session.UUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts)
 		require.NoError(t, err)
 		assert.Equal(t, newEmail, challenge.NewEmail)
 	})

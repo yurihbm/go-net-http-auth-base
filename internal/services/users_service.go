@@ -17,7 +17,7 @@ type usersService struct {
 	emailVerification domain.EmailVerificationService
 	sessionsRepo      domain.SessionsRepository
 	authRepo          domain.AuthRepository
-	emailChanges      domain.EmailChangeRepository
+	challenges        domain.SessionChallengeRepository
 	limiter           domain.EmailSendLimiter
 	transactor        domain.Transactor
 	hmacKey           []byte
@@ -28,7 +28,7 @@ func NewUserService(
 	emailVerification domain.EmailVerificationService,
 	sessionsRepo domain.SessionsRepository,
 	authRepo domain.AuthRepository,
-	emailChanges domain.EmailChangeRepository,
+	challenges domain.SessionChallengeRepository,
 	limiter domain.EmailSendLimiter,
 	transactor domain.Transactor,
 	hmacKey []byte,
@@ -38,7 +38,7 @@ func NewUserService(
 		emailVerification: emailVerification,
 		sessionsRepo:      sessionsRepo,
 		authRepo:          authRepo,
-		emailChanges:      emailChanges,
+		challenges:        challenges,
 		limiter:           limiter,
 		transactor:        transactor,
 		hmacKey:           hmacKey,
@@ -133,9 +133,10 @@ func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Acto
 
 	// The new code only replaces the old one when the address may receive another email.
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
-		_, err := s.emailChanges.Upsert(ctx, domain.EmailChangeChallenge{
+		err := s.challenges.Upsert(ctx, domain.SessionChallenge{
 			UserUUID:     user.UUID,
 			SessionUUID:  sessionUUID,
+			Purpose:      domain.SessionChallengeEmailChange,
 			NewEmail:     newEmail,
 			EmailVersion: user.EmailVersion,
 			CodeHash:     s.hashEmailChangeCode(sessionUUID, code),
@@ -151,7 +152,7 @@ func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Acto
 	}
 
 	if err := s.emailVerification.SendEmailChangeCode(ctx, newEmail, code); err != nil {
-		if deleteErr := s.emailChanges.Delete(ctx, sessionUUID); deleteErr != nil {
+		if deleteErr := s.challenges.Delete(ctx, sessionUUID, domain.SessionChallengeEmailChange); deleteErr != nil {
 			slog.ErrorContext(ctx, "email change challenge cleanup failed", "error", deleteErr, "user_uuid", user.UUID)
 		}
 		return domain.NewInternalServerError("users.emailChange.sendFailed", err)
@@ -164,7 +165,7 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, actor domain.Acto
 		return nil, domain.NewUnauthorizedError("users.emailChange.unauthorized")
 	}
 
-	challenge, err := s.emailChanges.Attempt(ctx, actor.UUID, sessionUUID, domain.EmailChangeMaxAttempts)
+	challenge, err := s.challenges.Attempt(ctx, actor.UUID, sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts)
 	if err != nil {
 		return nil, err
 	}
