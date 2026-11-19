@@ -1,12 +1,16 @@
 package services
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"math/big"
+
+	"go-net-http-auth-base/internal/domain"
 )
 
 func generateOTP() (string, error) {
@@ -21,4 +25,15 @@ func hashOTP(key []byte, scope string, code string) string {
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(scope + ":" + code))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func sendOrRollback(ctx context.Context, sendFailedKey string, send func() error, rollback func() error) error {
+	sendErr := send()
+	if sendErr == nil {
+		return nil
+	}
+	if err := rollback(); err != nil {
+		slog.ErrorContext(ctx, "code cleanup after a failed send failed", "error", err, "send_failed_key", sendFailedKey)
+	}
+	return domain.NewInternalServerError(sendFailedKey, sendErr)
 }

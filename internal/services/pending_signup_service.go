@@ -155,11 +155,12 @@ func (s *pendingSignupService) start(ctx context.Context, pending domain.Pending
 		return "", err
 	}
 
-	if err := s.emails.SendSignupCode(ctx, created.Email, code); err != nil {
-		if deleteErr := s.pending.Delete(ctx, created.UUID); deleteErr != nil {
-			slog.ErrorContext(ctx, "pending signup cleanup failed", "error", deleteErr)
-		}
-		return "", domain.NewInternalServerError("auth.signup.sendFailed", err)
+	err = sendOrRollback(ctx, "auth.signup.sendFailed",
+		func() error { return s.emails.SendSignupCode(ctx, created.Email, code) },
+		func() error { return s.pending.Delete(ctx, created.UUID) },
+	)
+	if err != nil {
+		return "", err
 	}
 	return created.UUID, nil
 }
