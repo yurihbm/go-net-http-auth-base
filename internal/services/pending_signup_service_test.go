@@ -170,7 +170,7 @@ func TestPendingSignupService_StartOAuth(t *testing.T) {
 		var code string
 		expectReserveSend(m, signupEmail, nil)
 		expectCreatePending(m, &stored)
-		m.emails.On("SendSignupCode", signupEmail, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+		m.emails.On("SendOAuthSignupCode", signupEmail, mock.Anything, domain.OAuthProviderGitHub).Return(nil).Once().Run(func(args mock.Arguments) {
 			code = args.String(1)
 		})
 
@@ -218,6 +218,20 @@ func TestPendingSignupService_Resend(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, signupHash(signupPendingUUID, code), storedHash)
 		m.limiter.AssertExpectations(t)
+	})
+
+	t.Run("success - oauth sign-up resends the OAuth code email", func(t *testing.T) {
+		oauthPending := &domain.PendingSignup{UUID: signupPendingUUID, Email: signupEmail, Kind: domain.PendingSignupKindOAuth, Provider: domain.OAuthProviderMicrosoft}
+		service, m := newTestPendingSignupService()
+		m.pending.On("FindByUUID", signupPendingUUID).Return(oauthPending, nil).Once()
+		m.pending.On("Resend", signupPendingUUID, mock.Anything, domain.SignupCodeTTL).Return(oauthPending, nil).Once()
+		expectReserveSend(m, signupEmail, nil)
+		m.emails.On("SendOAuthSignupCode", signupEmail, mock.Anything, domain.OAuthProviderMicrosoft).Return(nil).Once()
+
+		err := service.Resend(context.Background(), signupPendingUUID)
+
+		require.NoError(t, err)
+		m.emails.AssertNotCalled(t, "SendSignupCode", mock.Anything, mock.Anything)
 	})
 
 	t.Run("error - no pending signup", func(t *testing.T) {
