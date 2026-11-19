@@ -540,7 +540,7 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 }
 
 func TestUsersController_ConfirmEmailChange(t *testing.T) {
-	dto := domain.ConfirmEmailChangeDTO{Code: "123456"}
+	dto := domain.CodeDTO{Code: "123456"}
 	user := &domain.User{UUID: actor.UUID, Email: "new@example.com"}
 
 	t.Run("success", func(t *testing.T) {
@@ -570,7 +570,7 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 		for name, code := range map[string]string{"missing": "", "too short": "123", "not numeric": "12345a"} {
 			controller, serviceMock, auditMock, _ := newTestUsersController()
 
-			w, req := getActorControllerArgs("POST", "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: code})
+			w, req := getActorControllerArgs("POST", "/users/me/email/confirm", domain.CodeDTO{Code: code})
 
 			controller.ConfirmEmailChange(w, req)
 

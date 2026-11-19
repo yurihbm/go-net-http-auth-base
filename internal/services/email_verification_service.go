@@ -25,13 +25,9 @@ func NewEmailVerificationService(tokens domain.TokenService, emailProvider domai
 }
 
 func (s *emailVerificationService) SendEmailChangeCode(ctx context.Context, newEmail string, code string) error {
-	minutes := int(domain.EmailChangeCodeTTL.Minutes())
-	return s.emailProvider.Send(ctx, domain.EmailMessage{
-		To:      newEmail,
-		Subject: "Confirm your new email address",
-		Text:    fmt.Sprintf("Your email change code is %s. Enter it in the browser where you requested the change to confirm it as the email of your account. It expires in %d minutes. Never share this code with anyone. If you did not request this change, ignore this email.", code, minutes),
-		HTML:    fmt.Sprintf("<p>Your email change code is <strong>%s</strong>. Enter it in the browser where you requested the change to confirm it as the email of your account. It expires in %d minutes.</p><p>Never share this code with anyone. If you did not request this change, ignore this email.</p>", html.EscapeString(code), minutes),
-	})
+	return s.emailProvider.Send(ctx, codeEmail(newEmail, "Confirm your new email address", "email change code", code,
+		"Enter it in the browser where you requested the change to confirm it as the email of your account.", domain.EmailChangeCodeTTL,
+		"Never share this code with anyone. If you did not request this change, ignore this email."))
 }
 
 func (s *emailVerificationService) SendEmailChangedNotice(ctx context.Context, revert domain.EmailChangeRevert) error {
