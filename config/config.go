@@ -94,7 +94,6 @@ type CORSConfig struct {
 type EmailConfig struct {
 	ResendAPIKey    string
 	From            string
-	VerificationURL string
 	ChangeURL       string
 	ChangeRevertURL string
 }
@@ -191,7 +190,6 @@ func Load() (*Config, error) {
 		Email: EmailConfig{
 			ResendAPIKey:    os.Getenv("RESEND_API_KEY"),
 			From:            os.Getenv("EMAIL_FROM"),
-			VerificationURL: os.Getenv("EMAIL_VERIFICATION_URL"),
 			ChangeURL:       os.Getenv("EMAIL_CHANGE_URL"),
 			ChangeRevertURL: os.Getenv("EMAIL_CHANGE_REVERT_URL"),
 		},
@@ -249,7 +247,6 @@ func Load() (*Config, error) {
 		required := []struct{ name, value string }{
 			{"RESEND_API_KEY", cfg.Email.ResendAPIKey},
 			{"EMAIL_FROM", cfg.Email.From},
-			{"EMAIL_VERIFICATION_URL", cfg.Email.VerificationURL},
 			{"EMAIL_CHANGE_URL", cfg.Email.ChangeURL},
 			{"EMAIL_CHANGE_REVERT_URL", cfg.Email.ChangeRevertURL},
 		}

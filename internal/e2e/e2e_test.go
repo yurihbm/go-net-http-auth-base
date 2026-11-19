@@ -51,7 +51,6 @@ func run(m *testing.M) int {
 		"RATE_LIMIT_BURST":               "1000",
 		"RESEND_API_KEY":                 "",
 		"EMAIL_FROM":                     "noreply@example.com",
-		"EMAIL_VERIFICATION_URL":         "http://app.test/verify-email",
 		"EMAIL_CHANGE_URL":               "http://app.test/confirm-email-change",
 		"EMAIL_CHANGE_REVERT_URL":        "http://app.test/revert-email-change",
 	} {

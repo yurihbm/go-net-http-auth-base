@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var stepUpCodePattern = regexp.MustCompile(`code is (\d{6})`)
+var otpCodePattern = regexp.MustCompile(`code is (\d{6})`)
 
 type capturingEmailProvider struct {
 	mu       sync.Mutex
@@ -42,11 +42,11 @@ func (p *capturingEmailProvider) last(t *testing.T, to string) domain.EmailMessa
 	return msg
 }
 
-func (p *capturingEmailProvider) stepUpCode(t *testing.T, to string) string {
+func (p *capturingEmailProvider) otpCode(t *testing.T, to string) string {
 	t.Helper()
 
-	match := stepUpCodePattern.FindStringSubmatch(p.last(t, to).Text)
-	require.Len(t, match, 2, "no step-up code in the email to %s", to)
+	match := otpCodePattern.FindStringSubmatch(p.last(t, to).Text)
+	require.Len(t, match, 2, "no code in the email to %s", to)
 	return match[1]
 }
 

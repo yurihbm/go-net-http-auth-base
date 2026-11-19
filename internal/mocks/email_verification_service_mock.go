@@ -14,14 +14,9 @@ type EmailVerificationServiceMock struct {
 
 var _ domain.EmailVerificationService = (*EmailVerificationServiceMock)(nil)
 
-func (m *EmailVerificationServiceMock) SendVerificationEmail(ctx context.Context, user *domain.User) error {
-	args := m.Called(ctx, user)
+func (m *EmailVerificationServiceMock) SendSignupCode(ctx context.Context, email string, code string) error {
+	args := m.Called(email, code)
 	return args.Error(0)
-}
-
-func (m *EmailVerificationServiceMock) VerifyVerificationToken(ctx context.Context, token string) (string, error) {
-	args := m.Called(token)
-	return args.String(0), args.Error(1)
 }
 
 func (m *EmailVerificationServiceMock) SendEmailChangeEmail(ctx context.Context, user *domain.User, newEmail string) error {

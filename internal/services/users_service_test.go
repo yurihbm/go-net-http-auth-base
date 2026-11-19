@@ -103,10 +103,10 @@ func TestUsersService_GetByEmail(t *testing.T) {
 }
 
 func TestUsersService_Create(t *testing.T) {
-	dto := domain.CreateUserDTO{
-		Name:     "Test User",
-		Email:    "test@example.com",
-		Password: "password123",
+	dto := domain.NewUserDTO{
+		Name:         "Test User",
+		Email:        " Test@Example.com",
+		PasswordHash: "hashed-password",
 	}
 	created := &domain.User{
 		UUID:         "generated-uuid",
@@ -117,47 +117,27 @@ func TestUsersService_Create(t *testing.T) {
 		CreatedAt:    1234567890,
 	}
 
-	t.Run("success sends the verification email", func(t *testing.T) {
+	t.Run("success stores the given hash without sending email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		sender := new(mocks.EmailVerificationServiceMock)
 		service := services.NewUserService(repo, sender, nil, nil, newTransactorMock())
-		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
-		repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
-			return u.Role == domain.RoleUser
-		})).Return(created, nil).Once()
-		sender.On("SendVerificationEmail", mock.Anything, created).Return(nil).Once()
-
-		user, err := service.Create(context.Background(), dto)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, user)
-		assert.Equal(t, "generated-uuid", user.UUID)
-		assert.Equal(t, dto.Name, user.Name)
-		assert.Equal(t, dto.Email, user.Email)
-		assert.Equal(t, "hashed-password", user.PasswordHash)
-		assert.Equal(t, domain.RoleUser, user.Role)
-		assert.Equal(t, int64(1234567890), user.CreatedAt)
-		repo.AssertExpectations(t)
-		sender.AssertExpectations(t)
-		sender.AssertNumberOfCalls(t, "SendVerificationEmail", 1)
-	})
-
-	t.Run("verification email failure does not fail creation", func(t *testing.T) {
-		repo := new(mocks.UsersRepositoryMock)
-		sender := new(mocks.EmailVerificationServiceMock)
-		service := services.NewUserService(repo, sender, nil, nil, newTransactorMock())
-		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
-		repo.On("Create", mock.AnythingOfType("domain.User")).Return(created, nil).Once()
-		sender.On("SendVerificationEmail", mock.Anything, created).Return(errors.New("smtp down")).Once()
+		repo.On("IsEmailReserved", "test@example.com").Return(false, nil).Once()
+		repo.On("Create", domain.User{
+			Name:         "Test User",
+			Email:        "test@example.com",
+			PasswordHash: "hashed-password",
+			Role:         domain.RoleUser,
+		}).Return(created, nil).Once()
 
 		user, err := service.Create(context.Background(), dto)
 
 		assert.NoError(t, err)
 		assert.Equal(t, created, user)
-		sender.AssertExpectations(t)
+		repo.AssertExpectations(t)
+		assert.Empty(t, sender.Calls)
 	})
 
-	t.Run("success oauth (no password) does not send the verification email", func(t *testing.T) {
+	t.Run("success oauth (no password)", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		sender := new(mocks.EmailVerificationServiceMock)
 		service := services.NewUserService(repo, sender, nil, nil, newTransactorMock())
@@ -189,13 +169,12 @@ func TestUsersService_Create(t *testing.T) {
 		assert.Equal(t, domain.RoleUser, user.Role)
 		assert.Equal(t, int64(1234567890), user.CreatedAt)
 		repo.AssertExpectations(t)
-		sender.AssertNotCalled(t, "SendVerificationEmail", mock.Anything, mock.Anything)
+		assert.Empty(t, sender.Calls)
 	})
 
 	t.Run("repository create error", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		sender := new(mocks.EmailVerificationServiceMock)
-		service := services.NewUserService(repo, sender, nil, nil, newTransactorMock())
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.AnythingOfType("domain.User")).Return(nil, errors.New("db error")).Once()
 
@@ -205,7 +184,6 @@ func TestUsersService_Create(t *testing.T) {
 		assert.Equal(t, "db error", err.Error())
 		assert.Nil(t, user)
 		repo.AssertExpectations(t)
-		sender.AssertNotCalled(t, "SendVerificationEmail", mock.Anything, mock.Anything)
 	})
 }
 
@@ -380,120 +358,6 @@ func newVerificationUsersService() (domain.UsersService, *mocks.UsersRepositoryM
 	return services.NewUserService(repo, emailVerification, nil, nil, newTransactorMock()), repo, emailVerification
 }
 
-func TestUsersService_VerifyEmail(t *testing.T) {
-	t.Run("marks unverified user as verified", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		emailVerification.On("VerifyVerificationToken", "token").Return("user-uuid", nil).Once()
-		repo.On("FindByUUID", "user-uuid").Return(&domain.User{UUID: "user-uuid"}, nil).Once()
-		repo.On("MarkEmailVerified", "user-uuid").Return(nil).Once()
-
-		err := service.VerifyEmail(context.Background(), "token")
-
-		assert.NoError(t, err)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("already verified is idempotent", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		emailVerification.On("VerifyVerificationToken", "token").Return("user-uuid", nil).Once()
-		repo.On("FindByUUID", "user-uuid").Return(&domain.User{UUID: "user-uuid", EmailVerified: true}, nil).Once()
-
-		err := service.VerifyEmail(context.Background(), "token")
-
-		assert.NoError(t, err)
-		repo.AssertNotCalled(t, "MarkEmailVerified", mock.Anything)
-	})
-
-	t.Run("invalid token", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		emailVerification.On("VerifyVerificationToken", "token").Return("", services.ErrInvalidToken).Once()
-
-		err := service.VerifyEmail(context.Background(), "token")
-
-		assert.ErrorIs(t, err, services.ErrInvalidToken)
-		repo.AssertNotCalled(t, "FindByUUID", mock.Anything)
-	})
-
-	t.Run("unknown user", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		notFound := domain.NewNotFoundError("users.notFound")
-		emailVerification.On("VerifyVerificationToken", "token").Return("ghost", nil).Once()
-		repo.On("FindByUUID", "ghost").Return(nil, notFound).Once()
-
-		err := service.VerifyEmail(context.Background(), "token")
-
-		assert.ErrorIs(t, err, notFound)
-		repo.AssertNotCalled(t, "MarkEmailVerified", mock.Anything)
-	})
-
-	t.Run("mark error", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		markErr := errors.New("db error")
-		emailVerification.On("VerifyVerificationToken", "token").Return("user-uuid", nil).Once()
-		repo.On("FindByUUID", "user-uuid").Return(&domain.User{UUID: "user-uuid"}, nil).Once()
-		repo.On("MarkEmailVerified", "user-uuid").Return(markErr).Once()
-
-		err := service.VerifyEmail(context.Background(), "token")
-
-		assert.ErrorIs(t, err, markErr)
-	})
-}
-
-func TestUsersService_ResendVerification(t *testing.T) {
-	t.Run("sends for unverified user", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		user := &domain.User{UUID: "user-uuid", Email: "test@example.com"}
-		repo.On("FindByEmail", "test@example.com").Return(user, nil).Once()
-		emailVerification.On("SendVerificationEmail", mock.Anything, user).Return(nil).Once()
-
-		err := service.ResendVerification(context.Background(), "test@example.com")
-
-		assert.NoError(t, err)
-		emailVerification.AssertExpectations(t)
-	})
-
-	t.Run("unknown email succeeds silently", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		repo.On("FindByEmail", "ghost@example.com").Return(nil, domain.NewNotFoundError("users.notFound")).Once()
-
-		err := service.ResendVerification(context.Background(), "ghost@example.com")
-
-		assert.NoError(t, err)
-		emailVerification.AssertNotCalled(t, "SendVerificationEmail", mock.Anything, mock.Anything)
-	})
-
-	t.Run("already verified succeeds silently", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		repo.On("FindByEmail", "test@example.com").Return(&domain.User{UUID: "user-uuid", Email: "test@example.com", EmailVerified: true}, nil).Once()
-
-		err := service.ResendVerification(context.Background(), "test@example.com")
-
-		assert.NoError(t, err)
-		emailVerification.AssertNotCalled(t, "SendVerificationEmail", mock.Anything, mock.Anything)
-	})
-
-	t.Run("lookup error is returned", func(t *testing.T) {
-		service, repo, _ := newVerificationUsersService()
-		lookupErr := errors.New("db error")
-		repo.On("FindByEmail", "test@example.com").Return(nil, lookupErr).Once()
-
-		err := service.ResendVerification(context.Background(), "test@example.com")
-
-		assert.ErrorIs(t, err, lookupErr)
-	})
-
-	t.Run("send error is returned", func(t *testing.T) {
-		service, repo, emailVerification := newVerificationUsersService()
-		sendErr := errors.New("smtp down")
-		repo.On("FindByEmail", "test@example.com").Return(&domain.User{UUID: "user-uuid", Email: "test@example.com"}, nil).Once()
-		emailVerification.On("SendVerificationEmail", mock.Anything, mock.Anything).Return(sendErr).Once()
-
-		err := service.ResendVerification(context.Background(), "test@example.com")
-
-		assert.ErrorIs(t, err, sendErr)
-	})
-}
-
 func TestUsersService_Create_ReservedEmail(t *testing.T) {
 	t.Run("error - email reserved during another user's change lock", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
@@ -501,7 +365,7 @@ func TestUsersService_Create_ReservedEmail(t *testing.T) {
 		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid", Email: "taken@example.com"}, nil).Once()
 		repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
 
-		user, err := service.Create(context.Background(), domain.CreateUserDTO{Name: "Squatter", Email: " Taken@Example.com ", Password: "password123"})
+		user, err := service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: " Taken@Example.com ", PasswordHash: "hash"})
 
 		var conflictErr *domain.ConflictError
 		require.True(t, errors.As(err, &conflictErr))
@@ -517,7 +381,7 @@ func TestUsersService_Create_ReservedEmail(t *testing.T) {
 		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
 		repo.On("IsEmailReserved", "taken@example.com").Return(false, lookupErr).Once()
 
-		_, err := service.Create(context.Background(), domain.CreateUserDTO{Name: "Squatter", Email: "taken@example.com", Password: "password123"})
+		_, err := service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: "taken@example.com", PasswordHash: "hash"})
 
 		assert.ErrorIs(t, err, lookupErr)
 	})
@@ -529,34 +393,13 @@ func TestUsersService_CreateOAuth_ReservedEmail(t *testing.T) {
 	repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
 	repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
 
-	user, err := service.CreateOAuth(context.Background(), domain.CreateOAuthUserDTO{Name: "Squatter", Email: "Taken@example.com", EmailVerified: true})
+	user, err := service.CreateOAuth(context.Background(), domain.CreateOAuthUserDTO{Name: "Squatter", Email: "Taken@example.com"})
 
 	var conflictErr *domain.ConflictError
 	require.True(t, errors.As(err, &conflictErr))
 	assert.Equal(t, "users.email.conflict", conflictErr.Error())
 	assert.Nil(t, user)
 	repo.AssertCalled(t, "Create", mock.Anything)
-}
-
-func TestUsersService_CreateOAuth_EmailVerified(t *testing.T) {
-	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, newTransactorMock())
-
-	for _, verified := range []bool{true, false} {
-		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
-		repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
-			return u.EmailVerified == verified
-		})).Return(&domain.User{UUID: "uuid", EmailVerified: verified}, nil).Once()
-
-		user, err := service.CreateOAuth(context.Background(), domain.CreateOAuthUserDTO{
-			Name:          "Test",
-			Email:         "test@example.com",
-			EmailVerified: verified,
-		})
-
-		assert.NoError(t, err)
-		assert.Equal(t, verified, user.EmailVerified)
-	}
 }
 
 func TestUsersService_RequestEmailChange(t *testing.T) {
@@ -700,7 +543,7 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 	change := &domain.EmailChange{UserUUID: "user-uuid", CurrentEmail: "old@example.com", NewEmail: "new@example.com", Version: 3}
 	user := &domain.User{UUID: "user-uuid", Email: "old@example.com", EmailVersion: 3}
 	changedAt := time.Now().Unix()
-	updated := &domain.User{UUID: "user-uuid", Email: "new@example.com", EmailVerified: true, EmailVersion: 4, EmailChangedAt: changedAt}
+	updated := &domain.User{UUID: "user-uuid", Email: "new@example.com", EmailVersion: 4, EmailChangedAt: changedAt}
 
 	expectUpdate := func(f emailChangeFixture) {
 		f.emailVerification.On("VerifyEmailChangeToken", "token").Return(change, nil).Once()

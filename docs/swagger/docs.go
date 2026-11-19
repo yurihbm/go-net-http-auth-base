@@ -256,6 +256,108 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/signup/resend": {
+            "post": {
+                "description": "Emails a new 6-digit code for the pending sign-up and invalidates the previous one. Requires the ` + "`" + `pending_signup` + "`" + ` cookie set by POST /users. One resend per 60 seconds; the sign-up itself still expires 1 hour after POST /users.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Resend the sign-up code",
+                "responses": {
+                    "202": {
+                        "description": "Code sent (auth.signup.codeResent)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "No pending sign-up (auth.signup.noPending)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "429": {
+                        "description": "Cooldown (auth.signup.cooldown) or too many emails to this address (auth.email.sendLimit)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error, or the email could not be sent (auth.signup.sendFailed)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/signup/verify": {
+            "post": {
+                "description": "Creates the account from the pending sign-up with the 6-digit code emailed by POST /users. Requires the ` + "`" + `pending_signup` + "`" + ` cookie set by POST /users, so the code only works in the browser that started the sign-up. A code allows 5 attempts and expires after 10 minutes. On success sets the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies and clears the ` + "`" + `pending_signup` + "`" + ` cookie.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Finish a sign-up",
+                "parameters": [
+                    {
+                        "description": "Code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.SignupVerifyDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Account created and logged in (auth.signup.success)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Wrong code (auth.signup.invalidCode), or no pending sign-up: missing cookie, expired, already used or out of attempts (auth.signup.noPending)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already in use (users.email.conflict)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many wrong codes for this address in 24 hours (auth.email.codeLocked)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/step-up": {
             "post": {
                 "description": "Emails a 6-digit code to the current email address of the user. Valid for 10 minutes, one request per 60 seconds per session. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
@@ -547,7 +649,7 @@ const docTemplate = `{
         },
         "/users": {
             "post": {
-                "description": "Creates a user and sends the verification email.",
+                "description": "Emails a 6-digit code to the address and sets the HttpOnly ` + "`" + `pending_signup` + "`" + ` cookie (` + "`" + `__Host-pending_signup` + "`" + ` outside development, valid for 1 hour). No account exists until POST /auth/signup/verify succeeds in the same browser. One email per address every 60 seconds and 5 per hour.",
                 "consumes": [
                     "application/json"
                 ],
@@ -557,7 +659,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Create a user",
+                "summary": "Start a sign-up",
                 "parameters": [
                     {
                         "description": "User data",
@@ -570,10 +672,10 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "User created",
+                    "202": {
+                        "description": "Code sent (user.create.pending)",
                         "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User"
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
                     },
                     "400": {
@@ -583,13 +685,19 @@ const docTemplate = `{
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Email already in use (users.email.conflict)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many emails to this address (auth.email.sendLimit)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Internal server error, or the email could not be sent (auth.signup.sendFailed)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -763,52 +871,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/resend-verification": {
-            "post": {
-                "description": "Always succeeds for unknown or already verified emails.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Resend the verification email",
-                "parameters": [
-                    {
-                        "description": "Email address",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.ResendVerificationDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Request accepted",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "400": {
-                        "description": "Validation error",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    }
-                }
-            }
-        },
         "/users/revert-email-change": {
             "post": {
                 "description": "Restores the previous email using the token from the \"it wasn't me\" link, signs out every device and unlinks OAuth providers added since the change.",
@@ -860,64 +922,6 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    }
-                }
-            }
-        },
-        "/users/verify-email": {
-            "post": {
-                "description": "Confirms the email using the token from the verification link.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Verify an email address",
-                "parameters": [
-                    {
-                        "description": "Verification token",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.VerifyEmailDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Email verified",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "400": {
-                        "description": "Validation error",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "404": {
-                        "description": "Not found",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -1347,17 +1351,6 @@ const docTemplate = `{
                 }
             }
         },
-        "go-net-http-auth-base_internal_domain.ResendVerificationDTO": {
-            "type": "object",
-            "required": [
-                "email"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                }
-            }
-        },
         "go-net-http-auth-base_internal_domain.RevertEmailChangeDTO": {
             "type": "object",
             "required": [
@@ -1365,6 +1358,17 @@ const docTemplate = `{
             ],
             "properties": {
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_domain.SignupVerifyDTO": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
                     "type": "string"
                 }
             }
@@ -1388,9 +1392,6 @@ const docTemplate = `{
                 },
                 "email": {
                     "type": "string"
-                },
-                "email_verified": {
-                    "type": "boolean"
                 },
                 "name": {
                     "type": "string"
@@ -1421,17 +1422,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "go-net-http-auth-base_internal_domain.VerifyEmailDTO": {
-            "type": "object",
-            "required": [
-                "token"
-            ],
-            "properties": {
-                "token": {
                     "type": "string"
                 }
             }

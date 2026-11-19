@@ -166,7 +166,6 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 		assert.Equal(t, "John Doe Updated", returnedUser.Name)
 		assert.Equal(t, originalEmail, returnedUser.Email)
 		assert.Equal(t, createdUser.Role, returnedUser.Role)
-		assert.Equal(t, createdUser.EmailVerified, returnedUser.EmailVerified)
 		assert.GreaterOrEqual(t, returnedUser.UpdatedAt, createdUser.CreatedAt)
 
 		updatedUser, err := repo.FindByUUID(context.Background(), createdUser.UUID)
@@ -198,8 +197,7 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 	repo := setupUsersRepoTest(t)
 	createdUser := seedUser(t, repo)
 
-	t.Run("success sets the email as verified and bumps the version", func(t *testing.T) {
-		require.False(t, createdUser.EmailVerified)
+	t.Run("success sets the email and bumps the version", func(t *testing.T) {
 		require.Equal(t, 0, createdUser.EmailVersion)
 		require.Zero(t, createdUser.EmailChangedAt)
 		changedAt := time.Now()
@@ -208,13 +206,11 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, "john.new@example.com", returnedUser.Email)
-		assert.True(t, returnedUser.EmailVerified)
 		assert.Equal(t, 1, returnedUser.EmailVersion)
 		assert.Equal(t, changedAt.Unix(), returnedUser.EmailChangedAt)
 		found, err := repo.FindByUUID(context.Background(), createdUser.UUID)
 		require.NoError(t, err)
 		assert.Equal(t, "john.new@example.com", found.Email)
-		assert.True(t, found.EmailVerified)
 		assert.Equal(t, 1, found.EmailVersion)
 	})
 
@@ -394,42 +390,6 @@ func TestUsersPostgresRepository_Delete(t *testing.T) {
 
 	t.Run("invalid uuid", func(t *testing.T) {
 		err := repo.Delete(context.Background(), "invalid-uuid")
-		require.Error(t, err)
-		var validationErr *domain.ValidationError
-		assert.True(t, errors.As(err, &validationErr))
-	})
-}
-
-func TestUsersPostgresRepository_MarkEmailVerified(t *testing.T) {
-	repo := setupUsersRepoTest(t)
-	createdUser := seedUser(t, repo)
-
-	t.Run("new users are unverified by default", func(t *testing.T) {
-		assert.False(t, createdUser.EmailVerified)
-	})
-
-	t.Run("create persists email verified flag", func(t *testing.T) {
-		verified, err := repo.Create(context.Background(), domain.User{
-			Name:          "Verified",
-			Email:         "verified@example.com",
-			Role:          domain.RoleUser,
-			EmailVerified: true,
-		})
-		require.NoError(t, err)
-		assert.True(t, verified.EmailVerified)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		err := repo.MarkEmailVerified(context.Background(), createdUser.UUID)
-		require.NoError(t, err)
-
-		found, err := repo.FindByUUID(context.Background(), createdUser.UUID)
-		require.NoError(t, err)
-		assert.True(t, found.EmailVerified)
-	})
-
-	t.Run("invalid uuid", func(t *testing.T) {
-		err := repo.MarkEmailVerified(context.Background(), "invalid-uuid")
 		require.Error(t, err)
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))

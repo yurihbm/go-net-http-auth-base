@@ -10,32 +10,36 @@ import (
 )
 
 type UsersController struct {
-	userService      domain.UsersService
-	auditService     domain.AuditService
-	authMiddleware   middlewares.HandlerMiddleware
-	stepUpMiddleware middlewares.HandlerMiddleware
+	userService          domain.UsersService
+	pendingSignupService domain.PendingSignupService
+	auditService         domain.AuditService
+	authMiddleware       middlewares.HandlerMiddleware
+	stepUpMiddleware     middlewares.HandlerMiddleware
+	isSecureCookie       bool
 }
 
 var _ Controller = (*UsersController)(nil)
 
 func NewUsersController(
 	service domain.UsersService,
+	pendingSignupService domain.PendingSignupService,
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	stepUpMiddleware middlewares.HandlerMiddleware,
+	isSecureCookie bool,
 ) *UsersController {
 	return &UsersController{
-		userService:      service,
-		auditService:     auditService,
-		authMiddleware:   authMiddleware,
-		stepUpMiddleware: stepUpMiddleware,
+		userService:          service,
+		pendingSignupService: pendingSignupService,
+		auditService:         auditService,
+		authMiddleware:       authMiddleware,
+		stepUpMiddleware:     stepUpMiddleware,
+		isSecureCookie:       isSecureCookie,
 	}
 }
 
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users", c.CreateUser)
-	router.HandleFunc("POST /users/verify-email", c.VerifyEmail)
-	router.HandleFunc("POST /users/resend-verification", c.ResendVerification)
 	router.HandleFunc("POST /users/confirm-email-change", c.ConfirmEmailChange)
 	router.HandleFunc("POST /users/revert-email-change", c.RevertEmailChange)
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
@@ -45,16 +49,17 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("DELETE /users/{uuid}", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.DeleteUser)))
 }
 
-// @Summary		Create a user
-// @Description	Creates a user and sends the verification email.
+// @Summary		Start a sign-up
+// @Description	Emails a 6-digit code to the address and sets the HttpOnly `pending_signup` cookie (`__Host-pending_signup` outside development, valid for 1 hour). No account exists until POST /auth/signup/verify succeeds in the same browser. One email per address every 60 seconds and 5 per hour.
 // @Tags			users
 // @Accept			json
 // @Produce		json
-// @Param			body	body		domain.CreateUserDTO			true	"User data"
-// @Success		201		{object}	api.ResponseBody[domain.User]	"User created"
-// @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
-// @Failure		409		{object}	api.ResponseBody[any]			"Conflict"
-// @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
+// @Param			body	body		domain.CreateUserDTO	true	"User data"
+// @Success		202		{object}	api.ResponseBody[any]	"Code sent (user.create.pending)"
+// @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
+// @Failure		409		{object}	api.ResponseBody[any]	"Email already in use (users.email.conflict)"
+// @Failure		429		{object}	api.ResponseBody[any]	"Too many emails to this address (auth.email.sendLimit)"
+// @Failure		500		{object}	api.ResponseBody[any]	"Internal server error, or the email could not be sent (auth.signup.sendFailed)"
 // @Router			/users [post]
 func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 	dto, err := api.DecodeAndValidate[domain.CreateUserDTO](r)
@@ -63,12 +68,12 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := c.userService.Create(r.Context(), dto)
+	pendingUUID, err := c.pendingSignupService.StartCredentials(r.Context(), dto)
 	if err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 			ActorUUID:     actorUUID(r),
-			Action:        domain.AuditActionUserCreate,
+			Action:        domain.AuditActionSignupRequest,
 			ResourceType:  domain.AuditResourceUser,
 			ResourceUUID:  "",
 			Status:        domain.AuditStatusFailure,
@@ -80,78 +85,15 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),
-		Action:       domain.AuditActionUserCreate,
+		Action:       domain.AuditActionSignupRequest,
 		ResourceType: domain.AuditResourceUser,
-		ResourceUUID: user.UUID,
-		Status:       domain.AuditStatusSuccess,
-	})
-
-	api.WriteJSONResponse(w, http.StatusCreated, api.ResponseBody[domain.User]{
-		Data:    *user,
-		Message: "user.create.success",
-	})
-}
-
-// @Summary		Verify an email address
-// @Description	Confirms the email using the token from the verification link.
-// @Tags			users
-// @Accept			json
-// @Produce		json
-// @Param			body	body		domain.VerifyEmailDTO	true	"Verification token"
-// @Success		200		{object}	api.ResponseBody[any]	"Email verified"
-// @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
-// @Failure		401		{object}	api.ResponseBody[any]	"Unauthorized"
-// @Failure		404		{object}	api.ResponseBody[any]	"Not found"
-// @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
-// @Router			/users/verify-email [post]
-func (c *UsersController) VerifyEmail(w http.ResponseWriter, r *http.Request) {
-	dto, err := api.DecodeAndValidate[domain.VerifyEmailDTO](r)
-	if err != nil {
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	if err := c.userService.VerifyEmail(r.Context(), dto.Token); err != nil {
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
-		Action:       domain.AuditActionVerifyEmail,
-		ResourceType: domain.AuditResourceAuth,
 		ResourceUUID: "",
 		Status:       domain.AuditStatusSuccess,
 	})
 
-	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
-		Message: "user.verifyEmail.success",
-	})
-}
-
-// @Summary		Resend the verification email
-// @Description	Always succeeds for unknown or already verified emails.
-// @Tags			users
-// @Accept			json
-// @Produce		json
-// @Param			body	body		domain.ResendVerificationDTO	true	"Email address"
-// @Success		200		{object}	api.ResponseBody[any]			"Request accepted"
-// @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
-// @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
-// @Router			/users/resend-verification [post]
-func (c *UsersController) ResendVerification(w http.ResponseWriter, r *http.Request) {
-	dto, err := api.DecodeAndValidate[domain.ResendVerificationDTO](r)
-	if err != nil {
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	if err := c.userService.ResendVerification(r.Context(), dto.Email); err != nil {
-		api.HandleError(r.Context(), w, err)
-		return
-	}
-
-	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
-		Message: "user.resendVerification.success",
+	api.SetPendingSignupCookie(w, pendingUUID, c.isSecureCookie)
+	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
+		Message: "user.create.pending",
 	})
 }
 
