@@ -58,6 +58,10 @@ func toTimestamptz(t *time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
+func toInterval(d time.Duration) pgtype.Interval {
+	return pgtype.Interval{Microseconds: d.Microseconds(), Valid: true}
+}
+
 func unixOrZero(t pgtype.Timestamptz) int64 {
 	if !t.Valid {
 		return 0

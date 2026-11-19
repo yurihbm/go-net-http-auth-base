@@ -333,7 +333,7 @@ func (c *AuthController) ResendSignup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) pendingSignupUUID(r *http.Request) (string, bool) {
-	cookie, err := r.Cookie(api.PendingSignupCookieName(c.isSecureCookie))
+	cookie, err := r.Cookie(api.OAuthFlowCookieName(api.PendingSignupCookieName, c.isSecureCookie))
 	if err != nil || cookie.Value == "" {
 		return "", false
 	}

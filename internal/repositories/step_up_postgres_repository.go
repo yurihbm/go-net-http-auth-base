@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type StepUpPostgresRepository struct {
@@ -37,7 +36,7 @@ func (r *StepUpPostgresRepository) Upsert(ctx context.Context, challenge domain.
 		SessionUuid: *sessionUUID,
 		CodeHash:    challenge.CodeHash,
 		ExpiresAt:   toTimestamptz(&expiresAt),
-		Cooldown:    pgtype.Interval{Microseconds: cooldown.Microseconds(), Valid: true},
+		Cooldown:    toInterval(cooldown),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
