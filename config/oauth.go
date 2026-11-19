@@ -40,7 +40,9 @@ func NewMicrosoftOAuthConfig(creds OAuthProviderCredentials, apiURL string) oaut
 		RedirectURL:  apiURL + "/auth/microsoft/callback",
 		Endpoint:     microsoft.AzureADEndpoint(""),
 		Scopes: []string{
-			"User.Read",
+			"openid",
+			"email",
+			"profile",
 		},
 	}
 }
