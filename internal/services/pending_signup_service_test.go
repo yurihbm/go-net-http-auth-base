@@ -258,7 +258,7 @@ func TestPendingSignupService_Resend(t *testing.T) {
 func TestPendingSignupService_Attempt(t *testing.T) {
 	const code = "123456"
 	pending := &domain.PendingSignup{UUID: signupPendingUUID, Email: signupEmail}
-	attempted := &domain.PendingSignup{UUID: signupPendingUUID, Email: signupEmail, CodeHash: signupHash(signupPendingUUID, code), Attempts: 1}
+	attempted := &domain.PendingSignup{UUID: signupPendingUUID, Email: signupEmail, CodeHash: signupHash(signupPendingUUID, code)}
 
 	t.Run("success refunds the reserved guess", func(t *testing.T) {
 		service, m := newTestPendingSignupService()

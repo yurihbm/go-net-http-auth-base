@@ -45,6 +45,12 @@ func ageChallenge(t *testing.T, sessionUUID string, age time.Duration) {
 	require.NoError(t, err)
 }
 
+func challengeAttempts(t *testing.T, sessionUUID string) int {
+	var attempts int
+	require.NoError(t, testDB.QueryRow(context.Background(), "SELECT attempts FROM step_up_challenges WHERE session_uuid = $1", sessionUUID).Scan(&attempts))
+	return attempts
+}
+
 func TestStepUpPostgresRepository_Upsert(t *testing.T) {
 	repo, user, session := setupStepUpRepoTest(t)
 	ctx := context.Background()
@@ -56,9 +62,8 @@ func TestStepUpPostgresRepository_Upsert(t *testing.T) {
 		assert.Equal(t, user.UUID, challenge.UserUUID)
 		assert.Equal(t, session.UUID, challenge.SessionUUID)
 		assert.Equal(t, "hash-1", challenge.CodeHash)
-		assert.Equal(t, 0, challenge.Attempts)
+		assert.Equal(t, 0, challengeAttempts(t, session.UUID))
 		assert.InDelta(t, time.Now().Add(domain.StepUpCodeTTL).Unix(), challenge.ExpiresAt, 5)
-		assert.InDelta(t, time.Now().Unix(), challenge.CreatedAt, 5)
 	})
 
 	t.Run("error - cooldown", func(t *testing.T) {
@@ -79,7 +84,7 @@ func TestStepUpPostgresRepository_Upsert(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, "hash-3", challenge.CodeHash)
-		assert.Equal(t, 0, challenge.Attempts)
+		assert.Equal(t, 0, challengeAttempts(t, session.UUID))
 	})
 
 	t.Run("error - unknown session", func(t *testing.T) {
@@ -121,7 +126,7 @@ func TestStepUpPostgresRepository_Attempt(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, "hash-1", challenge.CodeHash)
-			assert.Equal(t, i, challenge.Attempts)
+			assert.Equal(t, i, challengeAttempts(t, session.UUID))
 		}
 
 		challenge, err := repo.Attempt(ctx, user.UUID, session.UUID, domain.StepUpMaxAttempts)
