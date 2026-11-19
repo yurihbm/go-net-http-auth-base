@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"crypto/hmac"
 	"errors"
 	"log/slog"
 	"time"
@@ -16,7 +17,10 @@ type usersService struct {
 	emailVerification domain.EmailVerificationService
 	sessionsRepo      domain.SessionsRepository
 	authRepo          domain.AuthRepository
+	emailChanges      domain.EmailChangeRepository
+	limiter           domain.EmailSendLimiter
 	transactor        domain.Transactor
+	hmacKey           []byte
 }
 
 func NewUserService(
@@ -24,14 +28,20 @@ func NewUserService(
 	emailVerification domain.EmailVerificationService,
 	sessionsRepo domain.SessionsRepository,
 	authRepo domain.AuthRepository,
+	emailChanges domain.EmailChangeRepository,
+	limiter domain.EmailSendLimiter,
 	transactor domain.Transactor,
+	hmacKey []byte,
 ) domain.UsersService {
 	return &usersService{
 		repo:              repo,
 		emailVerification: emailVerification,
 		sessionsRepo:      sessionsRepo,
 		authRepo:          authRepo,
+		emailChanges:      emailChanges,
+		limiter:           limiter,
 		transactor:        transactor,
+		hmacKey:           hmacKey,
 	}
 }
 
@@ -82,7 +92,7 @@ func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid stri
 	return s.repo.Update(ctx, *user)
 }
 
-func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Actor, email string) error {
+func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Actor, sessionUUID string, email string) error {
 	if actor.UUID == "" {
 		return domain.NewUnauthorizedError("users.emailChange.unauthorized")
 	}
@@ -116,24 +126,68 @@ func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Acto
 		return err
 	}
 
-	return s.emailVerification.SendEmailChangeEmail(ctx, user, newEmail)
+	code, err := generateOTP()
+	if err != nil {
+		return domain.NewInternalServerError("users.emailChange.codeGenerationFailed", err)
+	}
+
+	// The new code only replaces the old one when the address may receive another email.
+	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		_, err := s.emailChanges.Upsert(ctx, domain.EmailChangeChallenge{
+			UserUUID:     user.UUID,
+			SessionUUID:  sessionUUID,
+			NewEmail:     newEmail,
+			EmailVersion: user.EmailVersion,
+			CodeHash:     s.hashEmailChangeCode(sessionUUID, code),
+			ExpiresAt:    time.Now().Add(domain.EmailChangeCodeTTL).Unix(),
+		}, domain.EmailChangeCooldown)
+		if err != nil {
+			return err
+		}
+		return s.limiter.ReserveSend(ctx, newEmail, domain.EmailSendCooldown, domain.EmailSendWindow, domain.EmailMaxSendsPerWindow)
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := s.emailVerification.SendEmailChangeCode(ctx, newEmail, code); err != nil {
+		if deleteErr := s.emailChanges.Delete(ctx, sessionUUID); deleteErr != nil {
+			slog.ErrorContext(ctx, "email change challenge cleanup failed", "error", deleteErr, "user_uuid", user.UUID)
+		}
+		return domain.NewInternalServerError("users.emailChange.sendFailed", err)
+	}
+	return nil
 }
 
-func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*domain.User, error) {
-	change, err := s.emailVerification.VerifyEmailChangeToken(ctx, token)
+func (s *usersService) ConfirmEmailChange(ctx context.Context, actor domain.Actor, sessionUUID string, code string) (*domain.User, error) {
+	if actor.UUID == "" {
+		return nil, domain.NewUnauthorizedError("users.emailChange.unauthorized")
+	}
+
+	challenge, err := s.emailChanges.Attempt(ctx, actor.UUID, sessionUUID, domain.EmailChangeMaxAttempts)
 	if err != nil {
 		return nil, err
 	}
 
-	user, err := s.repo.FindByUUID(ctx, change.UserUUID)
+	if err := s.limiter.ReserveCodeGuess(ctx, challenge.NewEmail, domain.EmailCodeFailureWindow); err != nil {
+		return nil, err
+	}
+
+	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.hashEmailChangeCode(sessionUUID, code))) {
+		return nil, domain.ErrEmailChangeInvalidCode
+	}
+	if err := s.limiter.RefundCodeGuess(ctx, challenge.NewEmail); err != nil {
+		slog.ErrorContext(ctx, "code guess refund failed", "error", err, "user_uuid", actor.UUID)
+	}
+
+	user, err := s.repo.FindByUUID(ctx, actor.UUID)
 	if err != nil {
 		return nil, err
 	}
 
-	// The token is bound to the email and version it was issued for: once the
-	// email changes (even back to the same value), this token and any other
-	// pending one stop working.
-	if user.Email != change.CurrentEmail || user.EmailVersion != change.Version {
+	// The challenge is bound to the email version it was requested for: once
+	// the email changes (even back to the same value), it stops working.
+	if user.EmailVersion != challenge.EmailVersion {
 		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
 	}
 
@@ -145,11 +199,11 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*d
 	var updated *domain.User
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
 		var err error
-		updated, err = s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail, change.Version, &now)
+		updated, err = s.repo.UpdateEmail(ctx, user.UUID, challenge.NewEmail, challenge.EmailVersion, &now)
 		if err != nil {
 			return err
 		}
-		if err := s.ensureEmailNotReserved(ctx, change.NewEmail); err != nil {
+		if err := s.ensureEmailNotReserved(ctx, challenge.NewEmail); err != nil {
 			return err
 		}
 		return s.sessionsRepo.DeleteAllByUser(ctx, user.UUID)
@@ -160,7 +214,7 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*d
 
 	notice := domain.EmailChangeRevert{
 		UserUUID:  updated.UUID,
-		OldEmail:  change.CurrentEmail,
+		OldEmail:  user.Email,
 		NewEmail:  updated.Email,
 		Version:   updated.EmailVersion,
 		ChangedAt: updated.EmailChangedAt,
@@ -238,6 +292,10 @@ func (s *usersService) ensureEmailNotReserved(ctx context.Context, email string)
 		return domain.NewConflictError("users.email.conflict")
 	}
 	return nil
+}
+
+func (s *usersService) hashEmailChangeCode(sessionUUID string, code string) string {
+	return hashOTP(s.hmacKey, "email-change:"+sessionUUID, code)
 }
 
 func isEmailChangeLocked(user *domain.User) bool {

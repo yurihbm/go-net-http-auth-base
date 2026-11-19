@@ -44,11 +44,14 @@ func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, 
 
 var actor = domain.Actor{UUID: "caller-uuid", Role: domain.RoleUser}
 
+const actorSessionUUID = "caller-session-uuid"
+
 func getActorControllerArgs(method string, endpoint string, body any) (*httptest.ResponseRecorder, *http.Request) {
 	w, req := getControllerArgs(method, endpoint, body)
 	ctx := context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{
-		UserUUID: actor.UUID,
-		UserRole: actor.Role,
+		UserUUID:    actor.UUID,
+		UserRole:    actor.Role,
+		SessionUUID: actorSessionUUID,
 	})
 	return w, req.WithContext(ctx)
 }
@@ -57,12 +60,12 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes with auth middleware", func(t *testing.T) {
 		router := http.NewServeMux()
 		controller, _, _, authMiddleware := newTestUsersController()
-		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(5)
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(6)
 
 		controller.RegisterRoutes(router)
 
-		authMiddleware.AssertNumberOfCalls(t, "Use", 5)
-		for _, path := range []string{"/users", "/users/confirm-email-change", "/users/revert-email-change"} {
+		authMiddleware.AssertNumberOfCalls(t, "Use", 6)
+		for _, path := range []string{"/users", "/users/revert-email-change"} {
 			_, pattern := router.Handler(httptest.NewRequest("POST", path, nil))
 			assert.Equal(t, "POST "+path, pattern)
 		}
@@ -486,7 +489,7 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
-		serviceMock.On("RequestEmailChange", actor, dto.Email).Return(nil)
+		serviceMock.On("RequestEmailChange", actor, actorSessionUUID, dto.Email).Return(nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionEmailChangeRequest &&
 				d.ResourceType == domain.AuditResourceUser &&
@@ -514,13 +517,13 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 		controller.RequestEmailChange(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		serviceMock.AssertNotCalled(t, "RequestEmailChange", mock.Anything, mock.Anything)
+		serviceMock.AssertNotCalled(t, "RequestEmailChange", mock.Anything, mock.Anything, mock.Anything)
 		auditMock.AssertNotCalled(t, "Log", mock.Anything)
 	})
 
 	t.Run("error - email taken", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
-		serviceMock.On("RequestEmailChange", actor, dto.Email).Return(domain.NewConflictError("users.email.conflict"))
+		serviceMock.On("RequestEmailChange", actor, actorSessionUUID, dto.Email).Return(domain.NewConflictError("users.email.conflict"))
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionEmailChangeRequest &&
 				d.Status == domain.AuditStatusFailure &&
@@ -537,12 +540,12 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 }
 
 func TestUsersController_ConfirmEmailChange(t *testing.T) {
-	dto := domain.ConfirmEmailChangeDTO{Token: "change-token"}
-	user := &domain.User{UUID: "user-uuid", Email: "new@example.com"}
+	dto := domain.ConfirmEmailChangeDTO{Code: "123456"}
+	user := &domain.User{UUID: actor.UUID, Email: "new@example.com"}
 
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
-		serviceMock.On("ConfirmEmailChange", dto.Token).Return(user, nil)
+		serviceMock.On("ConfirmEmailChange", actor, actorSessionUUID, dto.Code).Return(user, nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionEmailChange &&
 				d.ResourceType == domain.AuditResourceUser &&
@@ -550,7 +553,7 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 				d.Status == domain.AuditStatusSuccess
 		})).Return(nil)
 
-		w, req := getControllerArgs("POST", "/users/confirm-email-change", dto)
+		w, req := getActorControllerArgs("POST", "/users/me/email/confirm", dto)
 
 		controller.ConfirmEmailChange(w, req)
 
@@ -563,40 +566,50 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 		auditMock.AssertExpectations(t)
 	})
 
-	t.Run("error - missing token", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
+	t.Run("error - invalid code", func(t *testing.T) {
+		for name, code := range map[string]string{"missing": "", "too short": "123", "not numeric": "12345a"} {
+			controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		w, req := getControllerArgs("POST", "/users/confirm-email-change", domain.ConfirmEmailChangeDTO{})
+			w, req := getActorControllerArgs("POST", "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: code})
 
-		controller.ConfirmEmailChange(w, req)
+			controller.ConfirmEmailChange(w, req)
 
-		assert.Equal(t, http.StatusBadRequest, w.Code)
-		serviceMock.AssertNotCalled(t, "ConfirmEmailChange", mock.Anything)
-		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+			assert.Equal(t, http.StatusBadRequest, w.Code, name)
+			serviceMock.AssertNotCalled(t, "ConfirmEmailChange", mock.Anything, mock.Anything, mock.Anything)
+			auditMock.AssertNotCalled(t, "Log", mock.Anything)
+		}
 	})
 
-	t.Run("error - stale token", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
-		serviceMock.On("ConfirmEmailChange", dto.Token).Return(nil, domain.NewUnauthorizedError("users.emailChange.staleToken"))
+	failures := map[string]struct {
+		err    error
+		status int
+	}{
+		"wrong code":       {domain.ErrEmailChangeInvalidCode, http.StatusUnauthorized},
+		"no challenge":     {domain.ErrEmailChangeNoChallenge, http.StatusUnauthorized},
+		"stale":            {domain.NewUnauthorizedError("users.emailChange.staleToken"), http.StatusUnauthorized},
+		"address locked":   {domain.ErrEmailCodeLocked, http.StatusTooManyRequests},
+		"email taken":      {domain.NewConflictError("users.email.conflict"), http.StatusConflict},
+		"change lock held": {domain.NewConflictError("users.emailChange.locked"), http.StatusConflict},
+	}
+	for name, tc := range failures {
+		t.Run("error - "+name, func(t *testing.T) {
+			controller, serviceMock, auditMock, _ := newTestUsersController()
+			serviceMock.On("ConfirmEmailChange", actor, actorSessionUUID, dto.Code).Return(nil, tc.err)
+			auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+				return d.Action == domain.AuditActionEmailChange &&
+					d.Status == domain.AuditStatusFailure &&
+					d.FailureReason != nil
+			})).Return(nil)
 
-		w, req := getControllerArgs("POST", "/users/confirm-email-change", dto)
+			w, req := getActorControllerArgs("POST", "/users/me/email/confirm", dto)
 
-		controller.ConfirmEmailChange(w, req)
+			controller.ConfirmEmailChange(w, req)
 
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		auditMock.AssertNotCalled(t, "Log", mock.Anything)
-	})
-
-	t.Run("error - email taken", func(t *testing.T) {
-		controller, serviceMock, _, _ := newTestUsersController()
-		serviceMock.On("ConfirmEmailChange", dto.Token).Return(nil, domain.NewConflictError("users.email.conflict"))
-
-		w, req := getControllerArgs("POST", "/users/confirm-email-change", dto)
-
-		controller.ConfirmEmailChange(w, req)
-
-		assert.Equal(t, http.StatusConflict, w.Code)
-	})
+			assert.Equal(t, tc.status, w.Code)
+			assert.Empty(t, w.Result().Cookies())
+			auditMock.AssertExpectations(t)
+		})
+	}
 }
 
 func assertAuthCookiesCleared(t *testing.T, w *httptest.ResponseRecorder) {

@@ -59,7 +59,7 @@ func TestCompleteSignup_Transaction(t *testing.T) {
 			[]byte("test-secret-key"),
 		)
 		service := services.NewAuthService(
-			services.NewUserService(usersRepo, emails, nil, nil, transactor),
+			services.NewUserService(usersRepo, emails, nil, nil, nil, nil, transactor, nil),
 			pendingSignups,
 			repositories.NewAuthPostgresRepository(db),
 			sessionsRepo,
