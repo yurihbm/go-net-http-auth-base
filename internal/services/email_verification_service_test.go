@@ -283,8 +283,8 @@ func TestEmailVerificationService_SendStepUpCode(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "user@example.com", sent.To)
 		assert.Equal(t, "Your verification code", sent.Subject)
-		assert.Contains(t, sent.Text, "123456")
-		assert.Contains(t, sent.HTML, "123456")
+		assert.Equal(t, "Your verification code is 123456. It expires in 10 minutes. If you did not request it, ignore this email.", sent.Text)
+		assert.Contains(t, sent.HTML, "<strong>123456</strong>")
 	})
 
 	t.Run("error - returns provider error", func(t *testing.T) {
@@ -313,12 +313,8 @@ func TestEmailVerificationService_SendSignupCode(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "new@example.com", sent.To)
 		assert.Equal(t, "Your sign-up code", sent.Subject)
-		assert.Contains(t, sent.Text, "code is 123456")
-		assert.Contains(t, sent.Text, "create")
-		assert.Contains(t, sent.Text, "Never share this code")
-		assert.Contains(t, sent.HTML, "123456")
-		assert.Contains(t, sent.HTML, "Never share this code")
-		assert.NotContains(t, sent.Text, "http")
+		assert.Equal(t, "Your sign-up code is 123456. Enter it in the browser where you started creating your account. It expires in 10 minutes. Never share this code with anyone. If you did not try to create an account, ignore this email.", sent.Text)
+		assert.Equal(t, "<p>Your sign-up code is <strong>123456</strong>. Enter it in the browser where you started creating your account. It expires in 10 minutes.</p><p>Never share this code with anyone. If you did not try to create an account, ignore this email.</p>", sent.HTML)
 	})
 
 	t.Run("error - returns provider error", func(t *testing.T) {
