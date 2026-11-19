@@ -343,13 +343,8 @@ func TestEmailVerificationService_SendOAuthSignupCode(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "new@example.com", sent.To)
 		assert.Equal(t, "Your sign-in code", sent.Subject)
-		assert.Contains(t, sent.Text, "code is 123456")
-		assert.Contains(t, sent.Text, "Microsoft")
-		assert.Contains(t, sent.Text, "linked to the account for this email")
-		assert.Contains(t, sent.Text, "Never share this code")
-		assert.Contains(t, sent.HTML, "123456")
-		assert.Contains(t, sent.HTML, "Never share this code")
-		assert.NotContains(t, sent.Text, "http")
+		assert.Equal(t, "Your sign-in code is 123456. Someone is signing in with a Microsoft account that uses this email. Entering this code signs them in, and the Microsoft account is linked to the account for this email (or a new account is created). Only enter it in the browser where you started signing in. It expires in 10 minutes. Never share this code with anyone. If you did not try to sign in, ignore this email.", sent.Text)
+		assert.Equal(t, "<p>Your sign-in code is <strong>123456</strong>. Someone is signing in with a Microsoft account that uses this email. Entering this code signs them in, and the Microsoft account is linked to the account for this email (or a new account is created). Only enter it in the browser where you started signing in. It expires in 10 minutes.</p><p>Never share this code with anyone. If you did not try to sign in, ignore this email.</p>", sent.HTML)
 	})
 
 	t.Run("error - returns provider error", func(t *testing.T) {
