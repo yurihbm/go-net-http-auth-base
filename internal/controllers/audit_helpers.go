@@ -25,3 +25,13 @@ func auditLog(r *http.Request, auditService domain.AuditService, dto domain.Crea
 		slog.ErrorContext(r.Context(), "audit log failed", "error", err, "action", dto.Action)
 	}
 }
+
+func auditResult(r *http.Request, auditService domain.AuditService, dto domain.CreateAuditLogDTO, err error) {
+	dto.Status = domain.AuditStatusSuccess
+	if err != nil {
+		reason := err.Error()
+		dto.Status = domain.AuditStatusFailure
+		dto.FailureReason = &reason
+	}
+	auditLog(r, auditService, dto)
+}
