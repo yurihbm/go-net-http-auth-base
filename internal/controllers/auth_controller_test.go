@@ -62,7 +62,7 @@ func newTestAuthControllerWithSignup(isSecure bool) (*controllers.AuthController
 }
 
 func withPendingSignupCookie(req *http.Request, isSecure bool, value string) *http.Request {
-	req.AddCookie(&http.Cookie{Name: api.PendingSignupCookieName(isSecure), Value: value})
+	req.AddCookie(&http.Cookie{Name: api.OAuthFlowCookieName(api.PendingSignupCookieName, isSecure), Value: value})
 	return req
 }
 
@@ -599,7 +599,7 @@ func TestAuthController_VerifySignup(t *testing.T) {
 			refresh := findCookie(cookies, api.RefreshTokenCookieName)
 			require.NotNil(t, refresh)
 			assert.Equal(t, "refresh", refresh.Value)
-			pending := findCookie(cookies, api.PendingSignupCookieName(mode.isSecure))
+			pending := findCookie(cookies, api.OAuthFlowCookieName(api.PendingSignupCookieName, mode.isSecure))
 			require.NotNil(t, pending)
 			assert.Less(t, pending.MaxAge, 0)
 			authMock.AssertExpectations(t)
@@ -672,7 +672,7 @@ func TestAuthController_VerifySignup(t *testing.T) {
 
 			assert.Equal(t, tc.status, w.Code)
 			assert.Nil(t, findCookie(w.Result().Cookies(), api.AccessTokenCookieName))
-			assert.Nil(t, findCookie(w.Result().Cookies(), api.PendingSignupCookieName(true)))
+			assert.Nil(t, findCookie(w.Result().Cookies(), api.OAuthFlowCookieName(api.PendingSignupCookieName, true)))
 			auditMock.AssertExpectations(t)
 		})
 	}

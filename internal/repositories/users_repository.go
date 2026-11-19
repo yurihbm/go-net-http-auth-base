@@ -137,7 +137,7 @@ func (r *UsersPostgresRepository) ReserveStepUpGuess(ctx context.Context, uuidSt
 
 	_, err = r.q.ReserveUserStepUpGuess(ctx, postgres.ReserveUserStepUpGuessParams{
 		Uuid:          *uuid,
-		FailureWindow: pgtype.Interval{Microseconds: window.Microseconds(), Valid: true},
+		FailureWindow: toInterval(window),
 		MaxFailures:   int32(domain.StepUpMaxUserFailures),
 	})
 	if err != nil {

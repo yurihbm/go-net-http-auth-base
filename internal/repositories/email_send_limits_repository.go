@@ -9,7 +9,6 @@ import (
 	"go-net-http-auth-base/postgres"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type EmailSendLimitsPostgresRepository struct {
@@ -58,8 +57,4 @@ func (r *EmailSendLimitsPostgresRepository) RefundCodeGuess(ctx context.Context,
 		return domain.NewInternalServerError("auth.email.internalServerError", err)
 	}
 	return nil
-}
-
-func toInterval(d time.Duration) pgtype.Interval {
-	return pgtype.Interval{Microseconds: d.Microseconds(), Valid: true}
 }
