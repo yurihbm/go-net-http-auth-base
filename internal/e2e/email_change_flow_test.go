@@ -55,7 +55,7 @@ func TestEmailChangeFlow(t *testing.T) {
 	})
 
 	t.Run("a second device cannot confirm with the code", func(t *testing.T) {
-		resp := laptop.do(http.MethodPost, "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: mailbox.otpCode(t, newEmail)})
+		resp := laptop.do(http.MethodPost, "/users/me/email/confirm", domain.CodeDTO{Code: mailbox.otpCode(t, newEmail)})
 
 		assert.Equal(t, http.StatusUnauthorized, resp.Status)
 		assert.Equal(t, "users.emailChange.noChallenge", resp.Body.Error)
@@ -67,7 +67,7 @@ func TestEmailChangeFlow(t *testing.T) {
 			wrong = "111111"
 		}
 
-		resp := phone.do(http.MethodPost, "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: wrong})
+		resp := phone.do(http.MethodPost, "/users/me/email/confirm", domain.CodeDTO{Code: wrong})
 
 		assert.Equal(t, http.StatusUnauthorized, resp.Status)
 		assert.Equal(t, "users.emailChange.invalidCode", resp.Body.Error)
@@ -75,7 +75,7 @@ func TestEmailChangeFlow(t *testing.T) {
 
 	code := mailbox.otpCode(t, newEmail)
 	t.Run("confirm in the requesting session changes the email and signs out every device", func(t *testing.T) {
-		resp := phone.do(http.MethodPost, "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: code})
+		resp := phone.do(http.MethodPost, "/users/me/email/confirm", domain.CodeDTO{Code: code})
 
 		require.Equal(t, http.StatusOK, resp.Status)
 		cleared := map[string]bool{}
@@ -94,7 +94,7 @@ func TestEmailChangeFlow(t *testing.T) {
 		device := newClient(t)
 		require.Equal(t, http.StatusOK, device.login(newEmail, user.Password).Status)
 
-		resp := device.do(http.MethodPost, "/users/me/email/confirm", domain.ConfirmEmailChangeDTO{Code: code})
+		resp := device.do(http.MethodPost, "/users/me/email/confirm", domain.CodeDTO{Code: code})
 
 		assert.Equal(t, http.StatusUnauthorized, resp.Status)
 		assert.Equal(t, "users.emailChange.noChallenge", resp.Body.Error)

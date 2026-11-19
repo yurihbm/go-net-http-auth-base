@@ -118,13 +118,6 @@ definitions:
     required:
     - code
     type: object
-  go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO:
-    properties:
-      code:
-        type: string
-    required:
-    - code
-    type: object
   go-net-http-auth-base_internal_domain.CreateUserDTO:
     properties:
       email:
@@ -911,7 +904,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO'
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.CodeDTO'
       produces:
       - application/json
       responses:
