@@ -60,10 +60,6 @@ type RequestEmailChangeDTO struct {
 	Email string `json:"email" validate:"required,email"`
 }
 
-type ConfirmEmailChangeDTO struct {
-	Code string `json:"code" validate:"required,len=6,numeric"`
-}
-
 type RevertEmailChangeDTO struct {
 	Token string `json:"token" validate:"required"`
 }

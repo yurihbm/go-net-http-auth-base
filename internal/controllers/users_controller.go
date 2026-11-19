@@ -152,7 +152,7 @@ func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Requ
 // @Tags			users
 // @Accept			json
 // @Produce		json
-// @Param			body	body		domain.ConfirmEmailChangeDTO	true	"Code"
+// @Param			body	body		domain.CodeDTO	true	"Code"
 // @Success		200		{object}	api.ResponseBody[domain.User]	"Email changed"
 // @Failure		400		{object}	api.ResponseBody[any]			"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]			"Invalid code (users.emailChange.invalidCode), no active challenge for this session (users.emailChange.noChallenge) or stale request (users.emailChange.staleToken)"
@@ -162,7 +162,7 @@ func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Requ
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
 // @Router			/users/me/email/confirm [post]
 func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
-	dto, err := api.DecodeAndValidate[domain.ConfirmEmailChangeDTO](r)
+	dto, err := api.DecodeAndValidate[domain.CodeDTO](r)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return

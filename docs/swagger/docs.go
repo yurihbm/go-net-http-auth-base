@@ -833,7 +833,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO"
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.CodeDTO"
                         }
                     }
                 ],
@@ -1307,17 +1307,6 @@ const docTemplate = `{
             }
         },
         "go-net-http-auth-base_internal_domain.CodeDTO": {
-            "type": "object",
-            "required": [
-                "code"
-            ],
-            "properties": {
-                "code": {
-                    "type": "string"
-                }
-            }
-        },
-        "go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO": {
             "type": "object",
             "required": [
                 "code"

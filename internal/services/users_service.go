@@ -150,13 +150,10 @@ func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Acto
 		return err
 	}
 
-	if err := s.emailVerification.SendEmailChangeCode(ctx, newEmail, code); err != nil {
-		if deleteErr := s.challenges.Delete(ctx, sessionUUID, domain.SessionChallengeEmailChange); deleteErr != nil {
-			slog.ErrorContext(ctx, "email change challenge cleanup failed", "error", deleteErr, "user_uuid", user.UUID)
-		}
-		return domain.NewInternalServerError("users.emailChange.sendFailed", err)
-	}
-	return nil
+	return sendOrRollback(ctx, "users.emailChange.sendFailed",
+		func() error { return s.emailVerification.SendEmailChangeCode(ctx, newEmail, code) },
+		func() error { return s.challenges.Delete(ctx, sessionUUID, domain.SessionChallengeEmailChange) },
+	)
 }
 
 func (s *usersService) ConfirmEmailChange(ctx context.Context, actor domain.Actor, sessionUUID string, code string) (*domain.User, error) {
