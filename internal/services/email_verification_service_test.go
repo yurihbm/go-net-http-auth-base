@@ -328,3 +328,38 @@ func TestEmailVerificationService_SendSignupCode(t *testing.T) {
 		assert.ErrorIs(t, err, sendErr)
 	})
 }
+
+func TestEmailVerificationService_SendOAuthSignupCode(t *testing.T) {
+	t.Run("says the code signs in or links the provider and must not be shared", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		var sent domain.EmailMessage
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			sent = args.Get(1).(domain.EmailMessage)
+		})
+
+		err := service.SendOAuthSignupCode(context.Background(), "new@example.com", "123456", domain.OAuthProviderMicrosoft)
+
+		require.NoError(t, err)
+		assert.Equal(t, "new@example.com", sent.To)
+		assert.Equal(t, "Your sign-in code", sent.Subject)
+		assert.Contains(t, sent.Text, "code is 123456")
+		assert.Contains(t, sent.Text, "Microsoft")
+		assert.Contains(t, sent.Text, "linked to the account for this email")
+		assert.Contains(t, sent.Text, "Never share this code")
+		assert.Contains(t, sent.HTML, "123456")
+		assert.Contains(t, sent.HTML, "Never share this code")
+		assert.NotContains(t, sent.Text, "http")
+	})
+
+	t.Run("error - returns provider error", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		sendErr := errors.New("smtp down")
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
+
+		err := service.SendOAuthSignupCode(context.Background(), "new@example.com", "123456", domain.OAuthProviderGitHub)
+
+		assert.ErrorIs(t, err, sendErr)
+	})
+}

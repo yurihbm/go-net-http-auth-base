@@ -19,6 +19,11 @@ func (m *EmailVerificationServiceMock) SendSignupCode(ctx context.Context, email
 	return args.Error(0)
 }
 
+func (m *EmailVerificationServiceMock) SendOAuthSignupCode(ctx context.Context, email string, code string, provider domain.OAuthProviderName) error {
+	args := m.Called(email, code, provider)
+	return args.Error(0)
+}
+
 func (m *EmailVerificationServiceMock) SendEmailChangeEmail(ctx context.Context, user *domain.User, newEmail string) error {
 	args := m.Called(user, newEmail)
 	return args.Error(0)
