@@ -182,7 +182,21 @@ func (q *Queries) MarkUserEmailVerified(ctx context.Context, uuid pgtype.UUID) e
 	return err
 }
 
-const recordUserStepUpFailure = `-- name: RecordUserStepUpFailure :one
+const refundUserStepUpGuess = `-- name: RefundUserStepUpGuess :exec
+UPDATE
+    users
+SET
+    step_up_failures = GREATEST(step_up_failures - 1, 0)
+WHERE
+    uuid = $1
+`
+
+func (q *Queries) RefundUserStepUpGuess(ctx context.Context, uuid pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, refundUserStepUpGuess, uuid)
+	return err
+}
+
+const reserveUserStepUpGuess = `-- name: ReserveUserStepUpGuess :one
 UPDATE
     users
 SET
@@ -200,17 +214,21 @@ SET
     END
 WHERE
     uuid = $1
+    AND (step_up_failures_window_start IS NULL
+        OR step_up_failures_window_start < now() - $2::interval
+        OR step_up_failures < $3::int)
 RETURNING
     step_up_failures
 `
 
-type RecordUserStepUpFailureParams struct {
+type ReserveUserStepUpGuessParams struct {
 	Uuid          pgtype.UUID
 	FailureWindow pgtype.Interval
+	MaxFailures   int32
 }
 
-func (q *Queries) RecordUserStepUpFailure(ctx context.Context, arg RecordUserStepUpFailureParams) (int32, error) {
-	row := q.db.QueryRow(ctx, recordUserStepUpFailure, arg.Uuid, arg.FailureWindow)
+func (q *Queries) ReserveUserStepUpGuess(ctx context.Context, arg ReserveUserStepUpGuessParams) (int32, error) {
+	row := q.db.QueryRow(ctx, reserveUserStepUpGuess, arg.Uuid, arg.FailureWindow, arg.MaxFailures)
 	var step_up_failures int32
 	err := row.Scan(&step_up_failures)
 	return step_up_failures, err

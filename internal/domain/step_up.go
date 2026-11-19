@@ -16,7 +16,10 @@ const (
 	EmailChangeLock          = 72 * time.Hour
 )
 
-var ErrStepUpSessionRevoked = NewUnauthorizedError("auth.stepUp.sessionRevoked")
+var (
+	ErrStepUpSessionRevoked = NewUnauthorizedError("auth.stepUp.sessionRevoked")
+	ErrStepUpUserLocked     = NewTooManyRequestsError("auth.stepUp.userLocked")
+)
 
 type StepUpChallenge struct {
 	UserUUID    string

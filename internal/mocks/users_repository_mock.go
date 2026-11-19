@@ -65,7 +65,12 @@ func (m *UsersRepositoryMock) MarkEmailVerified(ctx context.Context, uuid string
 	return args.Error(0)
 }
 
-func (m *UsersRepositoryMock) RecordStepUpFailure(ctx context.Context, uuid string, window time.Duration) (int, error) {
+func (m *UsersRepositoryMock) ReserveStepUpGuess(ctx context.Context, uuid string, window time.Duration) error {
 	args := m.Called(uuid, window)
-	return args.Int(0), args.Error(1)
+	return args.Error(0)
+}
+
+func (m *UsersRepositoryMock) RefundStepUpGuess(ctx context.Context, uuid string) error {
+	args := m.Called(uuid)
+	return args.Error(0)
 }
