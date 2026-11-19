@@ -130,23 +130,36 @@ func (r *UsersPostgresRepository) UpdateEmail(ctx context.Context, uuidStr strin
 	return &user, nil
 }
 
-func (r *UsersPostgresRepository) RecordStepUpFailure(ctx context.Context, uuidStr string, window time.Duration) (int, error) {
+func (r *UsersPostgresRepository) ReserveStepUpGuess(ctx context.Context, uuidStr string, window time.Duration) error {
 	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	failures, err := r.q.RecordUserStepUpFailure(ctx, postgres.RecordUserStepUpFailureParams{
+	_, err = r.q.ReserveUserStepUpGuess(ctx, postgres.ReserveUserStepUpGuessParams{
 		Uuid:          *uuid,
 		FailureWindow: pgtype.Interval{Microseconds: window.Microseconds(), Valid: true},
+		MaxFailures:   int32(domain.StepUpMaxUserFailures),
 	})
 	if err != nil {
-		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
-			return 0, noRowsErr
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrStepUpUserLocked
 		}
-		return 0, domain.NewInternalServerError("users.internalServerError", err)
+		return domain.NewInternalServerError("users.internalServerError", err)
 	}
-	return int(failures), nil
+	return nil
+}
+
+func (r *UsersPostgresRepository) RefundStepUpGuess(ctx context.Context, uuidStr string) error {
+	uuid, err := parseUsersUUID(uuidStr)
+	if err != nil {
+		return err
+	}
+
+	if err := r.q.RefundUserStepUpGuess(ctx, *uuid); err != nil {
+		return domain.NewInternalServerError("users.internalServerError", err)
+	}
+	return nil
 }
 
 func (r *UsersPostgresRepository) MarkEmailVerified(ctx context.Context, uuidStr string) error {

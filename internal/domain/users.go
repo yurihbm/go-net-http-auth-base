@@ -88,7 +88,8 @@ type UsersRepository interface {
 	Create(context.Context, User) (*User, error)
 	Update(context.Context, User) (*User, error)
 	UpdateEmail(ctx context.Context, uuid string, email string, expectedVersion int, changedAt *time.Time) (*User, error)
-	RecordStepUpFailure(ctx context.Context, uuid string, window time.Duration) (int, error)
+	ReserveStepUpGuess(ctx context.Context, uuid string, window time.Duration) error
+	RefundStepUpGuess(ctx context.Context, uuid string) error
 	MarkEmailVerified(context.Context, string) error
 	Delete(context.Context, string) error
 }

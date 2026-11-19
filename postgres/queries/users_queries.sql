@@ -54,7 +54,7 @@ WHERE
 RETURNING
     *;
 
--- name: RecordUserStepUpFailure :one
+-- name: ReserveUserStepUpGuess :one
 UPDATE
     users
 SET
@@ -72,8 +72,19 @@ SET
     END
 WHERE
     uuid = $1
+    AND (step_up_failures_window_start IS NULL
+        OR step_up_failures_window_start < now() - sqlc.arg(failure_window)::interval
+        OR step_up_failures < sqlc.arg(max_failures)::int)
 RETURNING
     step_up_failures;
+
+-- name: RefundUserStepUpGuess :exec
+UPDATE
+    users
+SET
+    step_up_failures = GREATEST(step_up_failures - 1, 0)
+WHERE
+    uuid = $1;
 
 -- name: MarkUserEmailVerified :exec
 UPDATE

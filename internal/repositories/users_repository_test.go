@@ -263,7 +263,7 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 	})
 }
 
-func TestUsersPostgresRepository_RecordStepUpFailure(t *testing.T) {
+func TestUsersPostgresRepository_ReserveStepUpGuess(t *testing.T) {
 	repo := setupUsersRepoTest(t)
 	ctx := context.Background()
 	user, err := repo.Create(ctx, domain.User{Name: "Failures", Email: "failures@example.com", PasswordHash: "hash", Role: domain.RoleUser})
@@ -271,13 +271,9 @@ func TestUsersPostgresRepository_RecordStepUpFailure(t *testing.T) {
 	window := domain.StepUpUserFailureWindow
 
 	t.Run("success - starts the window and increments", func(t *testing.T) {
-		first, err := repo.RecordStepUpFailure(ctx, user.UUID, window)
-		require.NoError(t, err)
-		second, err := repo.RecordStepUpFailure(ctx, user.UUID, window)
-		require.NoError(t, err)
+		require.NoError(t, repo.ReserveStepUpGuess(ctx, user.UUID, window))
+		require.NoError(t, repo.ReserveStepUpGuess(ctx, user.UUID, window))
 
-		assert.Equal(t, 1, first)
-		assert.Equal(t, 2, second)
 		found, err := repo.FindByUUID(ctx, user.UUID)
 		require.NoError(t, err)
 		assert.Equal(t, 2, found.StepUpFailures)
@@ -285,47 +281,98 @@ func TestUsersPostgresRepository_RecordStepUpFailure(t *testing.T) {
 	})
 
 	t.Run("success - expired window restarts the count", func(t *testing.T) {
-		_, err := testDB.Exec(ctx, "UPDATE users SET step_up_failures = 7, step_up_failures_window_start = now() - interval '25 hours' WHERE uuid = $1", user.UUID)
+		_, err := testDB.Exec(ctx, "UPDATE users SET step_up_failures = 20, step_up_failures_window_start = now() - interval '25 hours' WHERE uuid = $1", user.UUID)
 		require.NoError(t, err)
 
-		failures, err := repo.RecordStepUpFailure(ctx, user.UUID, window)
+		require.NoError(t, repo.ReserveStepUpGuess(ctx, user.UUID, window))
 
-		require.NoError(t, err)
-		assert.Equal(t, 1, failures)
 		found, err := repo.FindByUUID(ctx, user.UUID)
 		require.NoError(t, err)
+		assert.Equal(t, 1, found.StepUpFailures)
 		assert.WithinDuration(t, time.Now(), time.Unix(found.StepUpFailuresWindowStart, 0), 5*time.Second)
 	})
 
-	t.Run("success - concurrent failures are all counted", func(t *testing.T) {
+	t.Run("error - cap reached inside the window", func(t *testing.T) {
+		_, err := testDB.Exec(ctx, "UPDATE users SET step_up_failures = $2, step_up_failures_window_start = now() WHERE uuid = $1", user.UUID, domain.StepUpMaxUserFailures)
+		require.NoError(t, err)
+
+		err = repo.ReserveStepUpGuess(ctx, user.UUID, window)
+
+		assert.ErrorIs(t, err, domain.ErrStepUpUserLocked)
+	})
+
+	t.Run("success - concurrent reservations never exceed the cap", func(t *testing.T) {
 		_, err := testDB.Exec(ctx, "UPDATE users SET step_up_failures = 0, step_up_failures_window_start = now() WHERE uuid = $1", user.UUID)
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup
-		for range 10 {
+		var mu sync.Mutex
+		reserved := 0
+		for range domain.StepUpMaxUserFailures + 10 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_, err := repo.RecordStepUpFailure(ctx, user.UUID, window)
-				assert.NoError(t, err)
+				if err := repo.ReserveStepUpGuess(ctx, user.UUID, window); err == nil {
+					mu.Lock()
+					reserved++
+					mu.Unlock()
+				} else {
+					assert.ErrorIs(t, err, domain.ErrStepUpUserLocked)
+				}
 			}()
 		}
 		wg.Wait()
 
+		assert.Equal(t, domain.StepUpMaxUserFailures, reserved)
 		found, err := repo.FindByUUID(ctx, user.UUID)
 		require.NoError(t, err)
-		assert.Equal(t, 10, found.StepUpFailures)
+		assert.Equal(t, domain.StepUpMaxUserFailures, found.StepUpFailures)
 	})
 
 	t.Run("error - user not found", func(t *testing.T) {
-		_, err := repo.RecordStepUpFailure(ctx, uuid.NewString(), window)
+		err := repo.ReserveStepUpGuess(ctx, uuid.NewString(), window)
 
-		var notFoundErr *domain.NotFoundError
-		assert.True(t, errors.As(err, &notFoundErr))
+		assert.ErrorIs(t, err, domain.ErrStepUpUserLocked)
 	})
 
 	t.Run("error - invalid uuid", func(t *testing.T) {
-		_, err := repo.RecordStepUpFailure(ctx, "invalid-uuid", window)
+		err := repo.ReserveStepUpGuess(ctx, "invalid-uuid", window)
+
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
+func TestUsersPostgresRepository_RefundStepUpGuess(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	ctx := context.Background()
+	user, err := repo.Create(ctx, domain.User{Name: "Failures", Email: "failures@example.com", PasswordHash: "hash", Role: domain.RoleUser})
+	require.NoError(t, err)
+
+	t.Run("success - decrements the count", func(t *testing.T) {
+		_, err := testDB.Exec(ctx, "UPDATE users SET step_up_failures = 3, step_up_failures_window_start = now() WHERE uuid = $1", user.UUID)
+		require.NoError(t, err)
+
+		require.NoError(t, repo.RefundStepUpGuess(ctx, user.UUID))
+
+		found, err := repo.FindByUUID(ctx, user.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, 2, found.StepUpFailures)
+	})
+
+	t.Run("success - never goes below zero", func(t *testing.T) {
+		_, err := testDB.Exec(ctx, "UPDATE users SET step_up_failures = 0 WHERE uuid = $1", user.UUID)
+		require.NoError(t, err)
+
+		require.NoError(t, repo.RefundStepUpGuess(ctx, user.UUID))
+
+		found, err := repo.FindByUUID(ctx, user.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, found.StepUpFailures)
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		err := repo.RefundStepUpGuess(ctx, "invalid-uuid")
 
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))

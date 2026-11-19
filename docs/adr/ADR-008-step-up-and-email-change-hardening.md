@@ -35,10 +35,13 @@ not reliable across providers.
 - **Per-user failure cap.** The session cap alone lets someone who knows the
   password log in again for fresh guesses. `users.step_up_failures` and
   `users.step_up_failures_window_start` count wrong codes across all sessions of
-  the user in a 24-hour window, updated by one atomic statement (it restarts the
-  count at 1 when the window has expired). At 20 failures, `RequestCode` and
+  the user in a 24-hour window. `VerifyCode` reserves a guess before the
+  compare with one conditional statement that increments only below 20 (it
+  restarts the count at 1 when the window has expired), so parallel guesses
+  from several sessions cannot exceed the cap. A correct code or a missing
+  challenge refunds the reserved guess. At 20 failures, `RequestCode` and
   `VerifyCode` answer `429 auth.stepUp.userLocked` until the window ends. A
-  successful verification does not reset it.
+  successful verification does not reset earlier failures.
 - **Required on email change and account deletion.** `POST /users/me/email` and
   `DELETE /users/{uuid}` (self and admin) sit behind `StepUpMiddleware`, which
   answers `403 auth.stepUp.required` when the session is not elevated.
