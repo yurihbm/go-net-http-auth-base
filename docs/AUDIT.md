@@ -79,7 +79,7 @@ The domain package defines type-safe constants for common values:
 
 **Actions:**
 
-- `AuditActionSignupRequest` (`SIGNUP_REQUEST`): Sign-up started and code emailed (`POST /users`); no account exists yet, and the pending sign-up UUID is never logged because the cookie holding it is a bearer secret
+- `AuditActionSignupRequest` (`SIGNUP_REQUEST`): Sign-up started and code emailed (`POST /users`, or the OAuth callback when the provider email is not verified, with `changes.provider`; a failure with `verification_limited` when the address hit its send limit); no account exists yet, and the pending sign-up UUID is never logged because the cookie holding it is a bearer secret
 - `AuditActionUserCreate` (`USER_CREATE`): User account creation, logged when the sign-up code is verified (`POST /auth/signup/verify`); on success the actor and resource are the new user
 - `AuditActionUserUpdate` (`USER_UPDATE`): User account modification (`PUT /users/{uuid}`)
 - `AuditActionUserDelete` (`USER_DELETE`): User account deletion (`DELETE /users/{uuid}`)

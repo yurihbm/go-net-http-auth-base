@@ -76,7 +76,6 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.signup.sendFailed`             | `InternalServerError`  | `PendingSignupService`: the code email could not be sent (on start the pending sign-up is deleted) |
 | `auth.signup.codeGenerationFailed`   | `InternalServerError`  | `PendingSignupService`: the random source failed                       |
 | `auth.signup.tokenGenerationFailed`  | `InternalServerError`  | `AuthService.CompleteSignup`: the session could not be started (the user is rolled back) |
-| `auth.signup.unsupportedKind`        | `InternalServerError`  | `AuthService.CompleteSignup`: the pending sign-up is not a credentials sign-up |
 | `auth.signup.internalServerError`    | `InternalServerError`  | Unexpected `PendingSignupRepository` failures                          |
 | `auth.email.sendLimit`               | `TooManyRequestsError` | `EmailSendLimiter.ReserveSend`: an email went to this address in the last 60s, or 5 in the last hour |
 | `auth.email.codeLocked`              | `TooManyRequestsError` | `PendingSignupService.Attempt`: 20 wrong codes for this address in 24h |

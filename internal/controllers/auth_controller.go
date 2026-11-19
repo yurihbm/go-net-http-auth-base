@@ -36,7 +36,10 @@ var oauthProviderErrorCodes = []string{
 	"temporarily_unavailable",
 }
 
-const defaultOAuthProviderErrorCode = "access_denied"
+const (
+	defaultOAuthProviderErrorCode = "access_denied"
+	oauthVerificationLimitedCode  = "verification_limited"
+)
 
 type AuthController struct {
 	authService          domain.AuthService
@@ -435,7 +438,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 }
 
 // @Summary		Finish an OAuth login
-// @Description	Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the `access_token` and `refresh_token` cookies and redirects to the redirect_uri. If the provider returned an error, redirects to the redirect_uri with `?error=<code>`.
+// @Description	Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the `access_token` and `refresh_token` cookies and redirects to the redirect_uri. If the provider email is not verified, emails a one-time code, sets the `pending_signup` cookie and redirects to the redirect_uri with `?verification=required` (the frontend then posts the code to POST /auth/signup/verify); if the address hit the email send limit, redirects with `?error=verification_limited`. If the provider returned an error, redirects to the redirect_uri with `?error=<code>`.
 // @Tags			auth
 // @Produce		json
 // @Param			provider			path	string	true	"OAuth provider"	Enums(google, microsoft, github)
@@ -444,7 +447,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 // @Param			error				query	string	false	"Error code returned by the provider"
 // @Param			error_description	query	string	false	"Error description returned by the provider"
 // @Success		302					"Redirect to the redirect_uri"
-// @Header			302					{string}	Location				"redirect_uri, with ?error=<code> on provider error"
+// @Header			302					{string}	Location				"redirect_uri, with ?verification=required, ?error=verification_limited or ?error=<code> on provider error"
 // @Failure		400					{object}	api.ResponseBody[any]	"Validation error"
 // @Failure		401					{object}	api.ResponseBody[any]	"Unauthorized"
 // @Failure		404					{object}	api.ResponseBody[any]	"Not found"
@@ -509,6 +512,11 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if result.VerificationLimited || result.PendingSignupUUID != "" {
+		c.redirectOAuthPendingSignup(w, r, providerName, result)
+		return
+	}
+
 	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    &result.User.UUID,
 		Action:       domain.AuditActionOAuthLogin,
@@ -522,6 +530,42 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 	api.SetAuthCookies(w, result.Tokens, c.isSecureCookie)
 
 	http.Redirect(w, r, result.RedirectURI, http.StatusFound)
+}
+
+func (c *AuthController) redirectOAuthPendingSignup(w http.ResponseWriter, r *http.Request, providerName domain.OAuthProviderName, result *domain.OAuthLoginResult) {
+	target, err := url.Parse(result.RedirectURI)
+	if err != nil {
+		api.HandleError(r.Context(), w, ErrInvalidRedirectURI)
+		return
+	}
+	query := target.Query()
+
+	if result.VerificationLimited {
+		reason := oauthVerificationLimitedCode
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			Action:        domain.AuditActionSignupRequest,
+			ResourceType:  domain.AuditResourceAuth,
+			ResourceUUID:  "",
+			Changes:       map[string]string{"provider": string(providerName)},
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
+		query.Set("error", oauthVerificationLimitedCode)
+	} else {
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			Action:       domain.AuditActionSignupRequest,
+			ResourceType: domain.AuditResourceAuth,
+			ResourceUUID: "",
+			Changes:      map[string]string{"provider": string(providerName)},
+			Status:       domain.AuditStatusSuccess,
+		})
+		api.SetPendingSignupCookie(w, result.PendingSignupUUID, c.isSecureCookie)
+		query.Set("verification", "required")
+	}
+	target.RawQuery = query.Encode()
+
+	c.deleteOAuthFlowCookies(w, providerName)
+	http.Redirect(w, r, target.String(), http.StatusFound)
 }
 
 func (c *AuthController) redirectOAuthProviderError(
