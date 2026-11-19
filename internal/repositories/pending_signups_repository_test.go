@@ -50,6 +50,12 @@ func setPendingSignupTimes(t *testing.T, pendingUUID string, column string, offs
 	require.NoError(t, err)
 }
 
+func pendingSignupAttempts(t *testing.T, pendingUUID string) int {
+	var attempts int
+	require.NoError(t, testDB.QueryRow(context.Background(), "SELECT attempts FROM pending_signups WHERE uuid = $1", pendingUUID).Scan(&attempts))
+	return attempts
+}
+
 func assertNoPending(t *testing.T, err error) {
 	t.Helper()
 	var unauthorizedErr *domain.UnauthorizedError
@@ -68,7 +74,7 @@ func TestPendingSignupsPostgresRepository_Create(t *testing.T) {
 		assert.Equal(t, "pending@example.com", pending.Email)
 		assert.Equal(t, "bcrypt-hash", pending.PasswordHash)
 		assert.Equal(t, "hash-1", pending.CodeHash)
-		assert.Equal(t, 0, pending.Attempts)
+		assert.Equal(t, 0, pendingSignupAttempts(t, pending.UUID))
 		assert.InDelta(t, time.Now().Add(domain.SignupCodeTTL).Unix(), pending.CodeExpiresAt, 5)
 		assert.InDelta(t, time.Now().Add(domain.PendingSignupTTL).Unix(), pending.ExpiresAt, 5)
 	})
@@ -158,7 +164,7 @@ func TestPendingSignupsPostgresRepository_Attempt(t *testing.T) {
 		for i := 1; i <= domain.SignupMaxAttempts; i++ {
 			attempted, err := repo.Attempt(ctx, pending.UUID, domain.SignupMaxAttempts)
 			require.NoError(t, err)
-			assert.Equal(t, i, attempted.Attempts)
+			assert.Equal(t, i, pendingSignupAttempts(t, pending.UUID))
 			assert.Equal(t, "hash", attempted.CodeHash)
 		}
 
@@ -236,7 +242,7 @@ func TestPendingSignupsPostgresRepository_Resend(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, "new-hash", resent.CodeHash)
-		assert.Equal(t, 0, resent.Attempts)
+		assert.Equal(t, 0, pendingSignupAttempts(t, pending.UUID))
 		assert.InDelta(t, time.Now().Add(domain.SignupCodeTTL).Unix(), resent.CodeExpiresAt, 5)
 		assert.Equal(t, pending.ExpiresAt, resent.ExpiresAt)
 	})

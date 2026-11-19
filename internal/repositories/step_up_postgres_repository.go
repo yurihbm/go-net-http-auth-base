@@ -74,7 +74,6 @@ func (r *StepUpPostgresRepository) Attempt(ctx context.Context, userUUIDStr stri
 		UserUUID:    userUUIDStr,
 		SessionUUID: sessionUUIDStr,
 		CodeHash:    row.CodeHash,
-		Attempts:    int(row.Attempts),
 	}, nil
 }
 
@@ -95,8 +94,6 @@ func toDomainStepUpChallenge(challenge postgres.StepUpChallenge) domain.StepUpCh
 		UserUUID:    uuid.UUID(challenge.UserUuid.Bytes).String(),
 		SessionUUID: uuid.UUID(challenge.SessionUuid.Bytes).String(),
 		CodeHash:    challenge.CodeHash,
-		Attempts:    int(challenge.Attempts),
 		ExpiresAt:   challenge.ExpiresAt.Time.Unix(),
-		CreatedAt:   challenge.CreatedAt.Time.Unix(),
 	}
 }

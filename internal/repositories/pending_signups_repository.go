@@ -142,9 +142,7 @@ func toDomainPendingSignup(pending postgres.PendingSignup) *domain.PendingSignup
 		Provider:       domain.OAuthProviderName(pending.Provider.OauthProvider),
 		ProviderUserID: pending.ProviderUserID.String,
 		CodeHash:       pending.CodeHash,
-		Attempts:       int(pending.Attempts),
 		CodeExpiresAt:  pending.CodeExpiresAt.Time.Unix(),
 		ExpiresAt:      pending.ExpiresAt.Time.Unix(),
-		CreatedAt:      pending.CreatedAt.Time.Unix(),
 	}
 }

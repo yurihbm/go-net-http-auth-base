@@ -109,9 +109,7 @@ func TestCompleteSignup_Transaction(t *testing.T) {
 		assert.ErrorIs(t, err, trimErr)
 		assert.Nil(t, result)
 		assert.Equal(t, 0, countUsers(t))
-		pending, err := f.pendingRepo.FindByUUID(context.Background(), f.pendingUUID)
-		require.NoError(t, err)
-		assert.Equal(t, 1, pending.Attempts)
+		assert.Equal(t, 1, pendingSignupAttempts(t, f.pendingUUID))
 	})
 
 	t.Run("error - email taken meanwhile keeps the pending signup", func(t *testing.T) {
@@ -138,9 +136,7 @@ func TestCompleteSignup_Transaction(t *testing.T) {
 		_, err := f.service.CompleteSignup(context.Background(), f.pendingUUID, wrong)
 
 		assert.ErrorIs(t, err, domain.ErrSignupInvalidCode)
-		pending, err := f.pendingRepo.FindByUUID(context.Background(), f.pendingUUID)
-		require.NoError(t, err)
-		assert.Equal(t, 1, pending.Attempts)
+		assert.Equal(t, 1, pendingSignupAttempts(t, f.pendingUUID))
 		var failures int
 		require.NoError(t, testDB.QueryRow(context.Background(), "SELECT failures FROM email_send_limits WHERE email = $1", email).Scan(&failures))
 		assert.Equal(t, 1, failures)
