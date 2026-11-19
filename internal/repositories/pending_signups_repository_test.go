@@ -71,7 +71,6 @@ func TestPendingSignupsPostgresRepository_Create(t *testing.T) {
 		assert.Equal(t, 0, pending.Attempts)
 		assert.InDelta(t, time.Now().Add(domain.SignupCodeTTL).Unix(), pending.CodeExpiresAt, 5)
 		assert.InDelta(t, time.Now().Add(domain.PendingSignupTTL).Unix(), pending.ExpiresAt, 5)
-		assert.InDelta(t, time.Now().Unix(), pending.LastSentAt, 5)
 	})
 
 	t.Run("success oauth", func(t *testing.T) {
@@ -219,38 +218,34 @@ func TestPendingSignupsPostgresRepository_Resend(t *testing.T) {
 	repo := setupPendingSignupsRepoTest(t)
 	ctx := context.Background()
 
-	t.Run("error - cooldown", func(t *testing.T) {
+	t.Run("error - expired pending signup", func(t *testing.T) {
 		pending := seedPendingSignup(t, repo, "hash")
+		setPendingSignupTimes(t, pending.UUID, "expires_at", -time.Minute)
 
-		_, err := repo.Resend(ctx, pending.UUID, "new-hash", domain.SignupCodeTTL, domain.SignupResendCooldown)
+		_, err := repo.Resend(ctx, pending.UUID, "new-hash", domain.SignupCodeTTL)
 
-		var tooManyErr *domain.TooManyRequestsError
-		require.True(t, errors.As(err, &tooManyErr))
-		assert.Equal(t, "auth.signup.cooldown", err.Error())
+		assertNoPending(t, err)
 	})
 
 	t.Run("success replaces the code and resets attempts", func(t *testing.T) {
 		pending := seedPendingSignup(t, repo, "hash")
 		_, err := repo.Attempt(ctx, pending.UUID, domain.SignupMaxAttempts)
 		require.NoError(t, err)
-		setPendingSignupTimes(t, pending.UUID, "last_sent_at", -2*domain.SignupResendCooldown)
 
-		resent, err := repo.Resend(ctx, pending.UUID, "new-hash", domain.SignupCodeTTL, domain.SignupResendCooldown)
+		resent, err := repo.Resend(ctx, pending.UUID, "new-hash", domain.SignupCodeTTL)
 
 		require.NoError(t, err)
 		assert.Equal(t, "new-hash", resent.CodeHash)
 		assert.Equal(t, 0, resent.Attempts)
-		assert.InDelta(t, time.Now().Unix(), resent.LastSentAt, 5)
 		assert.InDelta(t, time.Now().Add(domain.SignupCodeTTL).Unix(), resent.CodeExpiresAt, 5)
 		assert.Equal(t, pending.ExpiresAt, resent.ExpiresAt)
 	})
 
 	t.Run("success never extends the code past the pending signup", func(t *testing.T) {
 		pending := seedPendingSignup(t, repo, "hash")
-		setPendingSignupTimes(t, pending.UUID, "last_sent_at", -2*domain.SignupResendCooldown)
 		setPendingSignupTimes(t, pending.UUID, "expires_at", 2*time.Minute)
 
-		resent, err := repo.Resend(ctx, pending.UUID, "new-hash", domain.SignupCodeTTL, domain.SignupResendCooldown)
+		resent, err := repo.Resend(ctx, pending.UUID, "new-hash", domain.SignupCodeTTL)
 
 		require.NoError(t, err)
 		assert.Equal(t, resent.ExpiresAt, resent.CodeExpiresAt)

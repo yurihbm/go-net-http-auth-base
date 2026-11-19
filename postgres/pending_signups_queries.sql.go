@@ -22,7 +22,7 @@ WHERE
     AND code_expires_at > now()
     AND expires_at > now()
 RETURNING
-    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, last_sent_at, created_at
+    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, created_at
 `
 
 type AttemptPendingSignupParams struct {
@@ -45,7 +45,6 @@ func (q *Queries) AttemptPendingSignup(ctx context.Context, arg AttemptPendingSi
 		&i.Attempts,
 		&i.CodeExpiresAt,
 		&i.ExpiresAt,
-		&i.LastSentAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -58,7 +57,7 @@ WHERE
     uuid = $1
     AND code_hash = $2
 RETURNING
-    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, last_sent_at, created_at
+    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, created_at
 `
 
 type ConsumePendingSignupParams struct {
@@ -81,7 +80,6 @@ func (q *Queries) ConsumePendingSignup(ctx context.Context, arg ConsumePendingSi
 		&i.Attempts,
 		&i.CodeExpiresAt,
 		&i.ExpiresAt,
-		&i.LastSentAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -91,7 +89,7 @@ const createPendingSignup = `-- name: CreatePendingSignup :one
 INSERT INTO pending_signups (uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, code_expires_at, expires_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING
-    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, last_sent_at, created_at
+    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, created_at
 `
 
 type CreatePendingSignupParams struct {
@@ -133,7 +131,6 @@ func (q *Queries) CreatePendingSignup(ctx context.Context, arg CreatePendingSign
 		&i.Attempts,
 		&i.CodeExpiresAt,
 		&i.ExpiresAt,
-		&i.LastSentAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -175,7 +172,7 @@ func (q *Queries) DeletePendingSignup(ctx context.Context, uuid pgtype.UUID) err
 
 const getPendingSignup = `-- name: GetPendingSignup :one
 SELECT
-    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, last_sent_at, created_at
+    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, created_at
 FROM
     pending_signups
 WHERE
@@ -198,7 +195,6 @@ func (q *Queries) GetPendingSignup(ctx context.Context, uuid pgtype.UUID) (Pendi
 		&i.Attempts,
 		&i.CodeExpiresAt,
 		&i.ExpiresAt,
-		&i.LastSentAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -210,30 +206,22 @@ UPDATE
 SET
     code_hash = $2,
     code_expires_at = LEAST(now() + $3::interval, expires_at),
-    attempts = 0,
-    last_sent_at = now()
+    attempts = 0
 WHERE
     uuid = $1
-    AND last_sent_at < now() - $4::interval
     AND expires_at > now()
 RETURNING
-    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, last_sent_at, created_at
+    uuid, kind, name, email, password_hash, provider, provider_user_id, code_hash, attempts, code_expires_at, expires_at, created_at
 `
 
 type ResendPendingSignupParams struct {
 	Uuid     pgtype.UUID
 	CodeHash string
 	CodeTtl  pgtype.Interval
-	Cooldown pgtype.Interval
 }
 
 func (q *Queries) ResendPendingSignup(ctx context.Context, arg ResendPendingSignupParams) (PendingSignup, error) {
-	row := q.db.QueryRow(ctx, resendPendingSignup,
-		arg.Uuid,
-		arg.CodeHash,
-		arg.CodeTtl,
-		arg.Cooldown,
-	)
+	row := q.db.QueryRow(ctx, resendPendingSignup, arg.Uuid, arg.CodeHash, arg.CodeTtl)
 	var i PendingSignup
 	err := row.Scan(
 		&i.Uuid,
@@ -247,7 +235,6 @@ func (q *Queries) ResendPendingSignup(ctx context.Context, arg ResendPendingSign
 		&i.Attempts,
 		&i.CodeExpiresAt,
 		&i.ExpiresAt,
-		&i.LastSentAt,
 		&i.CreatedAt,
 	)
 	return i, err

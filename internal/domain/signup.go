@@ -9,7 +9,6 @@ const (
 	SignupCodeTTL          = 10 * time.Minute
 	PendingSignupTTL       = time.Hour
 	SignupMaxAttempts      = 5
-	SignupResendCooldown   = 60 * time.Second
 	EmailSendCooldown      = 60 * time.Second
 	EmailSendWindow        = time.Hour
 	EmailMaxSendsPerWindow = 5
@@ -20,7 +19,6 @@ const (
 var (
 	ErrSignupNoPending   = NewUnauthorizedError("auth.signup.noPending")
 	ErrSignupInvalidCode = NewUnauthorizedError("auth.signup.invalidCode")
-	ErrSignupCooldown    = NewTooManyRequestsError("auth.signup.cooldown")
 	ErrEmailSendLimit    = NewTooManyRequestsError("auth.email.sendLimit")
 	ErrEmailCodeLocked   = NewTooManyRequestsError("auth.email.codeLocked")
 )
@@ -44,7 +42,6 @@ type PendingSignup struct {
 	Attempts       int
 	CodeExpiresAt  int64
 	ExpiresAt      int64
-	LastSentAt     int64
 	CreatedAt      int64
 }
 
@@ -69,7 +66,7 @@ type PendingSignupRepository interface {
 	FindByUUID(ctx context.Context, uuid string) (*PendingSignup, error)
 	Attempt(ctx context.Context, uuid string, maxAttempts int) (*PendingSignup, error)
 	Consume(ctx context.Context, uuid string, codeHash string) (*PendingSignup, error)
-	Resend(ctx context.Context, uuid string, codeHash string, codeTTL time.Duration, cooldown time.Duration) (*PendingSignup, error)
+	Resend(ctx context.Context, uuid string, codeHash string, codeTTL time.Duration) (*PendingSignup, error)
 	Delete(ctx context.Context, uuid string) error
 }
 

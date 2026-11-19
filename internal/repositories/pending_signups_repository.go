@@ -86,7 +86,7 @@ func (r *PendingSignupsPostgresRepository) Consume(ctx context.Context, uuidStr 
 	return pendingSignupResult(pending, err, domain.ErrSignupNoPending)
 }
 
-func (r *PendingSignupsPostgresRepository) Resend(ctx context.Context, uuidStr string, codeHash string, codeTTL time.Duration, cooldown time.Duration) (*domain.PendingSignup, error) {
+func (r *PendingSignupsPostgresRepository) Resend(ctx context.Context, uuidStr string, codeHash string, codeTTL time.Duration) (*domain.PendingSignup, error) {
 	pendingUUID, err := parsePendingSignupUUID(uuidStr)
 	if err != nil {
 		return nil, err
@@ -96,9 +96,8 @@ func (r *PendingSignupsPostgresRepository) Resend(ctx context.Context, uuidStr s
 		Uuid:     *pendingUUID,
 		CodeHash: codeHash,
 		CodeTtl:  toInterval(codeTTL),
-		Cooldown: toInterval(cooldown),
 	})
-	return pendingSignupResult(pending, err, domain.ErrSignupCooldown)
+	return pendingSignupResult(pending, err, domain.ErrSignupNoPending)
 }
 
 func (r *PendingSignupsPostgresRepository) Delete(ctx context.Context, uuidStr string) error {
@@ -146,7 +145,6 @@ func toDomainPendingSignup(pending postgres.PendingSignup) *domain.PendingSignup
 		Attempts:       int(pending.Attempts),
 		CodeExpiresAt:  pending.CodeExpiresAt.Time.Unix(),
 		ExpiresAt:      pending.ExpiresAt.Time.Unix(),
-		LastSentAt:     pending.LastSentAt.Time.Unix(),
 		CreatedAt:      pending.CreatedAt.Time.Unix(),
 	}
 }

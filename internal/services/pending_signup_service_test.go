@@ -205,7 +205,7 @@ func TestPendingSignupService_Resend(t *testing.T) {
 		service, m := newTestPendingSignupService()
 		var storedHash, code string
 		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
-		m.pending.On("Resend", signupPendingUUID, mock.Anything, domain.SignupCodeTTL, domain.SignupResendCooldown).Return(pending, nil).Once().Run(func(args mock.Arguments) {
+		m.pending.On("Resend", signupPendingUUID, mock.Anything, domain.SignupCodeTTL).Return(pending, nil).Once().Run(func(args mock.Arguments) {
 			storedHash = args.String(1)
 		})
 		expectReserveSend(m, signupEmail, nil)
@@ -230,22 +230,10 @@ func TestPendingSignupService_Resend(t *testing.T) {
 		m.emails.AssertNotCalled(t, "SendSignupCode", mock.Anything, mock.Anything)
 	})
 
-	t.Run("error - cooldown", func(t *testing.T) {
-		service, m := newTestPendingSignupService()
-		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
-		m.pending.On("Resend", signupPendingUUID, mock.Anything, domain.SignupCodeTTL, domain.SignupResendCooldown).Return(nil, domain.ErrSignupCooldown).Once()
-
-		err := service.Resend(context.Background(), signupPendingUUID)
-
-		assert.Equal(t, domain.ErrSignupCooldown, err)
-		m.limiter.AssertNotCalled(t, "ReserveSend", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-		m.emails.AssertNotCalled(t, "SendSignupCode", mock.Anything, mock.Anything)
-	})
-
 	t.Run("error - send limit", func(t *testing.T) {
 		service, m := newTestPendingSignupService()
 		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
-		m.pending.On("Resend", signupPendingUUID, mock.Anything, domain.SignupCodeTTL, domain.SignupResendCooldown).Return(pending, nil).Once()
+		m.pending.On("Resend", signupPendingUUID, mock.Anything, domain.SignupCodeTTL).Return(pending, nil).Once()
 		expectReserveSend(m, signupEmail, domain.ErrEmailSendLimit)
 
 		err := service.Resend(context.Background(), signupPendingUUID)
@@ -257,7 +245,7 @@ func TestPendingSignupService_Resend(t *testing.T) {
 	t.Run("error - send failure", func(t *testing.T) {
 		service, m := newTestPendingSignupService()
 		m.pending.On("FindByUUID", signupPendingUUID).Return(pending, nil).Once()
-		m.pending.On("Resend", signupPendingUUID, mock.Anything, domain.SignupCodeTTL, domain.SignupResendCooldown).Return(pending, nil).Once()
+		m.pending.On("Resend", signupPendingUUID, mock.Anything, domain.SignupCodeTTL).Return(pending, nil).Once()
 		expectReserveSend(m, signupEmail, nil)
 		m.emails.On("SendSignupCode", signupEmail, mock.Anything).Return(errors.New("smtp down")).Once()
 
