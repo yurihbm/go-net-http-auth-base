@@ -42,9 +42,10 @@ victim can be tricked into opening.
 - **Per-address limits** in `email_send_limits`, independent of the requester:
   one email per address every 60 seconds and 5 per hour (`429
   auth.email.sendLimit`), and 20 wrong codes per address in 24 hours (`429
-  auth.email.codeLocked`; each guess is reserved atomically before it is
-  compared and given back when the code matches, so parallel guesses cannot
-  exceed the cap). The send slot is not refunded when delivery fails.
+  auth.email.codeLocked`; each guess is reserved atomically before the attempt
+  is counted and given back when the code matches or the attempt is refused,
+  so parallel guesses cannot exceed the cap; the email change confirmation
+  reads its challenge first to know the address). The send slot is not refunded when delivery fails.
 - **Rollout in layers:** (1) credentials sign-up (this change); (2) OAuth
   providers that do not attest a verified email go through the same pending
   flow (kind `oauth`) instead of being rejected; (3) the email change is
