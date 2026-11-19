@@ -2,9 +2,7 @@ package services
 
 import (
 	"context"
-	"crypto/hmac"
 	"errors"
-	"log/slog"
 	"time"
 
 	"go-net-http-auth-base/internal/domain"
@@ -103,27 +101,13 @@ func (s *pendingSignupService) Attempt(ctx context.Context, pendingUUID string, 
 		return err
 	}
 
-	if err := s.limiter.ReserveCodeGuess(ctx, pending.Email, domain.EmailCodeFailureWindow); err != nil {
-		return err
-	}
-
-	attempted, err := s.pending.Attempt(ctx, pendingUUID, domain.SignupMaxAttempts)
-	if err != nil {
-		s.refundCodeGuess(ctx, pending.Email)
-		return err
-	}
-
-	if !hmac.Equal([]byte(attempted.CodeHash), []byte(s.hashCode(pendingUUID, code))) {
-		return domain.ErrSignupInvalidCode
-	}
-	s.refundCodeGuess(ctx, pending.Email)
-	return nil
-}
-
-func (s *pendingSignupService) refundCodeGuess(ctx context.Context, email string) {
-	if err := s.limiter.RefundCodeGuess(ctx, email); err != nil {
-		slog.ErrorContext(ctx, "code guess refund failed", "error", err)
-	}
+	return guessCode(ctx, s.limiter, pending.Email, s.hashCode(pendingUUID, code), domain.ErrSignupInvalidCode, func() (string, error) {
+		attempted, err := s.pending.Attempt(ctx, pendingUUID, domain.SignupMaxAttempts)
+		if err != nil {
+			return "", err
+		}
+		return attempted.CodeHash, nil
+	})
 }
 
 func (s *pendingSignupService) Consume(ctx context.Context, pendingUUID string, code string) (*domain.PendingSignup, error) {

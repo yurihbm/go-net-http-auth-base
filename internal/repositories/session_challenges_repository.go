@@ -66,8 +66,21 @@ func (r *SessionChallengesPostgresRepository) Upsert(ctx context.Context, challe
 	return nil
 }
 
+func (r *SessionChallengesPostgresRepository) Find(ctx context.Context, userUUIDStr string, sessionUUIDStr string, purpose domain.SessionChallengePurpose) (*domain.SessionChallenge, error) {
+	userUUID, sessionUUID, err := parseSessionUUIDs(userUUIDStr, sessionUUIDStr)
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := r.q.GetSessionChallenge(ctx, postgres.GetSessionChallengeParams{
+		SessionUuid: *sessionUUID,
+		UserUuid:    *userUUID,
+		Purpose:     postgres.SessionChallengePurpose(purpose),
+	})
+	return sessionChallengeResult(row, err, purpose)
+}
+
 func (r *SessionChallengesPostgresRepository) Attempt(ctx context.Context, userUUIDStr string, sessionUUIDStr string, purpose domain.SessionChallengePurpose, maxAttempts int) (*domain.SessionChallenge, error) {
-	errs := sessionChallengeErrorsByPurpose[purpose]
 	userUUID, sessionUUID, err := parseSessionUUIDs(userUUIDStr, sessionUUIDStr)
 	if err != nil {
 		return nil, err
@@ -79,15 +92,7 @@ func (r *SessionChallengesPostgresRepository) Attempt(ctx context.Context, userU
 		Purpose:     postgres.SessionChallengePurpose(purpose),
 		MaxAttempts: int32(maxAttempts),
 	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errs.noChallenge
-		}
-		return nil, domain.NewInternalServerError(errs.internal, err)
-	}
-
-	challenge := toDomainSessionChallenge(row)
-	return &challenge, nil
+	return sessionChallengeResult(row, err, purpose)
 }
 
 func (r *SessionChallengesPostgresRepository) Delete(ctx context.Context, sessionUUIDStr string, purpose domain.SessionChallengePurpose) error {
@@ -104,6 +109,18 @@ func (r *SessionChallengesPostgresRepository) Delete(ctx context.Context, sessio
 		return domain.NewInternalServerError(sessionChallengeErrorsByPurpose[purpose].internal, err)
 	}
 	return nil
+}
+
+func sessionChallengeResult(row postgres.SessionChallenge, err error, purpose domain.SessionChallengePurpose) (*domain.SessionChallenge, error) {
+	if err != nil {
+		errs := sessionChallengeErrorsByPurpose[purpose]
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errs.noChallenge
+		}
+		return nil, domain.NewInternalServerError(errs.internal, err)
+	}
+	challenge := toDomainSessionChallenge(row)
+	return &challenge, nil
 }
 
 func toDomainSessionChallenge(challenge postgres.SessionChallenge) domain.SessionChallenge {

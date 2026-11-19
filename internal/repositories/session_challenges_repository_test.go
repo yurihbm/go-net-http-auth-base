@@ -130,6 +130,61 @@ func TestSessionChallengesPostgresRepository_Upsert(t *testing.T) {
 	})
 }
 
+func TestSessionChallengesPostgresRepository_Find(t *testing.T) {
+	repo, user, session := setupSessionChallengesRepoTest(t)
+	ctx := context.Background()
+
+	t.Run("error - no challenge", func(t *testing.T) {
+		challenge, err := repo.Find(ctx, user.UUID, session.UUID, domain.SessionChallengeEmailChange)
+
+		assert.Nil(t, challenge)
+		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
+	})
+
+	t.Run("success returns the challenge without counting an attempt", func(t *testing.T) {
+		require.NoError(t, repo.Upsert(ctx, newEmailChangeChallenge(user, session, "hash-1"), domain.EmailChangeCooldown))
+
+		challenge, err := repo.Find(ctx, user.UUID, session.UUID, domain.SessionChallengeEmailChange)
+
+		require.NoError(t, err)
+		assert.Equal(t, "new@example.com", challenge.NewEmail)
+		assert.Equal(t, 3, challenge.EmailVersion)
+		assert.Equal(t, 0, challengeAttempts(t, session.UUID, domain.SessionChallengeEmailChange))
+	})
+
+	t.Run("error - other purpose", func(t *testing.T) {
+		challenge, err := repo.Find(ctx, user.UUID, session.UUID, domain.SessionChallengeStepUp)
+
+		assert.Nil(t, challenge)
+		assert.ErrorIs(t, err, domain.ErrStepUpNoChallenge)
+	})
+
+	t.Run("error - challenge of another user", func(t *testing.T) {
+		challenge, err := repo.Find(ctx, uuid.NewString(), session.UUID, domain.SessionChallengeEmailChange)
+
+		assert.Nil(t, challenge)
+		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
+	})
+
+	t.Run("error - expired challenge", func(t *testing.T) {
+		_, err := testDB.Exec(ctx, "UPDATE session_challenges SET expires_at = now() - interval '1 minute' WHERE session_uuid = $1", session.UUID)
+		require.NoError(t, err)
+
+		challenge, err := repo.Find(ctx, user.UUID, session.UUID, domain.SessionChallengeEmailChange)
+
+		assert.Nil(t, challenge)
+		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		challenge, err := repo.Find(ctx, user.UUID, "invalid", domain.SessionChallengeEmailChange)
+
+		assert.Nil(t, challenge)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
 func TestSessionChallengesPostgresRepository_Attempt(t *testing.T) {
 	repo, user, session := setupSessionChallengesRepoTest(t)
 	ctx := context.Background()
