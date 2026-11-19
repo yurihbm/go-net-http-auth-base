@@ -954,6 +954,70 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		})
 	}
 
+	for _, mode := range oauthFlowCookieModes {
+		t.Run("verification required - "+mode.name, func(t *testing.T) {
+			controller, authServiceMock, auditMock := newTestAuthControllerWithOptions(mode.isSecure, []string{allowedRedirectURI})
+			authServiceMock.On("OAuthLogin", domain.OAuthLoginDTO{
+				Provider:     domain.OAuthProviderGoogle,
+				State:        "valid-state",
+				Code:         "auth-code",
+				Nonce:        "nonce-123",
+				CodeVerifier: "verifier-123",
+			}).Return(&domain.OAuthLoginResult{
+				PendingSignupUUID: "pending-uuid",
+				RedirectURI:       "http://localhost:3000/callback?next=%2Fhome",
+			}, nil).Once()
+			auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+				return d.Action == domain.AuditActionSignupRequest &&
+					d.Status == domain.AuditStatusSuccess &&
+					d.ResourceType == domain.AuditResourceAuth &&
+					d.Changes.(map[string]string)["provider"] == "google" &&
+					d.ResourceUUID == ""
+			})).Return(nil).Once()
+
+			w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&code=auth-code", nil)
+			req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+			req.AddCookie(&http.Cookie{Name: mode.cookies.nonce, Value: "nonce-123"})
+			req.AddCookie(&http.Cookie{Name: mode.cookies.verifier, Value: "verifier-123"})
+
+			controller.OAuthProviderCallback(w, req)
+
+			assert.Equal(t, http.StatusFound, w.Code)
+			assert.Equal(t, "http://localhost:3000/callback?next=%2Fhome&verification=required", w.Header().Get("Location"))
+			cookies := w.Result().Cookies()
+			pending := findCookie(cookies, api.OAuthFlowCookieName(api.PendingSignupCookieName, mode.isSecure))
+			require.NotNil(t, pending)
+			assert.Equal(t, "pending-uuid", pending.Value)
+			assert.Nil(t, findCookie(cookies, "access_token"))
+			assertOAuthFlowCookiesCleared(t, cookies, mode.cookies)
+			authServiceMock.AssertExpectations(t)
+			auditMock.AssertExpectations(t)
+		})
+	}
+
+	t.Run("verification limited - redirects with error and sets no pending cookie", func(t *testing.T) {
+		controller, authServiceMock, auditMock := newTestAuthController()
+		authServiceMock.On("OAuthLogin", mock.Anything).Return(&domain.OAuthLoginResult{
+			VerificationLimited: true,
+			RedirectURI:         allowedRedirectURI,
+		}, nil).Once()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionSignupRequest &&
+				d.Status == domain.AuditStatusFailure &&
+				d.FailureReason != nil && *d.FailureReason == "verification_limited"
+		})).Return(nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/github/callback?state=valid-state&code=auth-code", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGitHub))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, allowedRedirectURI+"?error=verification_limited", w.Header().Get("Location"))
+		assert.Nil(t, findCookie(w.Result().Cookies(), api.OAuthFlowCookieName(api.PendingSignupCookieName, true)))
+		auditMock.AssertExpectations(t)
+	})
+
 	t.Run("forwards empty values when flow cookies are missing", func(t *testing.T) {
 		controller, authServiceMock, auditMock := newTestAuthController()
 		dto := domain.OAuthLoginDTO{

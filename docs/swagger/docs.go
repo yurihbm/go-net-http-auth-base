@@ -456,7 +456,7 @@ const docTemplate = `{
         },
         "/auth/{provider}/callback": {
             "get": {
-                "description": "Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies and redirects to the redirect_uri. If the provider returned an error, redirects to the redirect_uri with ` + "`" + `?error=\u003ccode\u003e` + "`" + `.",
+                "description": "Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies and redirects to the redirect_uri. If the provider email is not verified, emails a one-time code, sets the ` + "`" + `pending_signup` + "`" + ` cookie and redirects to the redirect_uri with ` + "`" + `?verification=required` + "`" + ` (the frontend then posts the code to POST /auth/signup/verify); if the address hit the email send limit, redirects with ` + "`" + `?error=verification_limited` + "`" + `. If the provider returned an error, redirects to the redirect_uri with ` + "`" + `?error=\u003ccode\u003e` + "`" + `.",
                 "produces": [
                     "application/json"
                 ],
@@ -509,7 +509,7 @@ const docTemplate = `{
                         "headers": {
                             "Location": {
                                 "type": "string",
-                                "description": "redirect_uri, with ?error=\u003ccode\u003e on provider error"
+                                "description": "redirect_uri, with ?verification=required, ?error=verification_limited or ?error=\u003ccode\u003e on provider error"
                             }
                         }
                     },
