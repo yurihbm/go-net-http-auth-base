@@ -41,11 +41,9 @@ UPDATE
 SET
     code_hash = $2,
     code_expires_at = LEAST(now() + sqlc.arg(code_ttl)::interval, expires_at),
-    attempts = 0,
-    last_sent_at = now()
+    attempts = 0
 WHERE
     uuid = $1
-    AND last_sent_at < now() - sqlc.arg(cooldown)::interval
     AND expires_at > now()
 RETURNING
     *;

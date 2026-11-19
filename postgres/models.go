@@ -189,7 +189,6 @@ type PendingSignup struct {
 	Attempts       int32
 	CodeExpiresAt  pgtype.Timestamptz
 	ExpiresAt      pgtype.Timestamptz
-	LastSentAt     pgtype.Timestamptz
 	CreatedAt      pgtype.Timestamptz
 }
 

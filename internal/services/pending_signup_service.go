@@ -82,7 +82,7 @@ func (s *pendingSignupService) Resend(ctx context.Context, pendingUUID string) e
 
 	// The new code only replaces the old one when the address may receive another email.
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
-		if _, err := s.pending.Resend(ctx, pendingUUID, s.hashCode(pendingUUID, code), domain.SignupCodeTTL, domain.SignupResendCooldown); err != nil {
+		if _, err := s.pending.Resend(ctx, pendingUUID, s.hashCode(pendingUUID, code), domain.SignupCodeTTL); err != nil {
 			return err
 		}
 		return s.reserveSend(ctx, pending.Email)

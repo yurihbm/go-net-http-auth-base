@@ -712,7 +712,6 @@ func TestAuthController_ResendSignup(t *testing.T) {
 		status int
 	}{
 		{"no pending signup", domain.ErrSignupNoPending, http.StatusUnauthorized},
-		{"cooldown", domain.ErrSignupCooldown, http.StatusTooManyRequests},
 		{"send limit", domain.ErrEmailSendLimit, http.StatusTooManyRequests},
 	} {
 		t.Run("error - "+tc.name, func(t *testing.T) {

@@ -35,8 +35,8 @@ func (m *PendingSignupRepositoryMock) Consume(ctx context.Context, uuid string, 
 	return pendingSignupResult(args)
 }
 
-func (m *PendingSignupRepositoryMock) Resend(ctx context.Context, uuid string, codeHash string, codeTTL time.Duration, cooldown time.Duration) (*domain.PendingSignup, error) {
-	args := m.Called(uuid, codeHash, codeTTL, cooldown)
+func (m *PendingSignupRepositoryMock) Resend(ctx context.Context, uuid string, codeHash string, codeTTL time.Duration) (*domain.PendingSignup, error) {
+	args := m.Called(uuid, codeHash, codeTTL)
 	return pendingSignupResult(args)
 }
 

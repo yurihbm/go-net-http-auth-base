@@ -73,7 +73,6 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | :----------------------------------- | :--------------------- | :--------------------------------------------------------------------- |
 | `auth.signup.noPending`              | `UnauthorizedError`    | `PendingSignupRepository`: no `pending_signup` cookie, unknown or malformed UUID, expired sign-up, code expired or attempts exhausted, or already consumed |
 | `auth.signup.invalidCode`            | `UnauthorizedError`    | `PendingSignupService.Attempt`: the code does not match (counted per address) |
-| `auth.signup.cooldown`               | `TooManyRequestsError` | `PendingSignupRepository.Resend`: a code was sent for this sign-up in the last 60s |
 | `auth.signup.sendFailed`             | `InternalServerError`  | `PendingSignupService`: the code email could not be sent (on start the pending sign-up is deleted) |
 | `auth.signup.codeGenerationFailed`   | `InternalServerError`  | `PendingSignupService`: the random source failed                       |
 | `auth.signup.tokenGenerationFailed`  | `InternalServerError`  | `AuthService.CompleteSignup`: the session could not be started (the user is rolled back) |

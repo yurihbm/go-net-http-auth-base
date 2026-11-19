@@ -307,12 +307,12 @@ func (c *AuthController) VerifySignup(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary		Resend the sign-up code
-// @Description	Emails a new 6-digit code for the pending sign-up and invalidates the previous one. Requires the `pending_signup` cookie set by POST /users. One resend per 60 seconds; the sign-up itself still expires 1 hour after POST /users.
+// @Description	Emails a new 6-digit code for the pending sign-up and invalidates the previous one. Requires the `pending_signup` cookie set by POST /users. One email per address per 60 seconds; the sign-up itself still expires 1 hour after POST /users.
 // @Tags			auth
 // @Produce		json
 // @Success		202	{object}	api.ResponseBody[any]	"Code sent (auth.signup.codeResent)"
 // @Failure		401	{object}	api.ResponseBody[any]	"No pending sign-up (auth.signup.noPending)"
-// @Failure		429	{object}	api.ResponseBody[any]	"Cooldown (auth.signup.cooldown) or too many emails to this address (auth.email.sendLimit)"
+// @Failure		429	{object}	api.ResponseBody[any]	"An email went to this address in the last 60 seconds, or 5 in the last hour (auth.email.sendLimit)"
 // @Failure		500	{object}	api.ResponseBody[any]	"Internal server error, or the email could not be sent (auth.signup.sendFailed)"
 // @Router			/auth/signup/resend [post]
 func (c *AuthController) ResendSignup(w http.ResponseWriter, r *http.Request) {
