@@ -22,7 +22,7 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 
 	reset := func(t *testing.T) string {
 		t.Helper()
-		_, err := testDB.Exec(ctx, "TRUNCATE TABLE email_send_limits, pending_signups, email_change_challenges, step_up_challenges, user_sessions, users RESTART IDENTITY CASCADE")
+		_, err := testDB.Exec(ctx, "TRUNCATE TABLE email_send_limits, pending_signups, session_challenges, user_sessions, users RESTART IDENTITY CASCADE")
 		require.NoError(t, err)
 		var userUUID string
 		err = testDB.QueryRow(ctx,
@@ -47,8 +47,8 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 	insertChallenge := func(t *testing.T, userUUID, sessionUUID string, expiresIn time.Duration) {
 		t.Helper()
 		_, err := testDB.Exec(ctx,
-			`INSERT INTO step_up_challenges (user_uuid, session_uuid, code_hash, expires_at)
-			VALUES ($1, $2, 'hash', now() + $3::interval)`,
+			`INSERT INTO session_challenges (user_uuid, session_uuid, purpose, code_hash, expires_at)
+			VALUES ($1, $2, 'step_up', 'hash', now() + $3::interval)`,
 			userUUID, sessionUUID, expiresIn.String(),
 		)
 		require.NoError(t, err)
@@ -57,8 +57,8 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 	insertEmailChangeChallenge := func(t *testing.T, userUUID, sessionUUID string, expiresIn time.Duration) {
 		t.Helper()
 		_, err := testDB.Exec(ctx,
-			`INSERT INTO email_change_challenges (user_uuid, session_uuid, new_email, email_version, code_hash, expires_at)
-			VALUES ($1, $2, 'new@example.com', 0, 'hash', now() + $3::interval)`,
+			`INSERT INTO session_challenges (user_uuid, session_uuid, purpose, new_email, email_version, code_hash, expires_at)
+			VALUES ($1, $2, 'email_change', 'new@example.com', 0, 'hash', now() + $3::interval)`,
 			userUUID, sessionUUID, expiresIn.String(),
 		)
 		require.NoError(t, err)
@@ -124,35 +124,22 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 		assert.Equal(t, 1, count(t, "user_sessions"))
 	})
 
-	t.Run("deletes expired challenge and keeps live one", func(t *testing.T) {
-		userUUID := reset(t)
-		expiredChallengeSession := insertSession(t, userUUID, time.Hour, 0)
-		liveChallengeSession := insertSession(t, userUUID, time.Hour, 0)
-		insertChallenge(t, userUUID, expiredChallengeSession, -time.Minute)
-		insertChallenge(t, userUUID, liveChallengeSession, time.Minute)
-
-		require.NoError(t, sweeper.RunMaintenance(ctx))
-
-		assert.Equal(t, 2, count(t, "user_sessions"))
-		assert.Equal(t, 1, count(t, "step_up_challenges"))
-		var sessionUUID string
-		require.NoError(t, testDB.QueryRow(ctx, "SELECT session_uuid::text FROM step_up_challenges").Scan(&sessionUUID))
-		assert.Equal(t, liveChallengeSession, sessionUUID)
-	})
-
-	t.Run("deletes expired email change challenges and keeps live ones", func(t *testing.T) {
+	t.Run("deletes expired challenges of every purpose and keeps live ones", func(t *testing.T) {
 		userUUID := reset(t)
 		expiredSession := insertSession(t, userUUID, time.Hour, 0)
 		liveSession := insertSession(t, userUUID, time.Hour, 0)
+		insertChallenge(t, userUUID, expiredSession, -time.Minute)
 		insertEmailChangeChallenge(t, userUUID, expiredSession, -time.Minute)
+		insertChallenge(t, userUUID, liveSession, time.Minute)
 		insertEmailChangeChallenge(t, userUUID, liveSession, time.Minute)
 
 		require.NoError(t, sweeper.RunMaintenance(ctx))
 
-		assert.Equal(t, 1, count(t, "email_change_challenges"))
-		var sessionUUID string
-		require.NoError(t, testDB.QueryRow(ctx, "SELECT session_uuid::text FROM email_change_challenges").Scan(&sessionUUID))
-		assert.Equal(t, liveSession, sessionUUID)
+		assert.Equal(t, 2, count(t, "user_sessions"))
+		assert.Equal(t, 2, count(t, "session_challenges"))
+		var stale int
+		require.NoError(t, testDB.QueryRow(ctx, "SELECT count(*) FROM session_challenges WHERE session_uuid <> $1", liveSession).Scan(&stale))
+		assert.Equal(t, 0, stale)
 	})
 
 	t.Run("deletes more rows than one batch", func(t *testing.T) {
@@ -171,7 +158,7 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 		require.NoError(t, sweeper.RunMaintenanceWithBatchSize(ctx, 3))
 
 		assert.Equal(t, 8, count(t, "user_sessions"))
-		assert.Equal(t, 1, count(t, "step_up_challenges"))
+		assert.Equal(t, 1, count(t, "session_challenges"))
 	})
 
 	t.Run("deletes expired pending signups and keeps live ones", func(t *testing.T) {

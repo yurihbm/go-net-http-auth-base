@@ -13,7 +13,7 @@ import (
 var ErrStepUpInvalidCode = domain.NewUnauthorizedError("auth.stepUp.invalidCode")
 
 type stepUpService struct {
-	challenges domain.StepUpRepository
+	challenges domain.SessionChallengeRepository
 	sessions   domain.SessionsRepository
 	users      domain.UsersRepository
 	transactor domain.Transactor
@@ -22,7 +22,7 @@ type stepUpService struct {
 }
 
 func NewStepUpService(
-	challenges domain.StepUpRepository,
+	challenges domain.SessionChallengeRepository,
 	sessions domain.SessionsRepository,
 	users domain.UsersRepository,
 	transactor domain.Transactor,
@@ -61,10 +61,11 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 		return domain.NewInternalServerError("auth.stepUp.codeGenerationFailed", err)
 	}
 
-	_, err = s.challenges.Upsert(ctx, domain.StepUpChallenge{
+	err = s.challenges.Upsert(ctx, domain.SessionChallenge{
 		UserUUID:    userUUID,
 		SessionUUID: sessionUUID,
-		CodeHash:    hashOTP(s.hmacKey, sessionUUID, code),
+		Purpose:     domain.SessionChallengeStepUp,
+		CodeHash:    s.hashCode(sessionUUID, code),
 		ExpiresAt:   time.Now().Add(domain.StepUpCodeTTL).Unix(),
 	}, domain.StepUpCooldown)
 	if err != nil {
@@ -73,7 +74,7 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 
 	return sendOrRollback(ctx, "auth.stepUp.sendFailed",
 		func() error { return s.emails.SendStepUpCode(ctx, user.Email, code) },
-		func() error { return s.challenges.Delete(ctx, sessionUUID) },
+		func() error { return s.challenges.Delete(ctx, sessionUUID, domain.SessionChallengeStepUp) },
 	)
 }
 
@@ -82,20 +83,20 @@ func (s *stepUpService) VerifyCode(ctx context.Context, userUUID string, session
 		return 0, err
 	}
 
-	challenge, err := s.challenges.Attempt(ctx, userUUID, sessionUUID, domain.StepUpMaxAttempts)
+	challenge, err := s.challenges.Attempt(ctx, userUUID, sessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts)
 	if err != nil {
 		s.refundGuess(ctx, userUUID)
 		return 0, err
 	}
 
-	if !hmac.Equal([]byte(challenge.CodeHash), []byte(hashOTP(s.hmacKey, sessionUUID, code))) {
+	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.hashCode(sessionUUID, code))) {
 		return 0, s.rejectWrongCode(ctx, userUUID, sessionUUID)
 	}
 	s.refundGuess(ctx, userUUID)
 
 	until := time.Now().Add(domain.StepUpElevationWindow)
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
-		if err := s.challenges.Delete(ctx, sessionUUID); err != nil {
+		if err := s.challenges.Delete(ctx, sessionUUID, domain.SessionChallengeStepUp); err != nil {
 			return err
 		}
 		return s.sessions.SetStepUpUntil(ctx, userUUID, sessionUUID, until)
@@ -139,6 +140,10 @@ func (s *stepUpService) refundGuess(ctx context.Context, userUUID string) {
 	if err := s.users.RefundStepUpGuess(ctx, userUUID); err != nil {
 		slog.ErrorContext(ctx, "step-up guess refund failed", "error", err, "user_uuid", userUUID)
 	}
+}
+
+func (s *stepUpService) hashCode(sessionUUID string, code string) string {
+	return hashOTP(s.hmacKey, "step-up:"+sessionUUID, code)
 }
 
 func isStepUpLocked(user *domain.User) bool {
