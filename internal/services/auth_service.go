@@ -18,6 +18,8 @@ var (
 	ErrInvalidToken             = domain.NewUnauthorizedError("auth.invalidToken")
 	ErrOAuthNonceMismatch       = domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")
 	ErrOAuthMissingCodeVerifier = domain.NewUnauthorizedError("auth.oauthLogin.missingCodeVerifier")
+
+	errOAuthEmailUnverified = errors.New("oauth provider email is not verified")
 )
 
 type authService struct {
@@ -79,28 +81,52 @@ func (s *authService) CredentialsLogin(ctx context.Context, dto domain.Credentia
 }
 
 // The attempt is counted outside the transaction so a wrong code is never rolled
-// back. If the user cannot be created (email taken meanwhile), the rollback keeps
-// the pending signup.
+// back. If the account cannot be created or linked (email taken meanwhile), the
+// rollback keeps the pending signup. An OAuth conflict may come from a concurrent
+// link or create, so it runs once more in a fresh transaction, where Consume
+// finds the restored pending signup and the records that won the race.
 func (s *authService) CompleteSignup(ctx context.Context, pendingUUID string, code string) (*domain.SignupResult, error) {
 	if err := s.pendingSignups.Attempt(ctx, pendingUUID, code); err != nil {
 		return nil, err
 	}
 
+	result, kind, err := s.completeSignupWithinTx(ctx, pendingUUID, code)
+
+	var conflictErr *domain.ConflictError
+	if kind == domain.PendingSignupKindOAuth && errors.As(err, &conflictErr) {
+		result, _, err = s.completeSignupWithinTx(ctx, pendingUUID, code)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *authService) completeSignupWithinTx(ctx context.Context, pendingUUID string, code string) (*domain.SignupResult, domain.PendingSignupKind, error) {
 	var result domain.SignupResult
+	var kind domain.PendingSignupKind
 	err := s.transactor.WithinTx(ctx, func(ctx context.Context) error {
 		pending, err := s.pendingSignups.Consume(ctx, pendingUUID, code)
 		if err != nil {
 			return err
 		}
-		if pending.Kind != domain.PendingSignupKindCredentials {
-			return domain.NewInternalServerError("auth.signup.unsupportedKind", errors.New("unsupported pending signup kind: "+string(pending.Kind)))
-		}
+		kind = pending.Kind
 
-		result.User, err = s.usersService.Create(ctx, domain.NewUserDTO{
-			Name:         pending.Name,
-			Email:        pending.Email,
-			PasswordHash: pending.PasswordHash,
-		})
+		if pending.Kind == domain.PendingSignupKindOAuth {
+			result.User, err = s.findOrCreateOAuthUser(ctx, pending.Provider, &domain.OAuthProviderUserInfo{
+				ID:            pending.ProviderUserID,
+				Name:          pending.Name,
+				Email:         pending.Email,
+				EmailVerified: true,
+			})
+		} else {
+			result.User, err = s.usersService.Create(ctx, domain.NewUserDTO{
+				Name:         pending.Name,
+				Email:        pending.Email,
+				PasswordHash: pending.PasswordHash,
+			})
+		}
 		if err != nil {
 			return err
 		}
@@ -112,10 +138,10 @@ func (s *authService) CompleteSignup(ctx context.Context, pendingUUID string, co
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, kind, err
 	}
 
-	return &result, nil
+	return &result, kind, nil
 }
 
 func (s *authService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
@@ -405,6 +431,9 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 	}
 
 	authenticatedUser, err := s.resolveOAuthUser(ctx, dto.Provider, &userInfo)
+	if errors.Is(err, errOAuthEmailUnverified) {
+		return s.startOAuthSignup(ctx, dto.Provider, &userInfo, redirectURI)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -419,6 +448,25 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		Tokens:      tokens,
 		RedirectURI: redirectURI,
 	}, nil
+}
+
+func (s *authService) startOAuthSignup(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo, redirectURI string) (*domain.OAuthLoginResult, error) {
+	pendingUUID, err := s.pendingSignups.StartOAuth(ctx, domain.StartOAuthSignupDTO{
+		Name:           userInfo.Name,
+		Email:          userInfo.Email,
+		Provider:       provider,
+		ProviderUserID: userInfo.ID,
+	})
+
+	var tooManyErr *domain.TooManyRequestsError
+	if errors.As(err, &tooManyErr) {
+		return &domain.OAuthLoginResult{RedirectURI: redirectURI, VerificationLimited: true}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.OAuthLoginResult{RedirectURI: redirectURI, PendingSignupUUID: pendingUUID}, nil
 }
 
 func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, error) {
@@ -464,19 +512,15 @@ func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain
 		return s.usersService.GetByUUID(ctx, domain.Actor{UUID: userOAuthProvider.UserUUID}, userOAuthProvider.UserUUID)
 	}
 
+	// Both Case 2 and Case 3 trust the provider's claim of owning this email;
+	// otherwise the mailbox is proven by code before anything is written.
+	if !userInfo.EmailVerified {
+		return nil, errOAuthEmailUnverified
+	}
+
 	existingUser, err := s.usersService.GetByEmail(ctx, userInfo.Email)
 	if err != nil && !errors.As(err, &notFoundErr) {
 		return nil, err
-	}
-
-	// Both Case 2 and Case 3 trust the provider's claim of owning this email.
-	if !userInfo.EmailVerified {
-		return nil, domain.NewValidationError(
-			"auth.providerCallback.emailNotVerified",
-			map[string]string{
-				"email": "provider email is not verified",
-			},
-		)
 	}
 
 	// Case 2: provider email matches an existing user account (link provider).
