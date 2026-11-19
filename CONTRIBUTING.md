@@ -36,7 +36,7 @@ This project follows a clean, layered architecture. Understanding this structure
 |                      Data Access Layer (Repositories & Providers)         |
 |                                                                           |
 |  UsersRepository  AuthRepository  SessionsRepository  AuditRepository     |
-|  PendingSignupRepository  EmailSendLimiter  StepUpRepository              |
+|  PendingSignupRepository  EmailSendLimiter  SessionChallengeRepository    |
 |  Transactor (WithinTx)            OAuthProviders      EmailProvider       |
 +-----------|---------------------------|-------------------|---------------+
             v                           v                   v

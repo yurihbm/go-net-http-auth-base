@@ -76,14 +76,18 @@ Rejected alternatives:
   the `email_verification_token` audience and `EMAIL_VERIFICATION_URL` are gone.
 - OAuth linking into an existing account only depends on the provider email
   being verified, because every local account is verified.
-- `infra.ExpiredRecordsSweeper` also deletes expired pending sign-ups,
-  `email_send_limits` rows whose windows both ended and expired email change
-  challenges.
+- `infra.ExpiredRecordsSweeper` also deletes expired pending sign-ups and
+  `email_send_limits` rows whose windows both ended.
 - `POST /users/confirm-email-change`, the `email_change_token` audience and
-  `EMAIL_CHANGE_URL` are gone: the email change challenge lives in
-  `email_change_challenges` (one per session, 10 minutes, 5 attempts, 60 seconds
-  cooldown) and confirming it revokes every session, so the client signs in
-  again.
+  `EMAIL_CHANGE_URL` are gone: the email change challenge is stored per session
+  (10 minutes, 5 attempts, 60 seconds cooldown) and confirming it revokes every
+  session, so the client signs in again.
+- Step-up and email change challenges share one `session_challenges` table
+  (replacing `step_up_challenges` of ADR-008): one row per session and
+  `purpose` (`step_up`, `email_change`), `new_email` and `email_version` only
+  on email change rows (CHECK), cascading with the session and the user, one
+  query set and one repository. The hash scopes stay separate (`step-up:` and
+  `email-change:` plus the session UUID), as do the error keys of each flow.
 - Residual risks:
   - Per-address brute force: with 20 wrong codes per address per 24 hours over a
     space of one million codes, an attacker who can keep starting flows has

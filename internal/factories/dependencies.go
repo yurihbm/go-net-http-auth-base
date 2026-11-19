@@ -57,13 +57,14 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	authRepository := repositories.NewAuthPostgresRepository(db)
 	sessionsRepository := repositories.NewSessionsPostgresRepository(db)
 	emailSendLimits := repositories.NewEmailSendLimitsPostgresRepository(db)
+	sessionChallenges := repositories.NewSessionChallengesPostgresRepository(db)
 	transactor := repositories.NewPostgresTransactor(pool)
 	usersService := services.NewUserService(
 		usersRepository,
 		emailVerificationService,
 		sessionsRepository,
 		authRepository,
-		repositories.NewEmailChangePostgresRepository(db),
+		sessionChallenges,
 		emailSendLimits,
 		transactor,
 		[]byte(cfg.JWTSecret),
@@ -105,7 +106,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	)
 
 	stepUpService := services.NewStepUpService(
-		repositories.NewStepUpPostgresRepository(db),
+		sessionChallenges,
 		sessionsRepository,
 		usersRepository,
 		transactor,
