@@ -71,13 +71,10 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 		return err
 	}
 
-	if err := s.emails.SendStepUpCode(ctx, user.Email, code); err != nil {
-		if deleteErr := s.challenges.Delete(ctx, sessionUUID); deleteErr != nil {
-			slog.ErrorContext(ctx, "step-up challenge cleanup failed", "error", deleteErr, "user_uuid", userUUID)
-		}
-		return domain.NewInternalServerError("auth.stepUp.sendFailed", err)
-	}
-	return nil
+	return sendOrRollback(ctx, "auth.stepUp.sendFailed",
+		func() error { return s.emails.SendStepUpCode(ctx, user.Email, code) },
+		func() error { return s.challenges.Delete(ctx, sessionUUID) },
+	)
 }
 
 func (s *stepUpService) VerifyCode(ctx context.Context, userUUID string, sessionUUID string, code string) (int64, error) {
