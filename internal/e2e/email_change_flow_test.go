@@ -40,10 +40,10 @@ func TestEmailChangeFlow(t *testing.T) {
 		if code == wrong {
 			wrong = "111111"
 		}
-		rejected := phone.do(http.MethodPost, "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: wrong})
+		rejected := phone.do(http.MethodPost, "/auth/step-up/verify", domain.CodeDTO{Code: wrong})
 		assert.Equal(t, http.StatusUnauthorized, rejected.Status)
 
-		accepted := phone.do(http.MethodPost, "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: code})
+		accepted := phone.do(http.MethodPost, "/auth/step-up/verify", domain.CodeDTO{Code: code})
 		assert.Equal(t, http.StatusOK, accepted.Status)
 	})
 
