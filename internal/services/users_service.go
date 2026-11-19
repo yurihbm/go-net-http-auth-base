@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"crypto/hmac"
 	"errors"
 	"log/slog"
 	"time"
@@ -165,20 +164,26 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, actor domain.Acto
 		return nil, domain.NewUnauthorizedError("users.emailChange.unauthorized")
 	}
 
-	challenge, err := s.challenges.Attempt(ctx, actor.UUID, sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts)
+	// The challenge is read first only to know which address the guess counts against.
+	found, err := s.challenges.Find(ctx, actor.UUID, sessionUUID, domain.SessionChallengeEmailChange)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.limiter.ReserveCodeGuess(ctx, challenge.NewEmail, domain.EmailCodeFailureWindow); err != nil {
+	var challenge *domain.SessionChallenge
+	err = guessCode(ctx, s.limiter, found.NewEmail, s.hashEmailChangeCode(sessionUUID, code), domain.ErrEmailChangeInvalidCode, func() (string, error) {
+		attempted, err := s.challenges.Attempt(ctx, actor.UUID, sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts)
+		if err != nil {
+			return "", err
+		}
+		if attempted.NewEmail != found.NewEmail {
+			return "", domain.ErrEmailChangeNoChallenge
+		}
+		challenge = attempted
+		return attempted.CodeHash, nil
+	})
+	if err != nil {
 		return nil, err
-	}
-
-	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.hashEmailChangeCode(sessionUUID, code))) {
-		return nil, domain.ErrEmailChangeInvalidCode
-	}
-	if err := s.limiter.RefundCodeGuess(ctx, challenge.NewEmail); err != nil {
-		slog.ErrorContext(ctx, "code guess refund failed", "error", err, "user_uuid", actor.UUID)
 	}
 
 	user, err := s.repo.FindByUUID(ctx, actor.UUID)

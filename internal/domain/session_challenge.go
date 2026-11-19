@@ -24,6 +24,7 @@ type SessionChallenge struct {
 
 type SessionChallengeRepository interface {
 	Upsert(ctx context.Context, challenge SessionChallenge, cooldown time.Duration) error
+	Find(ctx context.Context, userUUID string, sessionUUID string, purpose SessionChallengePurpose) (*SessionChallenge, error)
 	Attempt(ctx context.Context, userUUID string, sessionUUID string, purpose SessionChallengePurpose, maxAttempts int) (*SessionChallenge, error)
 	Delete(ctx context.Context, sessionUUID string, purpose SessionChallengePurpose) error
 }

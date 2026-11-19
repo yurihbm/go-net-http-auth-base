@@ -631,9 +631,13 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 	updated := &domain.User{UUID: "user-uuid", Email: "new@example.com", EmailVersion: 4, EmailChangedAt: changedAt}
 	notice := domain.EmailChangeRevert{UserUUID: "user-uuid", OldEmail: "old@example.com", NewEmail: "new@example.com", Version: 4, ChangedAt: changedAt}
 
+	expectFind := func(f emailChangeFixture) {
+		f.challenges.On("Find", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange).Return(challenge, nil).Once()
+	}
 	expectAttempt := func(f emailChangeFixture) {
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
+		expectFind(f)
 		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(nil).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
 		f.limiter.On("RefundCodeGuess", "new@example.com").Return(nil).Maybe()
 	}
 	expectUpdate := func(f emailChangeFixture) {
@@ -700,18 +704,51 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 		var unauthorizedErr *domain.UnauthorizedError
 		assert.True(t, errors.As(err, &unauthorizedErr))
 		assert.Nil(t, result)
-		f.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		f.challenges.AssertNotCalled(t, "Find", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("error - no challenge for the session", func(t *testing.T) {
 		f := newEmailChangeFixture()
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(nil, domain.ErrEmailChangeNoChallenge).Once()
+		f.challenges.On("Find", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange).Return(nil, domain.ErrEmailChangeNoChallenge).Once()
 
 		result, err := f.service.ConfirmEmailChange(context.Background(), actor, sessionUUID, code)
 
 		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
 		assert.Nil(t, result)
+		f.limiter.AssertNotCalled(t, "ReserveCodeGuess", mock.Anything, mock.Anything)
 		f.repo.AssertNotCalled(t, "FindByUUID", mock.Anything)
+	})
+
+	t.Run("error - a failed attempt refunds the reserved guess", func(t *testing.T) {
+		f := newEmailChangeFixture()
+		expectFind(f)
+		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(nil).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(nil, domain.ErrEmailChangeNoChallenge).Once()
+		f.limiter.On("RefundCodeGuess", "new@example.com").Return(nil).Once()
+
+		result, err := f.service.ConfirmEmailChange(context.Background(), actor, sessionUUID, code)
+
+		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
+		assert.Nil(t, result)
+		f.limiter.AssertExpectations(t)
+		f.repo.AssertNotCalled(t, "FindByUUID", mock.Anything)
+	})
+
+	t.Run("error - a challenge replaced for another address refunds the reserved guess", func(t *testing.T) {
+		f := newEmailChangeFixture()
+		replaced := *challenge
+		replaced.NewEmail = "other@example.com"
+		expectFind(f)
+		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(nil).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(&replaced, nil).Once()
+		f.limiter.On("RefundCodeGuess", "new@example.com").Return(nil).Once()
+
+		result, err := f.service.ConfirmEmailChange(context.Background(), actor, sessionUUID, code)
+
+		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
+		assert.Nil(t, result)
+		f.limiter.AssertExpectations(t)
+		f.repo.AssertNotCalled(t, "UpdateEmail", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("error - wrong code keeps the reserved guess for the new address and changes nothing", func(t *testing.T) {
@@ -732,8 +769,9 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 
 	t.Run("success - a failed guess refund is only logged", func(t *testing.T) {
 		f := newEmailChangeFixture()
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
+		expectFind(f)
 		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(nil).Once()
+		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
 		f.limiter.On("RefundCodeGuess", "new@example.com").Return(errors.New("db error")).Once()
 		expectUpdate(f)
 		f.sessions.On("DeleteAllByUser", "user-uuid").Return(nil).Once()
@@ -747,25 +785,27 @@ func TestUsersService_ConfirmEmailChange(t *testing.T) {
 
 	t.Run("error - address locked after too many wrong codes", func(t *testing.T) {
 		f := newEmailChangeFixture()
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
+		expectFind(f)
 		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(domain.ErrEmailCodeLocked).Once()
 
 		result, err := f.service.ConfirmEmailChange(context.Background(), actor, sessionUUID, code)
 
 		assert.ErrorIs(t, err, domain.ErrEmailCodeLocked)
 		assert.Nil(t, result)
+		f.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		f.repo.AssertNotCalled(t, "UpdateEmail", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("error - guess reservation fails", func(t *testing.T) {
 		f := newEmailChangeFixture()
 		dbErr := errors.New("db error")
-		f.challenges.On("Attempt", "user-uuid", sessionUUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts).Return(challenge, nil).Once()
+		expectFind(f)
 		f.limiter.On("ReserveCodeGuess", "new@example.com", domain.EmailCodeFailureWindow).Return(dbErr).Once()
 
 		_, err := f.service.ConfirmEmailChange(context.Background(), actor, sessionUUID, code)
 
 		assert.ErrorIs(t, err, dbErr)
+		f.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	staleCases := map[string]*domain.User{
