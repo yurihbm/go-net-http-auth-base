@@ -13,7 +13,6 @@ const (
 	StepUpMaxUserFailures    = 20
 	StepUpUserFailureWindow  = 24 * time.Hour
 	StepUpCooldown           = 60 * time.Second
-	EmailChangeLock          = 72 * time.Hour
 )
 
 var (
