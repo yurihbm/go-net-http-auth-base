@@ -29,16 +29,16 @@ func (p *microsoftOAuthProvider) GetUserInfo(ctx context.Context, code string, c
 	}
 
 	return &domain.OAuthProviderUserInfo{
-		ID:            microsoftUser.ID,
-		Name:          microsoftUser.Name,
-		Email:         microsoftUser.Email,
-		EmailVerified: microsoftUser.EmailVerified,
+		ID:    microsoftUser.ID,
+		Name:  microsoftUser.Name,
+		Email: microsoftUser.Email,
+		// The email is mutable and tenant-controlled, so it is always proven by code (ADR-009).
+		EmailVerified: false,
 	}, nil
 }
 
 type microsoftUserInfo struct {
-	ID            string `json:"sub"`
-	Name          string `json:"name"`
-	Email         string `json:"email"`
-	EmailVerified bool   `json:"email_verified"`
+	ID    string `json:"sub"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }

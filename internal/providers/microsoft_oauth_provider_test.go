@@ -48,9 +48,10 @@ func TestMicrosoftOAuthProvider_GetUserInfo(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			encodeJSON(t, w, map[string]any{
-				"sub":   "microsoft-user-123",
-				"name":  "Jane Doe",
-				"email": "jane@example.com",
+				"sub":            "microsoft-user-123",
+				"name":           "Jane Doe",
+				"email":          "jane@example.com",
+				"email_verified": true,
 			})
 		}))
 		defer userInfoServer.Close()
@@ -89,6 +90,7 @@ func TestMicrosoftOAuthProvider_GetUserInfo(t *testing.T) {
 		assert.Equal(t, "microsoft-user-123", userInfo.ID)
 		assert.Equal(t, "Jane Doe", userInfo.Name)
 		assert.Equal(t, "jane@example.com", userInfo.Email)
+		assert.False(t, userInfo.EmailVerified)
 	})
 
 	t.Run("error - code exchange fails", func(t *testing.T) {
