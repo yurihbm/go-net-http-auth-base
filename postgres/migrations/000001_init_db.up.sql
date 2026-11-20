@@ -70,6 +70,10 @@ CREATE TABLE user_sessions (
 
 CREATE INDEX idx_user_sessions_user_last_used ON user_sessions (user_uuid, last_used_at);
 
+CREATE INDEX idx_user_sessions_expires_at ON user_sessions (expires_at);
+
+CREATE INDEX idx_user_sessions_last_used_at ON user_sessions (last_used_at);
+
 CREATE TABLE step_up_challenges (
     uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
     user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
@@ -81,6 +85,8 @@ CREATE TABLE step_up_challenges (
 );
 
 CREATE INDEX idx_step_up_challenges_user ON step_up_challenges (user_uuid);
+
+CREATE INDEX idx_step_up_challenges_expires_at ON step_up_challenges (expires_at);
 
 CREATE TABLE audit_logs (
     uuid uuid DEFAULT uuidv7() NOT NULL,
