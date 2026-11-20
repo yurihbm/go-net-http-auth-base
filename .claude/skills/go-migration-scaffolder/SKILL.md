@@ -30,12 +30,12 @@ Use the script below only once a real service has been bootstrapped from the tem
 Run the `create-migration.ts` script to generate the necessary files.
 
 ```bash
-npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
+npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
 ```
 
 **Example:**
 ```bash
-npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table
+npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table
 ```
 
 This will:
