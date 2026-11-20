@@ -10,21 +10,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const expiredSessionsSweepBatchSize = 1000
+const expiredRecordsSweepBatchSize = 1000
 
-type ExpiredSessionsSweeper struct {
+type ExpiredRecordsSweeper struct {
 	q *postgres.Queries
 }
 
-func NewExpiredSessionsSweeper(db postgres.DBTX) *ExpiredSessionsSweeper {
-	return &ExpiredSessionsSweeper{q: postgres.New(db)}
+func NewExpiredRecordsSweeper(db postgres.DBTX) *ExpiredRecordsSweeper {
+	return &ExpiredRecordsSweeper{q: postgres.New(db)}
 }
 
-func (s *ExpiredSessionsSweeper) RunMaintenance(ctx context.Context) error {
-	return s.RunMaintenanceWithBatchSize(ctx, expiredSessionsSweepBatchSize)
+func (s *ExpiredRecordsSweeper) RunMaintenance(ctx context.Context) error {
+	return s.RunMaintenanceWithBatchSize(ctx, expiredRecordsSweepBatchSize)
 }
 
-func (s *ExpiredSessionsSweeper) RunMaintenanceWithBatchSize(ctx context.Context, batchSize int32) error {
+func (s *ExpiredRecordsSweeper) RunMaintenanceWithBatchSize(ctx context.Context, batchSize int32) error {
 	challenges, err := sweepInBatches(batchSize, func() (int64, error) {
 		return s.q.DeleteExpiredStepUpChallengesBatch(ctx, batchSize)
 	})
