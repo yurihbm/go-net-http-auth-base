@@ -16,7 +16,7 @@ func NewRequestUUIDMiddleware() GlobalMiddleware {
 
 func (m *RequestUUIDMiddleware) Use(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestUUID := uuid.New().String()
+		requestUUID := uuid.Must(uuid.NewV7()).String()
 
 		var reqContextData *shared.RequestContextData
 		if val := r.Context().Value(shared.RequestContextDataKey); val != nil {
