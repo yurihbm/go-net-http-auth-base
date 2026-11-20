@@ -198,6 +198,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/logout-others": {
+            "post": {
+                "description": "Deletes every session of the user except the current one. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Log out of the other devices",
+                "responses": {
+                    "204": {
+                        "description": "Other sessions deleted"
+                    },
+                    "401": {
+                        "description": "Unauthorized, or the current session was revoked or expired",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/refresh": {
             "post": {
                 "description": "Rotates the refresh token. Requires the ` + "`" + `refresh_token` + "`" + ` cookie (path /auth/refresh) and sets new ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies.",
@@ -217,6 +243,102 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/step-up": {
+            "post": {
+                "description": "Emails a 6-digit code to the current email address of the user. Valid for 10 minutes, one request per 60 seconds per session. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request a step-up code",
+                "responses": {
+                    "202": {
+                        "description": "Code sent",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "429": {
+                        "description": "Cooldown (auth.stepUp.cooldown) or too many failed codes for the user in 24 hours (auth.stepUp.userLocked)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/step-up/verify": {
+            "post": {
+                "description": "Elevates the current session for 5 minutes. A code allows 5 attempts. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify a step-up code",
+                "parameters": [
+                    {
+                        "description": "Code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.StepUpVerifyDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Session elevated; step_up_until is a unix timestamp",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-map_string_int64"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid code (auth.stepUp.invalidCode), no active challenge (auth.stepUp.noChallenge) or session revoked after too many failures (auth.stepUp.sessionRevoked, clears the auth cookies)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many failed codes for the user in 24 hours (auth.stepUp.userLocked)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -579,7 +701,7 @@ const docTemplate = `{
         },
         "/users/me/email": {
             "post": {
-                "description": "Sends a confirmation link to the new address; the email only changes after POST /users/confirm-email-change. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
+                "description": "Sends a confirmation link to the new address; the email only changes after POST /users/confirm-email-change. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify).",
                 "consumes": [
                     "application/json"
                 ],
@@ -616,6 +738,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Step-up required (auth.stepUp.required)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -867,7 +995,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
+                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins.",
                 "produces": [
                     "application/json"
                 ],
@@ -901,7 +1029,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Forbidden, or step-up required (auth.stepUp.required)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -975,6 +1103,29 @@ const docTemplate = `{
             "properties": {
                 "data": {
                     "$ref": "#/definitions/go-net-http-auth-base_internal_domain.User"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseMeta"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_api.ResponseBody-map_string_int64": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/map_string_int64"
                 },
                 "details": {
                     "type": "object",
@@ -1137,6 +1288,17 @@ const docTemplate = `{
                 }
             }
         },
+        "go-net-http-auth-base_internal_domain.StepUpVerifyDTO": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
         "go-net-http-auth-base_internal_domain.User": {
             "type": "object",
             "properties": {
@@ -1191,6 +1353,13 @@ const docTemplate = `{
                 "token": {
                     "type": "string"
                 }
+            }
+        },
+        "map_string_int64": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "integer",
+                "format": "int64"
             }
         }
     }

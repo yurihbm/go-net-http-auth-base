@@ -152,6 +152,25 @@ func (r *SessionsPostgresRepository) SetStepUpUntil(ctx context.Context, userUUI
 	return nil
 }
 
+func (r *SessionsPostgresRepository) IncrementStepUpFailures(ctx context.Context, userUUIDStr string, sessionUUIDStr string) (int, error) {
+	userUUID, sessionUUID, err := parseSessionUUIDs(userUUIDStr, sessionUUIDStr)
+	if err != nil {
+		return 0, err
+	}
+
+	failures, err := r.q.IncrementUserSessionStepUpFailures(ctx, postgres.IncrementUserSessionStepUpFailuresParams{
+		Uuid:     *sessionUUID,
+		UserUuid: *userUUID,
+	})
+	if err != nil {
+		if noRowsErr := isNoRowsError(err, "sessions.notFound"); noRowsErr != nil {
+			return 0, noRowsErr
+		}
+		return 0, domain.NewInternalServerError("sessions.internalServerError", err)
+	}
+	return int(failures), nil
+}
+
 func (r *SessionsPostgresRepository) DeleteAllByUser(ctx context.Context, userUUIDStr string) error {
 	userUUID, err := parseUsersUUID(userUUIDStr)
 	if err != nil {

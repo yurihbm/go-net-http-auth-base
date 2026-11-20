@@ -58,6 +58,12 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.stepUp.cooldown`               | `TooManyRequestsError` | `StepUpRepository.Upsert`: a code was already issued in the last 60s   |
 | `auth.stepUp.noChallenge`            | `UnauthorizedError`    | `StepUpRepository.Attempt`: no challenge, expired, or attempts exhausted |
 | `auth.stepUp.internalServerError`    | `InternalServerError`  | Unexpected `StepUpRepository` failures                                 |
+| `auth.stepUp.invalidCode`            | `UnauthorizedError`    | `StepUpService.VerifyCode`: the code does not match                    |
+| `auth.stepUp.sessionRevoked`         | `UnauthorizedError`    | `StepUpService.VerifyCode`: 10 wrong codes on one session; the session is deleted |
+| `auth.stepUp.userLocked`             | `TooManyRequestsError` | `StepUpService.RequestCode`, `UsersRepository.ReserveStepUpGuess` (`VerifyCode`): 20 wrong codes across the user's sessions in 24h |
+| `auth.stepUp.required`               | `ForbiddenError`       | `StepUpMiddleware`: the session has no active step-up                  |
+| `auth.stepUp.sendFailed`             | `InternalServerError`  | `StepUpService.RequestCode`: the code email could not be sent          |
+| `auth.stepUp.codeGenerationFailed`   | `InternalServerError`  | `StepUpService.RequestCode`: the random source failed                  |
 | `users.emailChange.staleToken`       | `UnauthorizedError`    | `UsersRepository.UpdateEmail`: `email_version` no longer matches       |
 
 ## Implementation Details

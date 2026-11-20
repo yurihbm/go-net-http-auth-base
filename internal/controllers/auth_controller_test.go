@@ -39,8 +39,17 @@ func newTestAuthControllerWithMiddleware(isSecure bool, allowList []string) (*co
 	auditMock := new(mocks.AuditServiceMock)
 	authMiddleware := new(mocks.AuthMiddlewareMock)
 
-	controller := controllers.NewAuthController(authServiceMock, auditMock, authMiddleware, isSecure, allowList)
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), auditMock, authMiddleware, isSecure, allowList)
 	return controller, authServiceMock, auditMock, authMiddleware
+}
+
+func newTestAuthControllerWithStepUp() (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.StepUpServiceMock, *mocks.AuditServiceMock) {
+	authServiceMock := new(mocks.AuthServiceMock)
+	stepUpMock := new(mocks.StepUpServiceMock)
+	auditMock := new(mocks.AuditServiceMock)
+
+	controller := controllers.NewAuthController(authServiceMock, stepUpMock, auditMock, new(mocks.AuthMiddlewareMock), true, []string{allowedRedirectURI})
+	return controller, authServiceMock, stepUpMock, auditMock
 }
 
 func withSession(req *http.Request, userUUID string, sessionUUID string) *http.Request {
@@ -78,11 +87,11 @@ func TestAuthController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes", func(t *testing.T) {
 		router := http.NewServeMux()
 		controller, _, _, authMiddleware := newTestAuthControllerWithMiddleware(true, []string{allowedRedirectURI})
-		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Once()
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(4)
 
 		controller.RegisterRoutes(router)
 
-		authMiddleware.AssertNumberOfCalls(t, "Use", 1)
+		authMiddleware.AssertNumberOfCalls(t, "Use", 4)
 
 		// Verify routes are registered by checking if requests match
 		routes := []struct {
@@ -92,6 +101,9 @@ func TestAuthController_RegisterRoutes(t *testing.T) {
 			{"POST", "/auth/login"},
 			{"POST", "/auth/refresh"},
 			{"POST", "/auth/logout"},
+			{"POST", "/auth/logout-others"},
+			{"POST", "/auth/step-up"},
+			{"POST", "/auth/step-up/verify"},
 			{"GET", "/auth/google/login"},
 			{"GET", "/auth/google/callback"},
 		}
@@ -378,6 +390,159 @@ func TestAuthController_Logout(t *testing.T) {
 		assert.Len(t, w.Result().Cookies(), 2)
 		auditMock.AssertExpectations(t)
 	})
+}
+
+func TestAuthController_LogoutOthers(t *testing.T) {
+	const (
+		userUUID    = "user-uuid"
+		sessionUUID = "session-uuid"
+	)
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, auditMock := newTestAuthController()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionLogoutOthers &&
+				d.Status == domain.AuditStatusSuccess &&
+				d.ActorUUID != nil && *d.ActorUUID == userUUID
+		})).Return(nil)
+		serviceMock.On("LogoutOthers", userUUID, sessionUUID).Return(nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/logout-others", nil)
+		controller.LogoutOthers(w, withSession(req, userUUID, sessionUUID))
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Result().Cookies())
+		serviceMock.AssertExpectations(t)
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("error - service error", func(t *testing.T) {
+		controller, serviceMock, auditMock := newTestAuthController()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionLogoutOthers && d.Status == domain.AuditStatusFailure
+		})).Return(nil)
+		serviceMock.On("LogoutOthers", userUUID, sessionUUID).
+			Return(domain.NewInternalServerError("sessions.internalServerError", errors.New("db down"))).Once()
+
+		w, req := getControllerArgs("POST", "/auth/logout-others", nil)
+		controller.LogoutOthers(w, withSession(req, userUUID, sessionUUID))
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		auditMock.AssertExpectations(t)
+	})
+}
+
+func TestAuthController_RequestStepUp(t *testing.T) {
+	const (
+		userUUID    = "user-uuid"
+		sessionUUID = "session-uuid"
+	)
+
+	t.Run("success", func(t *testing.T) {
+		controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionStepUpRequest && d.Status == domain.AuditStatusSuccess
+		})).Return(nil)
+		stepUpMock.On("RequestCode", userUUID, sessionUUID).Return(nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/step-up", nil)
+		controller.RequestStepUp(w, withSession(req, userUUID, sessionUUID))
+
+		var response api.ResponseBody[any]
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusAccepted, w.Code)
+		assert.Equal(t, "auth.stepUp.codeSent", response.Message)
+		stepUpMock.AssertExpectations(t)
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("error - cooldown", func(t *testing.T) {
+		controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionStepUpRequest && d.Status == domain.AuditStatusFailure
+		})).Return(nil)
+		stepUpMock.On("RequestCode", userUUID, sessionUUID).Return(domain.NewTooManyRequestsError("auth.stepUp.cooldown")).Once()
+
+		w, req := getControllerArgs("POST", "/auth/step-up", nil)
+		controller.RequestStepUp(w, withSession(req, userUUID, sessionUUID))
+
+		var response api.ResponseBody[any]
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		assert.Equal(t, "auth.stepUp.cooldown", response.Error)
+		auditMock.AssertExpectations(t)
+	})
+}
+
+func TestAuthController_VerifyStepUp(t *testing.T) {
+	const (
+		userUUID    = "user-uuid"
+		sessionUUID = "session-uuid"
+		until       = int64(1700000000)
+	)
+	dto := domain.StepUpVerifyDTO{Code: "123456"}
+
+	t.Run("success", func(t *testing.T) {
+		controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionStepUpVerify && d.Status == domain.AuditStatusSuccess
+		})).Return(nil)
+		stepUpMock.On("VerifyCode", userUUID, sessionUUID, dto.Code).Return(until, nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/step-up/verify", dto)
+		controller.VerifyStepUp(w, withSession(req, userUUID, sessionUUID))
+
+		var response api.ResponseBody[map[string]int64]
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "auth.stepUp.verified", response.Message)
+		assert.Equal(t, until, response.Data["step_up_until"])
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("error - validation", func(t *testing.T) {
+		controller, _, stepUpMock, _ := newTestAuthControllerWithStepUp()
+
+		w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: "12"})
+		controller.VerifyStepUp(w, withSession(req, userUUID, sessionUUID))
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		stepUpMock.AssertNotCalled(t, "VerifyCode", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - invalid code", func(t *testing.T) {
+		controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionStepUpVerify && d.Status == domain.AuditStatusFailure
+		})).Return(nil)
+		stepUpMock.On("VerifyCode", userUUID, sessionUUID, dto.Code).Return(int64(0), domain.NewUnauthorizedError("auth.stepUp.invalidCode")).Once()
+
+		w, req := getControllerArgs("POST", "/auth/step-up/verify", dto)
+		controller.VerifyStepUp(w, withSession(req, userUUID, sessionUUID))
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		auditMock.AssertExpectations(t)
+	})
+}
+
+func TestAuthController_VerifyStepUp_SessionRevoked(t *testing.T) {
+	controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
+	auditMock.On("Log", mock.Anything).Return(nil)
+	stepUpMock.On("VerifyCode", "user-uuid", "session-uuid", "123456").
+		Return(int64(0), domain.ErrStepUpSessionRevoked).Once()
+
+	w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: "123456"})
+	controller.VerifyStepUp(w, withSession(req, "user-uuid", "session-uuid"))
+
+	var response api.ResponseBody[any]
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, "auth.stepUp.sessionRevoked", response.Error)
+	assert.Len(t, w.Result().Cookies(), 2)
+	for _, cookie := range w.Result().Cookies() {
+		assert.Empty(t, cookie.Value)
+		assert.Negative(t, cookie.MaxAge)
+	}
 }
 
 func TestAuthController_LoginWithOAuthProvider(t *testing.T) {

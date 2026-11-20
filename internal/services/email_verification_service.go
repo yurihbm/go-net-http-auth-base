@@ -107,6 +107,15 @@ func (s *emailVerificationService) SendEmailChangedNotice(ctx context.Context, o
 	})
 }
 
+func (s *emailVerificationService) SendStepUpCode(ctx context.Context, email string, code string) error {
+	return s.emailProvider.Send(ctx, domain.EmailMessage{
+		To:      email,
+		Subject: "Your verification code",
+		Text:    fmt.Sprintf("Your verification code is %s. It expires in %d minutes. If you did not request it, ignore this email.", code, int(domain.StepUpCodeTTL.Minutes())),
+		HTML:    fmt.Sprintf("<p>Your verification code is <strong>%s</strong>. It expires in %d minutes. If you did not request it, ignore this email.</p>", html.EscapeString(code), int(domain.StepUpCodeTTL.Minutes())),
+	})
+}
+
 func (s *emailVerificationService) tokenLink(ctx context.Context, baseURL string, dto domain.GenerateTokenDTO) (string, error) {
 	token, err := s.tokens.GenerateToken(ctx, dto)
 	if err != nil {

@@ -6,11 +6,19 @@ import (
 )
 
 const (
-	StepUpCodeTTL         = 10 * time.Minute
-	StepUpElevationWindow = 5 * time.Minute
-	StepUpMaxAttempts     = 5
-	StepUpCooldown        = 60 * time.Second
-	EmailChangeLock       = 72 * time.Hour
+	StepUpCodeTTL            = 10 * time.Minute
+	StepUpElevationWindow    = 5 * time.Minute
+	StepUpMaxAttempts        = 5
+	StepUpMaxSessionFailures = 10
+	StepUpMaxUserFailures    = 20
+	StepUpUserFailureWindow  = 24 * time.Hour
+	StepUpCooldown           = 60 * time.Second
+	EmailChangeLock          = 72 * time.Hour
+)
+
+var (
+	ErrStepUpSessionRevoked = NewUnauthorizedError("auth.stepUp.sessionRevoked")
+	ErrStepUpUserLocked     = NewTooManyRequestsError("auth.stepUp.userLocked")
 )
 
 type StepUpChallenge struct {
@@ -32,8 +40,12 @@ type StepUpRepository interface {
 	Delete(ctx context.Context, sessionUUID string) error
 }
 
+type StepUpChecker interface {
+	IsElevated(ctx context.Context, userUUID string, sessionUUID string) (bool, error)
+}
+
 type StepUpService interface {
+	StepUpChecker
 	RequestCode(ctx context.Context, userUUID string, sessionUUID string) error
 	VerifyCode(ctx context.Context, userUUID string, sessionUUID string, code string) (int64, error)
-	IsElevated(ctx context.Context, userUUID string, sessionUUID string) (bool, error)
 }
