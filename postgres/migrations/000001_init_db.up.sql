@@ -73,19 +73,32 @@ CREATE INDEX idx_user_sessions_expires_at ON user_sessions (expires_at);
 
 CREATE INDEX idx_user_sessions_last_used_at ON user_sessions (last_used_at);
 
-CREATE TABLE step_up_challenges (
+CREATE TYPE session_challenge_purpose AS ENUM (
+    'step_up',
+    'email_change'
+);
+
+CREATE TABLE session_challenges (
     uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
     user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
-    session_uuid uuid NOT NULL UNIQUE REFERENCES user_sessions (uuid) ON DELETE CASCADE,
+    session_uuid uuid NOT NULL REFERENCES user_sessions (uuid) ON DELETE CASCADE,
+    purpose session_challenge_purpose NOT NULL,
+    new_email text,
+    email_version int,
     code_hash text NOT NULL,
     attempts int NOT NULL DEFAULT 0,
     expires_at timestamptz NOT NULL,
-    created_at timestamptz DEFAULT now() NOT NULL
+    created_at timestamptz DEFAULT now() NOT NULL,
+    UNIQUE (session_uuid, purpose),
+    CONSTRAINT session_challenges_purpose_fields CHECK (
+        (purpose = 'step_up' AND new_email IS NULL AND email_version IS NULL)
+        OR (purpose = 'email_change' AND new_email IS NOT NULL AND email_version IS NOT NULL)
+    )
 );
 
-CREATE INDEX idx_step_up_challenges_user ON step_up_challenges (user_uuid);
+CREATE INDEX idx_session_challenges_user ON session_challenges (user_uuid);
 
-CREATE INDEX idx_step_up_challenges_expires_at ON step_up_challenges (expires_at);
+CREATE INDEX idx_session_challenges_expires_at ON session_challenges (expires_at);
 
 CREATE TYPE pending_signup_kind AS ENUM (
     'credentials',

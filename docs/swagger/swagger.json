@@ -698,70 +698,6 @@
                 }
             }
         },
-        "/users/confirm-email-change": {
-            "post": {
-                "description": "Applies the new email using the token from the confirmation link and marks it as verified.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Confirm an email change",
-                "parameters": [
-                    {
-                        "description": "Confirmation token",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Email changed",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User"
-                        }
-                    },
-                    "400": {
-                        "description": "Validation error",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "404": {
-                        "description": "Not found",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    }
-                }
-            }
-        },
         "/users/me": {
             "get": {
                 "description": "Requires the `access_token` cookie set by POST /auth/login.",
@@ -802,7 +738,7 @@
         },
         "/users/me/email": {
             "post": {
-                "description": "Sends a confirmation link to the new address; the email only changes after POST /users/confirm-email-change. Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify).",
+                "description": "Emails a 6-digit code to the new address; the email only changes after POST /users/me/email/confirm succeeds in the same session. One email per address every 60 seconds and 5 per hour, and one request per session every 60 seconds. Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify).",
                 "consumes": [
                     "application/json"
                 ],
@@ -826,7 +762,7 @@
                 ],
                 "responses": {
                     "202": {
-                        "description": "Confirmation sent",
+                        "description": "Code sent",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -851,6 +787,82 @@
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "429": {
+                        "description": "Cooldown (users.emailChange.cooldown) or too many emails to the address (auth.email.sendLimit)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error, or the email could not be sent (users.emailChange.sendFailed)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/email/confirm": {
+            "post": {
+                "description": "Applies the new email with the code sent to it by POST /users/me/email, marks it as verified, signs out every device and clears the auth cookies. Only the session that requested the change can confirm it. Requires the `access_token` cookie set by POST /auth/login.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Confirm an email change",
+                "parameters": [
+                    {
+                        "description": "Code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.CodeDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Email changed",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid code (users.emailChange.invalidCode), no active challenge for this session (users.emailChange.noChallenge) or stale request (users.emailChange.staleToken)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict, or locked after a recent change (users.emailChange.locked)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many failed codes for the address in 24 hours (auth.email.codeLocked)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -1294,17 +1306,6 @@
             ],
             "properties": {
                 "code": {
-                    "type": "string"
-                }
-            }
-        },
-        "go-net-http-auth-base_internal_domain.ConfirmEmailChangeDTO": {
-            "type": "object",
-            "required": [
-                "token"
-            ],
-            "properties": {
-                "token": {
                     "type": "string"
                 }
             }

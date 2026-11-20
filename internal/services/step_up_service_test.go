@@ -27,7 +27,7 @@ const (
 var stepUpKey = []byte("test-secret-key")
 
 type stepUpMocks struct {
-	challenges *mocks.StepUpRepositoryMock
+	challenges *mocks.SessionChallengeRepositoryMock
 	sessions   *mocks.SessionsRepositoryMock
 	users      *mocks.UsersRepositoryMock
 	emails     *mocks.EmailVerificationServiceMock
@@ -35,7 +35,7 @@ type stepUpMocks struct {
 
 func newTestStepUpService() (domain.StepUpService, stepUpMocks) {
 	m := stepUpMocks{
-		challenges: new(mocks.StepUpRepositoryMock),
+		challenges: new(mocks.SessionChallengeRepositoryMock),
 		sessions:   new(mocks.SessionsRepositoryMock),
 		users:      new(mocks.UsersRepositoryMock),
 		emails:     new(mocks.EmailVerificationServiceMock),
@@ -46,7 +46,7 @@ func newTestStepUpService() (domain.StepUpService, stepUpMocks) {
 
 func stepUpHash(sessionUUID string, code string) string {
 	mac := hmac.New(sha256.New, stepUpKey)
-	mac.Write([]byte(sessionUUID + ":" + code))
+	mac.Write([]byte("step-up:" + sessionUUID + ":" + code))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
@@ -60,14 +60,14 @@ func TestStepUpService_RequestCode(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		var code string
-		var stored domain.StepUpChallenge
+		var stored domain.SessionChallenge
 		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
 		m.users.On("FindByUUID", stepUpUserUUID).Return(user, nil).Once()
 		m.emails.On("SendStepUpCode", stepUpEmail, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
 			code = args.String(1)
 		})
-		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(&domain.StepUpChallenge{}, nil).Once().Run(func(args mock.Arguments) {
-			stored = args.Get(0).(domain.StepUpChallenge)
+		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(nil).Once().Run(func(args mock.Arguments) {
+			stored = args.Get(0).(domain.SessionChallenge)
 		})
 
 		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
@@ -76,6 +76,7 @@ func TestStepUpService_RequestCode(t *testing.T) {
 		assert.Regexp(t, `^\d{6}$`, code)
 		assert.Equal(t, stepUpUserUUID, stored.UserUUID)
 		assert.Equal(t, stepUpSessionUUID, stored.SessionUUID)
+		assert.Equal(t, domain.SessionChallengeStepUp, stored.Purpose)
 		assert.WithinDuration(t, time.Now().Add(domain.StepUpCodeTTL), time.Unix(stored.ExpiresAt, 0), 5*time.Second)
 		assert.Equal(t, stepUpHash(stepUpSessionUUID, code), stored.CodeHash)
 		m.challenges.AssertExpectations(t)
@@ -141,7 +142,7 @@ func TestStepUpService_RequestCode(t *testing.T) {
 		cooldown := domain.NewTooManyRequestsError("auth.stepUp.cooldown")
 		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
 		m.users.On("FindByUUID", stepUpUserUUID).Return(user, nil).Once()
-		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(nil, cooldown).Once()
+		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(cooldown).Once()
 
 		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
 
@@ -153,31 +154,31 @@ func TestStepUpService_RequestCode(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
 		m.users.On("FindByUUID", stepUpUserUUID).Return(user, nil).Once()
-		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(&domain.StepUpChallenge{}, nil).Once()
+		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(nil).Once()
 		m.emails.On("SendStepUpCode", stepUpEmail, mock.Anything).Return(errors.New("smtp down")).Once()
-		m.challenges.On("Delete", stepUpSessionUUID).Return(nil).Once()
+		m.challenges.On("Delete", stepUpSessionUUID, domain.SessionChallengeStepUp).Return(nil).Once()
 
 		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
 
 		var internal *domain.InternalServerError
 		assert.ErrorAs(t, err, &internal)
-		m.challenges.AssertCalled(t, "Delete", stepUpSessionUUID)
+		m.challenges.AssertCalled(t, "Delete", stepUpSessionUUID, domain.SessionChallengeStepUp)
 	})
 
 	t.Run("error - email failure with failing cleanup still returns the send error", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
 		m.users.On("FindByUUID", stepUpUserUUID).Return(user, nil).Once()
-		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(&domain.StepUpChallenge{}, nil).Once()
+		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(nil).Once()
 		m.emails.On("SendStepUpCode", stepUpEmail, mock.Anything).Return(errors.New("smtp down")).Once()
-		m.challenges.On("Delete", stepUpSessionUUID).Return(errors.New("db down")).Once()
+		m.challenges.On("Delete", stepUpSessionUUID, domain.SessionChallengeStepUp).Return(errors.New("db down")).Once()
 
 		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
 
 		var internal *domain.InternalServerError
 		require.ErrorAs(t, err, &internal)
 		assert.Equal(t, "auth.stepUp.sendFailed", internal.Error())
-		m.challenges.AssertCalled(t, "Delete", stepUpSessionUUID)
+		m.challenges.AssertCalled(t, "Delete", stepUpSessionUUID, domain.SessionChallengeStepUp)
 	})
 }
 
@@ -187,10 +188,10 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.users.On("ReserveStepUpGuess", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(nil).Once()
-		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
-			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts).
+			Return(&domain.SessionChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
 		m.users.On("RefundStepUpGuess", stepUpUserUUID).Return(nil).Once()
-		m.challenges.On("Delete", stepUpSessionUUID).Return(nil).Once()
+		m.challenges.On("Delete", stepUpSessionUUID, domain.SessionChallengeStepUp).Return(nil).Once()
 		m.sessions.On("SetStepUpUntil", stepUpUserUUID, stepUpSessionUUID, mock.Anything).Return(nil).Once()
 
 		until, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
@@ -205,10 +206,10 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 	t.Run("success - refund failure is only logged", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.users.On("ReserveStepUpGuess", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(nil).Once()
-		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
-			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts).
+			Return(&domain.SessionChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
 		m.users.On("RefundStepUpGuess", stepUpUserUUID).Return(errors.New("db down")).Once()
-		m.challenges.On("Delete", stepUpSessionUUID).Return(nil).Once()
+		m.challenges.On("Delete", stepUpSessionUUID, domain.SessionChallengeStepUp).Return(nil).Once()
 		m.sessions.On("SetStepUpUntil", stepUpUserUUID, stepUpSessionUUID, mock.Anything).Return(nil).Once()
 
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
@@ -220,8 +221,8 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 	t.Run("error - no challenge refunds the guess", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.users.On("ReserveStepUpGuess", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(nil).Once()
-		noChallenge := domain.NewUnauthorizedError("auth.stepUp.noChallenge")
-		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).Return(nil, noChallenge).Once()
+		noChallenge := domain.ErrStepUpNoChallenge
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts).Return(nil, noChallenge).Once()
 		m.users.On("RefundStepUpGuess", stepUpUserUUID).Return(nil).Once()
 
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
@@ -234,8 +235,8 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 	t.Run("error - wrong code keeps the guess", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.users.On("ReserveStepUpGuess", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(nil).Once()
-		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
-			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts).
+			Return(&domain.SessionChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
 		m.sessions.On("IncrementStepUpFailures", stepUpUserUUID, stepUpSessionUUID).Return(domain.StepUpMaxSessionFailures-1, nil).Once()
 
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
@@ -244,7 +245,7 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 		require.ErrorAs(t, err, &unauthorized)
 		assert.Equal(t, "auth.stepUp.invalidCode", unauthorized.Error())
 		m.users.AssertNotCalled(t, "RefundStepUpGuess", mock.Anything)
-		m.challenges.AssertNotCalled(t, "Delete", mock.Anything)
+		m.challenges.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
 		m.sessions.AssertNotCalled(t, "SetStepUpUntil", mock.Anything, mock.Anything, mock.Anything)
 		m.sessions.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
 	})
@@ -252,8 +253,8 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 	t.Run("error - reaching the failure cap revokes the session", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.users.On("ReserveStepUpGuess", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(nil).Once()
-		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
-			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts).
+			Return(&domain.SessionChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
 		m.sessions.On("IncrementStepUpFailures", stepUpUserUUID, stepUpSessionUUID).Return(domain.StepUpMaxSessionFailures, nil).Once()
 		m.sessions.On("Delete", stepUpUserUUID, stepUpSessionUUID).Return(nil).Once()
 
@@ -269,8 +270,8 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.users.On("ReserveStepUpGuess", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(nil).Once()
 		deleteErr := errors.New("db down")
-		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
-			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts).
+			Return(&domain.SessionChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
 		m.sessions.On("IncrementStepUpFailures", stepUpUserUUID, stepUpSessionUUID).Return(domain.StepUpMaxSessionFailures, nil).Once()
 		m.sessions.On("Delete", stepUpUserUUID, stepUpSessionUUID).Return(deleteErr).Once()
 
@@ -283,8 +284,8 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.users.On("ReserveStepUpGuess", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(nil).Once()
 		incrementErr := errors.New("db down")
-		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
-			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts).
+			Return(&domain.SessionChallenge{CodeHash: stepUpHash(stepUpSessionUUID, "654321")}, nil).Once()
 		m.sessions.On("IncrementStepUpFailures", stepUpUserUUID, stepUpSessionUUID).Return(0, incrementErr).Once()
 
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
@@ -297,10 +298,10 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 		service, m := newTestStepUpService()
 		m.users.On("ReserveStepUpGuess", stepUpUserUUID, domain.StepUpUserFailureWindow).Return(nil).Once()
 		setErr := errors.New("db down")
-		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.StepUpMaxAttempts).
-			Return(&domain.StepUpChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
+		m.challenges.On("Attempt", stepUpUserUUID, stepUpSessionUUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts).
+			Return(&domain.SessionChallenge{CodeHash: stepUpHash(stepUpSessionUUID, code)}, nil).Once()
 		m.users.On("RefundStepUpGuess", stepUpUserUUID).Return(nil).Once()
-		m.challenges.On("Delete", stepUpSessionUUID).Return(nil).Once()
+		m.challenges.On("Delete", stepUpSessionUUID, domain.SessionChallengeStepUp).Return(nil).Once()
 		m.sessions.On("SetStepUpUntil", stepUpUserUUID, stepUpSessionUUID, mock.Anything).Return(setErr).Once()
 
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
@@ -317,7 +318,7 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 		var tooMany *domain.TooManyRequestsError
 		require.ErrorAs(t, err, &tooMany)
 		assert.Equal(t, "auth.stepUp.userLocked", tooMany.Error())
-		m.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything)
+		m.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("error - reserving the guess fails", func(t *testing.T) {
@@ -328,7 +329,7 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 		_, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
 
 		assert.ErrorIs(t, err, reserveErr)
-		m.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything)
+		m.challenges.AssertNotCalled(t, "Attempt", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 }
 

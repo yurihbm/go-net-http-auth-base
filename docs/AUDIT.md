@@ -84,7 +84,7 @@ The domain package defines type-safe constants for common values:
 - `AuditActionUserUpdate` (`USER_UPDATE`): User account modification (`PUT /users/{uuid}`)
 - `AuditActionUserDelete` (`USER_DELETE`): User account deletion (`DELETE /users/{uuid}`)
 - `AuditActionEmailChangeRequest` (`EMAIL_CHANGE_REQUEST`): Email change request (`POST /users/me/email`)
-- `AuditActionEmailChange` (`EMAIL_CHANGE`): Email change confirmation (`POST /users/confirm-email-change`)
+- `AuditActionEmailChange` (`EMAIL_CHANGE`): Email change confirmation (`POST /users/me/email/confirm`)
 - `AuditActionEmailChangeRevert` (`EMAIL_CHANGE_REVERT`): Email change undone from the notice link (`POST /users/revert-email-change`)
 - `AuditActionLogin` (`LOGIN`): Email/password authentication (`POST /auth/login`)
 - `AuditActionOAuthLogin` (`OAUTH_LOGIN`): OAuth authentication (`GET /auth/{provider}/callback`)

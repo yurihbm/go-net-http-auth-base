@@ -51,13 +51,24 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	if emailProvider == nil {
 		emailProvider = newEmailProvider(cfg.Email)
 	}
-	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.ChangeURL, cfg.Email.ChangeRevertURL)
+	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.ChangeRevertURL)
 
 	usersRepository := repositories.NewUsersPostgresRepository(db)
 	authRepository := repositories.NewAuthPostgresRepository(db)
 	sessionsRepository := repositories.NewSessionsPostgresRepository(db)
+	emailSendLimits := repositories.NewEmailSendLimitsPostgresRepository(db)
+	sessionChallenges := repositories.NewSessionChallengesPostgresRepository(db)
 	transactor := repositories.NewPostgresTransactor(pool)
-	usersService := services.NewUserService(usersRepository, emailVerificationService, sessionsRepository, authRepository, transactor)
+	usersService := services.NewUserService(
+		usersRepository,
+		emailVerificationService,
+		sessionsRepository,
+		authRepository,
+		sessionChallenges,
+		emailSendLimits,
+		transactor,
+		[]byte(cfg.JWTSecret),
+	)
 	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
 		map[domain.OAuthProviderName]domain.OAuthProvider{
 			domain.OAuthProviderGoogle: providers.NewGoogleOAuthProvider(
@@ -76,7 +87,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	}
 	pendingSignupService := services.NewPendingSignupService(
 		repositories.NewPendingSignupsPostgresRepository(db),
-		repositories.NewEmailSendLimitsPostgresRepository(db),
+		emailSendLimits,
 		usersRepository,
 		transactor,
 		emailVerificationService,
@@ -95,7 +106,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	)
 
 	stepUpService := services.NewStepUpService(
-		repositories.NewStepUpPostgresRepository(db),
+		sessionChallenges,
 		sessionsRepository,
 		usersRepository,
 		transactor,

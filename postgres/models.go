@@ -96,6 +96,48 @@ func (ns NullPendingSignupKind) Value() (driver.Value, error) {
 	return string(ns.PendingSignupKind), nil
 }
 
+type SessionChallengePurpose string
+
+const (
+	SessionChallengePurposeStepUp      SessionChallengePurpose = "step_up"
+	SessionChallengePurposeEmailChange SessionChallengePurpose = "email_change"
+)
+
+func (e *SessionChallengePurpose) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SessionChallengePurpose(s)
+	case string:
+		*e = SessionChallengePurpose(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SessionChallengePurpose: %T", src)
+	}
+	return nil
+}
+
+type NullSessionChallengePurpose struct {
+	SessionChallengePurpose SessionChallengePurpose
+	Valid                   bool // Valid is true if SessionChallengePurpose is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSessionChallengePurpose) Scan(value interface{}) error {
+	if value == nil {
+		ns.SessionChallengePurpose, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SessionChallengePurpose.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSessionChallengePurpose) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SessionChallengePurpose), nil
+}
+
 type UserRole string
 
 const (
@@ -192,14 +234,17 @@ type PendingSignup struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
-type StepUpChallenge struct {
-	Uuid        pgtype.UUID
-	UserUuid    pgtype.UUID
-	SessionUuid pgtype.UUID
-	CodeHash    string
-	Attempts    int32
-	ExpiresAt   pgtype.Timestamptz
-	CreatedAt   pgtype.Timestamptz
+type SessionChallenge struct {
+	Uuid         pgtype.UUID
+	UserUuid     pgtype.UUID
+	SessionUuid  pgtype.UUID
+	Purpose      SessionChallengePurpose
+	NewEmail     pgtype.Text
+	EmailVersion pgtype.Int4
+	CodeHash     string
+	Attempts     int32
+	ExpiresAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
 }
 
 type User struct {

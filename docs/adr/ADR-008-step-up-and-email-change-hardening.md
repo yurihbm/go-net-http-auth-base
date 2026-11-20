@@ -1,6 +1,6 @@
 # ADR-008: Step-Up and Email Change Hardening
 
-- **Status:** Accepted
+- **Status:** Partially superseded by ADR-009
 - **Date:** 2026-11-17
 
 ## Context

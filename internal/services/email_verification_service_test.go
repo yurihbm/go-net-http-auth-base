@@ -19,140 +19,37 @@ import (
 )
 
 const (
-	emailChangeURL       = "https://app.test/confirm-email-change"
 	emailChangeRevertURL = "https://app.test/revert-email-change"
 )
 
-func TestEmailVerificationService_SendEmailChangeEmail(t *testing.T) {
-	user := &domain.User{UUID: "user-uuid", Email: "old@example.com", Name: "Test", EmailVersion: 2}
-	newEmail := "new@example.com"
-
-	t.Run("sends a confirmation link to the new address", func(t *testing.T) {
-		tokens := services.NewTokenService(tokenSecret)
+func TestEmailVerificationService_SendEmailChangeCode(t *testing.T) {
+	t.Run("sends the code to the new address with a warning not to share it", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(tokens, emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL)
 		var sent domain.EmailMessage
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
 			sent = args.Get(1).(domain.EmailMessage)
 		})
 
-		err := service.SendEmailChangeEmail(context.Background(), user, newEmail)
+		err := service.SendEmailChangeCode(context.Background(), "new@example.com", "123456")
 
 		require.NoError(t, err)
-		assert.Equal(t, newEmail, sent.To)
+		assert.Equal(t, "new@example.com", sent.To)
 		assert.Equal(t, "Confirm your new email address", sent.Subject)
-
-		link := regexp.MustCompile(`https://app\.test/confirm-email-change\?token=[^\s"<]+`).FindString(sent.Text)
-		require.NotEmpty(t, link)
-		parsed, err := url.Parse(link)
-		require.NoError(t, err)
-		change, err := service.VerifyEmailChangeToken(context.Background(), parsed.Query().Get("token"))
-		require.NoError(t, err)
-		assert.Equal(t, &domain.EmailChange{UserUUID: user.UUID, CurrentEmail: user.Email, NewEmail: newEmail, Version: 2}, change)
-		assert.Contains(t, sent.HTML, emailChangeURL+"?token=")
+		assert.Equal(t, "Your email change code is 123456. Enter it in the browser where you requested the change to confirm it as the email of your account. It expires in 10 minutes. Never share this code with anyone. If you did not request this change, ignore this email.", sent.Text)
+		assert.Equal(t, "<p>Your email change code is <strong>123456</strong>. Enter it in the browser where you requested the change to confirm it as the email of your account. It expires in 10 minutes.</p><p>Never share this code with anyone. If you did not request this change, ignore this email.</p>", sent.HTML)
 	})
 
-	t.Run("keeps existing query params and escapes the HTML link", func(t *testing.T) {
-		tokens := new(mocks.TokenServiceMock)
+	t.Run("error - returns provider error", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(tokens, emailProvider, "https://app.test/confirm?lang=en", emailChangeRevertURL)
-		tokens.On("GenerateToken", mock.Anything).Return("signed-token", nil).Once()
-		var sent domain.EmailMessage
-		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
-			sent = args.Get(1).(domain.EmailMessage)
-		})
-
-		err := service.SendEmailChangeEmail(context.Background(), user, newEmail)
-
-		require.NoError(t, err)
-		assert.Contains(t, sent.Text, "https://app.test/confirm?lang=en&token=signed-token")
-		assert.Contains(t, sent.HTML, `href="https://app.test/confirm?lang=en&amp;token=signed-token"`)
-		tokens.AssertExpectations(t)
-	})
-
-	t.Run("returns token error", func(t *testing.T) {
-		tokens := new(mocks.TokenServiceMock)
-		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(tokens, emailProvider, emailChangeURL, emailChangeRevertURL)
-		tokenErr := errors.New("sign failed")
-		tokens.On("GenerateToken", mock.Anything).Return("", tokenErr).Once()
-
-		err := service.SendEmailChangeEmail(context.Background(), user, newEmail)
-
-		assert.ErrorIs(t, err, tokenErr)
-		emailProvider.AssertNotCalled(t, "Send", mock.Anything, mock.Anything)
-	})
-
-	t.Run("returns provider error", func(t *testing.T) {
-		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(services.NewTokenService(tokenSecret), emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL)
 		sendErr := errors.New("smtp down")
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
 
-		err := service.SendEmailChangeEmail(context.Background(), user, newEmail)
+		err := service.SendEmailChangeCode(context.Background(), "new@example.com", "123456")
 
 		assert.ErrorIs(t, err, sendErr)
 	})
-}
-
-func TestEmailVerificationService_VerifyEmailChangeToken(t *testing.T) {
-	service := services.NewEmailVerificationService(services.NewTokenService(tokenSecret), new(mocks.EmailProviderMock), emailChangeURL, emailChangeRevertURL)
-	sign := func(t *testing.T, claims jwt.MapClaims) string {
-		t.Helper()
-		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(tokenSecret))
-		require.NoError(t, err)
-		return token
-	}
-	validPayload := map[string]any{"current_email": "old@example.com", "new_email": "new@example.com", "ver": 2}
-
-	t.Run("expires after one hour", func(t *testing.T) {
-		tokens := services.NewTokenService(tokenSecret)
-		token, err := tokens.GenerateToken(context.Background(), domain.GenerateTokenDTO{
-			Subject:  "user-uuid",
-			Audience: domain.TokenAudienceEmailChange,
-		})
-		require.NoError(t, err)
-
-		data, err := tokens.VerifyToken(context.Background(), domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceEmailChange})
-
-		require.NoError(t, err)
-		assert.InDelta(t, time.Now().Add(time.Hour).Unix(), data.Expiration, 5)
-	})
-
-	cases := map[string]string{
-		"wrong audience": sign(t, jwt.MapClaims{
-			"sub":     "user-uuid",
-			"aud":     domain.TokenAudienceEmailChangeRevert,
-			"exp":     time.Now().Add(time.Hour).Unix(),
-			"payload": validPayload,
-		}),
-		"missing payload": sign(t, jwt.MapClaims{
-			"sub": "user-uuid",
-			"aud": domain.TokenAudienceEmailChange,
-			"exp": time.Now().Add(time.Hour).Unix(),
-		}),
-		"missing new email": sign(t, jwt.MapClaims{
-			"sub":     "user-uuid",
-			"aud":     domain.TokenAudienceEmailChange,
-			"exp":     time.Now().Add(time.Hour).Unix(),
-			"payload": map[string]any{"current_email": "old@example.com", "ver": 2},
-		}),
-		"missing version": sign(t, jwt.MapClaims{
-			"sub":     "user-uuid",
-			"aud":     domain.TokenAudienceEmailChange,
-			"exp":     time.Now().Add(time.Hour).Unix(),
-			"payload": map[string]any{"current_email": "old@example.com", "new_email": "new@example.com"},
-		}),
-		"garbage": "not-a-token",
-	}
-	for name, token := range cases {
-		t.Run("error - "+name, func(t *testing.T) {
-			change, err := service.VerifyEmailChangeToken(context.Background(), token)
-
-			assert.ErrorIs(t, err, services.ErrInvalidToken)
-			assert.Nil(t, change)
-		})
-	}
 }
 
 func TestEmailVerificationService_SendEmailChangedNotice(t *testing.T) {
@@ -161,7 +58,7 @@ func TestEmailVerificationService_SendEmailChangedNotice(t *testing.T) {
 	t.Run("notifies the previous address with an undo link", func(t *testing.T) {
 		tokens := services.NewTokenService(tokenSecret)
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(tokens, emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(tokens, emailProvider, emailChangeRevertURL)
 		var sent domain.EmailMessage
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
 			sent = args.Get(1).(domain.EmailMessage)
@@ -188,7 +85,7 @@ func TestEmailVerificationService_SendEmailChangedNotice(t *testing.T) {
 	t.Run("error - returns token error", func(t *testing.T) {
 		tokens := new(mocks.TokenServiceMock)
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(tokens, emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(tokens, emailProvider, emailChangeRevertURL)
 		tokenErr := errors.New("sign failed")
 		tokens.On("GenerateToken", mock.Anything).Return("", tokenErr).Once()
 
@@ -200,7 +97,7 @@ func TestEmailVerificationService_SendEmailChangedNotice(t *testing.T) {
 
 	t.Run("error - returns provider error", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(services.NewTokenService(tokenSecret), emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(services.NewTokenService(tokenSecret), emailProvider, emailChangeRevertURL)
 		sendErr := errors.New("smtp down")
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
 
@@ -211,7 +108,7 @@ func TestEmailVerificationService_SendEmailChangedNotice(t *testing.T) {
 }
 
 func TestEmailVerificationService_VerifyEmailChangeRevertToken(t *testing.T) {
-	service := services.NewEmailVerificationService(services.NewTokenService(tokenSecret), new(mocks.EmailProviderMock), emailChangeURL, emailChangeRevertURL)
+	service := services.NewEmailVerificationService(services.NewTokenService(tokenSecret), new(mocks.EmailProviderMock), emailChangeRevertURL)
 	sign := func(t *testing.T, claims jwt.MapClaims) string {
 		t.Helper()
 		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(tokenSecret))
@@ -252,7 +149,7 @@ func TestEmailVerificationService_VerifyEmailChangeRevertToken(t *testing.T) {
 		return payload
 	}
 	cases := map[string]string{
-		"wrong audience":     sign(t, claims(domain.TokenAudienceEmailChange, validPayload())),
+		"wrong audience":     sign(t, claims(domain.TokenAudienceAccess, validPayload())),
 		"missing old email":  sign(t, claims(domain.TokenAudienceEmailChangeRevert, without("old_email"))),
 		"missing new email":  sign(t, claims(domain.TokenAudienceEmailChangeRevert, without("new_email"))),
 		"missing version":    sign(t, claims(domain.TokenAudienceEmailChangeRevert, without("ver"))),
@@ -272,7 +169,7 @@ func TestEmailVerificationService_VerifyEmailChangeRevertToken(t *testing.T) {
 func TestEmailVerificationService_SendStepUpCode(t *testing.T) {
 	t.Run("sends the code to the given address", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL)
 		var sent domain.EmailMessage
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
 			sent = args.Get(1).(domain.EmailMessage)
@@ -289,7 +186,7 @@ func TestEmailVerificationService_SendStepUpCode(t *testing.T) {
 
 	t.Run("error - returns provider error", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL)
 		sendErr := errors.New("smtp down")
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
 
@@ -302,7 +199,7 @@ func TestEmailVerificationService_SendStepUpCode(t *testing.T) {
 func TestEmailVerificationService_SendSignupCode(t *testing.T) {
 	t.Run("sends the code with a warning not to share it", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL)
 		var sent domain.EmailMessage
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
 			sent = args.Get(1).(domain.EmailMessage)
@@ -319,7 +216,7 @@ func TestEmailVerificationService_SendSignupCode(t *testing.T) {
 
 	t.Run("error - returns provider error", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL)
 		sendErr := errors.New("smtp down")
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
 
@@ -332,7 +229,7 @@ func TestEmailVerificationService_SendSignupCode(t *testing.T) {
 func TestEmailVerificationService_SendOAuthSignupCode(t *testing.T) {
 	t.Run("says the code signs in or links the provider and must not be shared", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL)
 		var sent domain.EmailMessage
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
 			sent = args.Get(1).(domain.EmailMessage)
@@ -349,7 +246,7 @@ func TestEmailVerificationService_SendOAuthSignupCode(t *testing.T) {
 
 	t.Run("error - returns provider error", func(t *testing.T) {
 		emailProvider := new(mocks.EmailProviderMock)
-		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL)
 		sendErr := errors.New("smtp down")
 		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
 

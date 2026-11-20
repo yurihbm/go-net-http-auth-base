@@ -57,8 +57,12 @@ func TestEmailChange_Transaction(t *testing.T) {
 		newEmail = "new@example.com"
 	)
 
+	key := []byte("email-change-transaction-key")
+
 	type fixture struct {
 		service           domain.UsersService
+		emailChanges      domain.SessionChallengeRepository
+		limiter           domain.EmailSendLimiter
 		usersRepo         domain.UsersRepository
 		sessionsRepo      domain.SessionsRepository
 		authRepo          domain.AuthRepository
@@ -76,6 +80,8 @@ func TestEmailChange_Transaction(t *testing.T) {
 		usersRepo := repositories.NewUsersPostgresRepository(db)
 		sessionsRepo := repositories.NewSessionsPostgresRepository(db)
 		authRepo := repositories.NewAuthPostgresRepository(db)
+		emailChanges := repositories.NewSessionChallengesPostgresRepository(db)
+		limiter := repositories.NewEmailSendLimitsPostgresRepository(db)
 		emailVerification := new(mocks.EmailVerificationServiceMock)
 
 		user, err := usersRepo.Create(ctx, domain.User{Name: "Change User", Email: oldEmail, Role: domain.RoleUser})
@@ -92,7 +98,9 @@ func TestEmailChange_Transaction(t *testing.T) {
 		}
 
 		return fixture{
-			service:           services.NewUserService(usersRepo, emailVerification, serviceSessionsRepo, serviceAuthRepo, repositories.NewPostgresTransactor(testDB)),
+			service:           services.NewUserService(usersRepo, emailVerification, serviceSessionsRepo, serviceAuthRepo, emailChanges, limiter, repositories.NewPostgresTransactor(testDB), key),
+			emailChanges:      emailChanges,
+			limiter:           limiter,
 			usersRepo:         usersRepo,
 			sessionsRepo:      sessionsRepo,
 			authRepo:          authRepo,
@@ -102,12 +110,26 @@ func TestEmailChange_Transaction(t *testing.T) {
 		}
 	}
 
+	actorOf := func(f fixture) domain.Actor {
+		return domain.Actor{UUID: f.user.UUID, Role: domain.RoleUser}
+	}
+
+	requestCode := func(t *testing.T, f fixture) string {
+		t.Helper()
+		var code string
+		f.emailVerification.On("SendEmailChangeCode", newEmail, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			code = args.String(1)
+		})
+		require.NoError(t, f.service.RequestEmailChange(context.Background(), actorOf(f), f.session.UUID, newEmail))
+		return code
+	}
+
 	t.Run("confirm - success", func(t *testing.T) {
 		f := setup(t, nil, nil)
-		f.emailVerification.On("VerifyEmailChangeToken", "token").Return(&domain.EmailChange{UserUUID: f.user.UUID, CurrentEmail: oldEmail, NewEmail: newEmail, Version: 0}, nil)
+		code := requestCode(t, f)
 		f.emailVerification.On("SendEmailChangedNotice", mock.Anything).Return(nil)
 
-		_, err := f.service.ConfirmEmailChange(context.Background(), "token")
+		_, err := f.service.ConfirmEmailChange(context.Background(), actorOf(f), f.session.UUID, code)
 
 		require.NoError(t, err)
 		stored, err := f.usersRepo.FindByUUID(context.Background(), f.user.UUID)
@@ -116,14 +138,16 @@ func TestEmailChange_Transaction(t *testing.T) {
 		assert.Equal(t, 1, stored.EmailVersion)
 		assert.NotZero(t, stored.EmailChangedAt)
 		assert.False(t, sessionExists(t, f.sessionsRepo, f.user.UUID, f.session.UUID))
+		_, err = f.emailChanges.Attempt(context.Background(), f.user.UUID, f.session.UUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts)
+		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
 	})
 
 	t.Run("confirm - error - revoking sessions fails rolls back the email change", func(t *testing.T) {
 		deleteErr := errors.New("delete failed")
 		f := setup(t, deleteErr, nil)
-		f.emailVerification.On("VerifyEmailChangeToken", "token").Return(&domain.EmailChange{UserUUID: f.user.UUID, CurrentEmail: oldEmail, NewEmail: newEmail, Version: 0}, nil)
+		code := requestCode(t, f)
 
-		_, err := f.service.ConfirmEmailChange(context.Background(), "token")
+		_, err := f.service.ConfirmEmailChange(context.Background(), actorOf(f), f.session.UUID, code)
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, deleteErr)
@@ -134,6 +158,9 @@ func TestEmailChange_Transaction(t *testing.T) {
 		assert.Zero(t, stored.EmailChangedAt)
 		assert.True(t, sessionExists(t, f.sessionsRepo, f.user.UUID, f.session.UUID))
 		f.emailVerification.AssertNotCalled(t, "SendEmailChangedNotice", mock.Anything)
+		challenge, err := f.emailChanges.Attempt(context.Background(), f.user.UUID, f.session.UUID, domain.SessionChallengeEmailChange, domain.EmailChangeMaxAttempts)
+		require.NoError(t, err)
+		assert.Equal(t, newEmail, challenge.NewEmail)
 	})
 
 	applyChange := func(t *testing.T, f fixture) domain.UserOAuthProvider {
@@ -219,13 +246,13 @@ func TestEmailChange_Transaction(t *testing.T) {
 		releaseOnce := sync.Once{}
 		release := func() { releaseOnce.Do(func() { close(blocking.release) }) }
 		t.Cleanup(release)
-		service := services.NewUserService(f.usersRepo, f.emailVerification, blocking, f.authRepo, repositories.NewPostgresTransactor(testDB))
-		f.emailVerification.On("VerifyEmailChangeToken", "confirm-token").Return(&domain.EmailChange{UserUUID: f.user.UUID, CurrentEmail: oldEmail, NewEmail: newEmail, Version: 0}, nil)
+		service := services.NewUserService(f.usersRepo, f.emailVerification, blocking, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), key)
+		code := requestCode(t, f)
 		f.emailVerification.On("SendEmailChangedNotice", mock.Anything).Return(nil)
 
 		confirmDone := make(chan error, 1)
 		go func() {
-			_, err := service.ConfirmEmailChange(context.Background(), "confirm-token")
+			_, err := service.ConfirmEmailChange(context.Background(), actorOf(f), f.session.UUID, code)
 			confirmDone <- err
 		}()
 		<-blocking.reached
@@ -255,7 +282,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 			Version:   1,
 			ChangedAt: time.Now().Unix(),
 		}, nil)
-		revertService := services.NewUserService(f.usersRepo, f.emailVerification, f.sessionsRepo, f.authRepo, repositories.NewPostgresTransactor(testDB))
+		revertService := services.NewUserService(f.usersRepo, f.emailVerification, f.sessionsRepo, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), key)
 		_, err := revertService.RevertEmailChange(context.Background(), "revert-token")
 		require.NoError(t, err)
 		stored, err := f.usersRepo.FindByUUID(context.Background(), f.user.UUID)

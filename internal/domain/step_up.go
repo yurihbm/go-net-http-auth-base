@@ -13,26 +13,13 @@ const (
 	StepUpMaxUserFailures    = 20
 	StepUpUserFailureWindow  = 24 * time.Hour
 	StepUpCooldown           = 60 * time.Second
-	EmailChangeLock          = 72 * time.Hour
 )
 
 var (
+	ErrStepUpNoChallenge    = NewUnauthorizedError("auth.stepUp.noChallenge")
 	ErrStepUpSessionRevoked = NewUnauthorizedError("auth.stepUp.sessionRevoked")
 	ErrStepUpUserLocked     = NewTooManyRequestsError("auth.stepUp.userLocked")
 )
-
-type StepUpChallenge struct {
-	UserUUID    string
-	SessionUUID string
-	CodeHash    string
-	ExpiresAt   int64
-}
-
-type StepUpRepository interface {
-	Upsert(ctx context.Context, challenge StepUpChallenge, cooldown time.Duration) (*StepUpChallenge, error)
-	Attempt(ctx context.Context, userUUID string, sessionUUID string, maxAttempts int) (*StepUpChallenge, error)
-	Delete(ctx context.Context, sessionUUID string) error
-}
 
 type StepUpChecker interface {
 	IsElevated(ctx context.Context, userUUID string, sessionUUID string) (bool, error)

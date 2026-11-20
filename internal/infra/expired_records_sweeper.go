@@ -26,7 +26,7 @@ func (s *ExpiredRecordsSweeper) RunMaintenance(ctx context.Context) error {
 
 func (s *ExpiredRecordsSweeper) RunMaintenanceWithBatchSize(ctx context.Context, batchSize int32) error {
 	challenges, err := sweepInBatches(batchSize, func() (int64, error) {
-		return s.q.DeleteExpiredStepUpChallengesBatch(ctx, batchSize)
+		return s.q.DeleteExpiredSessionChallengesBatch(ctx, batchSize)
 	})
 	if err != nil {
 		return err
@@ -63,7 +63,7 @@ func (s *ExpiredRecordsSweeper) RunMaintenanceWithBatchSize(ctx context.Context,
 
 	slog.InfoContext(ctx, "expired records swept",
 		"sessions", sessions,
-		"step_up_challenges", challenges,
+		"session_challenges", challenges,
 		"pending_signups", pendingSignups,
 		"email_send_limits", emailSendLimits,
 	)

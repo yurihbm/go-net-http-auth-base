@@ -35,7 +35,7 @@ func TestStepUp_Transaction(t *testing.T) {
 	const code = "123456"
 	key := []byte("test-secret-key")
 
-	setup := func(t *testing.T, setErr error) (domain.StepUpService, domain.StepUpRepository, domain.SessionsRepository, *domain.UserSession) {
+	setup := func(t *testing.T, setErr error) (domain.StepUpService, domain.SessionChallengeRepository, domain.SessionsRepository, *domain.UserSession) {
 		t.Helper()
 		ctx := context.Background()
 		truncateTables(ctx, testDB)
@@ -43,17 +43,18 @@ func TestStepUp_Transaction(t *testing.T) {
 		db := repositories.NewTxAwareDB(testDB)
 		usersRepo := repositories.NewUsersPostgresRepository(db)
 		sessionsRepo := repositories.NewSessionsPostgresRepository(db)
-		stepUpRepo := repositories.NewStepUpPostgresRepository(db)
+		stepUpRepo := repositories.NewSessionChallengesPostgresRepository(db)
 
 		user, err := usersRepo.Create(ctx, domain.User{Name: "Step Up", Email: "stepup@example.com", Role: domain.RoleUser})
 		require.NoError(t, err)
 		session := seedSession(t, sessionsRepo, user.UUID, "jti")
 
 		mac := hmac.New(sha256.New, key)
-		mac.Write([]byte(session.UUID + ":" + code))
-		_, err = stepUpRepo.Upsert(ctx, domain.StepUpChallenge{
+		mac.Write([]byte("step-up:" + session.UUID + ":" + code))
+		err = stepUpRepo.Upsert(ctx, domain.SessionChallenge{
 			UserUUID:    user.UUID,
 			SessionUUID: session.UUID,
+			Purpose:     domain.SessionChallengeStepUp,
 			CodeHash:    hex.EncodeToString(mac.Sum(nil)),
 			ExpiresAt:   time.Now().Add(domain.StepUpCodeTTL).Unix(),
 		}, domain.StepUpCooldown)
@@ -79,7 +80,7 @@ func TestStepUp_Transaction(t *testing.T) {
 		t.Helper()
 		var count int
 		require.NoError(t, testDB.QueryRow(context.Background(),
-			"SELECT count(*) FROM step_up_challenges WHERE session_uuid = $1", sessionUUID).Scan(&count))
+			"SELECT count(*) FROM session_challenges WHERE session_uuid = $1 AND purpose = 'step_up'", sessionUUID).Scan(&count))
 		return count == 1
 	}
 
