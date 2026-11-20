@@ -103,8 +103,8 @@ To help you follow the project's architecture and conventions, we provide scaffo
 To generate a complete vertical slice (Domain, Repository, Service, Controller, Factory, and Tests):
 
 ```bash
-npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName>
-# Example: npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Product
+npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName>
+# Example: npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts Product
 ```
 
 ### Create a Migration
@@ -112,8 +112,8 @@ npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName>
 To generate migration files and a corresponding query file:
 
 ```bash
-npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
-# Example: npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table
+npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
+# Example: npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table
 ```
 
 ## 📝 Commit Message Conventions
