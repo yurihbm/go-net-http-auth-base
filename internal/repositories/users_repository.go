@@ -208,3 +208,14 @@ func toDomainUser(user postgres.User) domain.User {
 func parseUsersUUID(uuidStr string) (*pgtype.UUID, error) {
 	return parseUUID(uuidStr, "users.invalidUserUUID")
 }
+
+func (r *UsersPostgresRepository) IsEmailReserved(ctx context.Context, email string) (bool, error) {
+	reserved, err := r.q.IsEmailReserved(ctx, postgres.IsEmailReservedParams{
+		Email:       email,
+		LockSeconds: domain.EmailChangeLock.Seconds(),
+	})
+	if err != nil {
+		return false, domain.NewInternalServerError("users.internalServerError", err)
+	}
+	return reserved, nil
+}

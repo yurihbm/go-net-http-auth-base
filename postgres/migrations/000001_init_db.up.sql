@@ -16,11 +16,13 @@ CREATE TABLE users (
     email_changed_at timestamptz,
     step_up_failures int NOT NULL DEFAULT 0,
     step_up_failures_window_start timestamptz,
+    previous_email text,
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL
 );
 
 CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email));
+CREATE INDEX idx_users_previous_email_lower ON users (lower(previous_email)) WHERE previous_email IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS trigger

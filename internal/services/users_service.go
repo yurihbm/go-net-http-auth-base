@@ -16,10 +16,25 @@ var errForbiddenUserAccess = domain.NewForbiddenError("users.forbidden")
 type usersService struct {
 	repo              domain.UsersRepository
 	emailVerification domain.EmailVerificationService
+	sessionsRepo      domain.SessionsRepository
+	authRepo          domain.AuthRepository
+	transactor        domain.Transactor
 }
 
-func NewUserService(repo domain.UsersRepository, emailVerification domain.EmailVerificationService) domain.UsersService {
-	return &usersService{repo: repo, emailVerification: emailVerification}
+func NewUserService(
+	repo domain.UsersRepository,
+	emailVerification domain.EmailVerificationService,
+	sessionsRepo domain.SessionsRepository,
+	authRepo domain.AuthRepository,
+	transactor domain.Transactor,
+) domain.UsersService {
+	return &usersService{
+		repo:              repo,
+		emailVerification: emailVerification,
+		sessionsRepo:      sessionsRepo,
+		authRepo:          authRepo,
+		transactor:        transactor,
+	}
 }
 
 func (s *usersService) GetByUUID(ctx context.Context, actor domain.Actor, uuid string) (*domain.User, error) {
@@ -44,7 +59,7 @@ func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*d
 		PasswordHash: string(hash),
 		Role:         domain.RoleUser,
 	}
-	created, err := s.repo.Create(ctx, user)
+	created, err := s.createUnreserved(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +78,7 @@ func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUs
 		Role:          domain.RoleUser,
 		EmailVerified: dto.EmailVerified,
 	}
-	return s.repo.Create(ctx, user)
+	return s.createUnreserved(ctx, user)
 }
 
 func (s *usersService) Update(ctx context.Context, actor domain.Actor, uuid string, dto domain.UserUpdateDTO) (*domain.User, error) {
@@ -128,6 +143,10 @@ func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Acto
 		return err
 	}
 
+	if isEmailChangeLocked(user) {
+		return domain.NewConflictError("users.emailChange.locked")
+	}
+
 	newEmail := normalizeEmail(email)
 	if newEmail == user.Email {
 		return domain.NewValidationError("users.emailChange.unchanged", map[string]string{
@@ -144,6 +163,10 @@ func (s *usersService) RequestEmailChange(ctx context.Context, actor domain.Acto
 		return domain.NewConflictError("users.email.conflict")
 	}
 
+	if err := s.ensureEmailNotReserved(ctx, newEmail); err != nil {
+		return err
+	}
+
 	return s.emailVerification.SendEmailChangeEmail(ctx, user, newEmail)
 }
 
@@ -158,28 +181,134 @@ func (s *usersService) ConfirmEmailChange(ctx context.Context, token string) (*d
 		return nil, err
 	}
 
-	// The token is bound to the email it was issued for: once the email changes,
-	// this token and any other pending one stop working.
-	if user.Email != change.CurrentEmail {
+	// The token is bound to the email and version it was issued for: once the
+	// email changes (even back to the same value), this token and any other
+	// pending one stop working.
+	if user.Email != change.CurrentEmail || user.EmailVersion != change.Version {
 		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
 	}
 
+	if isEmailChangeLocked(user) {
+		return nil, domain.NewConflictError("users.emailChange.locked")
+	}
+
 	now := time.Now()
-	updated, err := s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail, user.EmailVersion, &now)
+	var updated *domain.User
+	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		updated, err = s.repo.UpdateEmail(ctx, user.UUID, change.NewEmail, change.Version, &now)
+		if err != nil {
+			return err
+		}
+		if err := s.ensureEmailNotReserved(ctx, change.NewEmail); err != nil {
+			return err
+		}
+		return s.sessionsRepo.DeleteAllByUser(ctx, user.UUID)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.emailVerification.SendEmailChangedNotice(ctx, change.CurrentEmail, updated.Email); err != nil {
+	notice := domain.EmailChangeRevert{
+		UserUUID:  updated.UUID,
+		OldEmail:  change.CurrentEmail,
+		NewEmail:  updated.Email,
+		Version:   updated.EmailVersion,
+		ChangedAt: updated.EmailChangedAt,
+	}
+	if err := s.emailVerification.SendEmailChangedNotice(ctx, notice); err != nil {
 		slog.ErrorContext(ctx, "email changed notice failed", "error", err, "user_uuid", updated.UUID)
 	}
 
 	return updated, nil
 }
 
+// The revert token is single use because the revert bumps the version, and the
+// email change lock guarantees no other change happened since the token was issued.
+func (s *usersService) RevertEmailChange(ctx context.Context, token string) (*domain.User, error) {
+	revert, err := s.emailVerification.VerifyEmailChangeRevertToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.FindByUUID(ctx, revert.UserUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	if user.Email != revert.NewEmail || user.EmailVersion != revert.Version {
+		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
+	}
+
+	var restored *domain.User
+	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		restored, err = s.repo.UpdateEmail(ctx, user.UUID, revert.OldEmail, revert.Version, nil)
+		if err != nil {
+			return err
+		}
+		if err := s.sessionsRepo.DeleteAllByUser(ctx, user.UUID); err != nil {
+			return err
+		}
+		return s.authRepo.DeleteOAuthProvidersCreatedSince(ctx, user.UUID, time.Unix(revert.ChangedAt, 0))
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return restored, nil
+}
+
+// The reservation is checked after the write, inside its transaction: a write
+// that waited on a concurrent email change only proceeds once that change is
+// committed, so the check sees the reservation it created.
+func (s *usersService) createUnreserved(ctx context.Context, user domain.User) (*domain.User, error) {
+	var created *domain.User
+	err := s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		var err error
+		created, err = s.repo.Create(ctx, user)
+		if err != nil {
+			return err
+		}
+		return s.ensureEmailNotReserved(ctx, user.Email)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+// A recently changed email stays reserved for its previous owner during the
+// lock window so the undo link can still restore it.
+func (s *usersService) ensureEmailNotReserved(ctx context.Context, email string) error {
+	reserved, err := s.repo.IsEmailReserved(ctx, email)
+	if err != nil {
+		return err
+	}
+	if reserved {
+		return domain.NewConflictError("users.email.conflict")
+	}
+	return nil
+}
+
+func isEmailChangeLocked(user *domain.User) bool {
+	return user.EmailChangedAt != 0 && time.Now().Before(time.Unix(user.EmailChangedAt, 0).Add(domain.EmailChangeLock))
+}
+
 func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid string) error {
 	if !actor.CanAccess(uuid) {
 		return errForbiddenUserAccess
 	}
+
+	if actor.UUID == uuid {
+		user, err := s.repo.FindByUUID(ctx, uuid)
+		if err != nil {
+			return err
+		}
+		if isEmailChangeLocked(user) {
+			return domain.NewConflictError("users.emailChange.locked")
+		}
+	}
+
 	return s.repo.Delete(ctx, uuid)
 }

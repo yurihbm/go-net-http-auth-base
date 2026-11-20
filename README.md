@@ -217,6 +217,7 @@ All variables are read and validated once at startup in `config/config.go`; the 
 | `RESEND_API_KEY`, `EMAIL_FROM`                                           | - (**required** outside development) | Resend credentials and sender; without a key, emails are only logged                          |
 | `EMAIL_VERIFICATION_URL`                                                 | - (**required** outside development) | Frontend URL that receives the verification token                                             |
 | `EMAIL_CHANGE_URL`                                                       | - (**required** outside development) | Frontend URL that receives the email change confirmation token                                |
+| `EMAIL_CHANGE_REVERT_URL`                                                | - (**required** outside development) | Frontend URL that receives the "it wasn't me" revert token                                     |
 | `OTEL_*`                                                                 | see [Observability](#-observability) | OpenTelemetry export                                                                          |
 | `TEST_DB_PORT_START`, `TEST_DB_PORT_END`                                 | `15432`, `15499`               | Host port range for the integration test database container (tests only)                            |
 

@@ -649,6 +649,7 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "user.emailChange.success", response.Message)
 		assert.Equal(t, *user, response.Data)
+		assertAuthCookiesCleared(t, w)
 		auditMock.AssertExpectations(t)
 	})
 
@@ -683,6 +684,79 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 		w, req := getControllerArgs("POST", "/users/confirm-email-change", dto)
 
 		controller.ConfirmEmailChange(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+	})
+}
+
+func assertAuthCookiesCleared(t *testing.T, w *httptest.ResponseRecorder) {
+	t.Helper()
+	cleared := map[string]int{}
+	for _, cookie := range w.Result().Cookies() {
+		cleared[cookie.Name] = cookie.MaxAge
+	}
+	assert.Equal(t, map[string]int{api.AccessTokenCookieName: -1, api.RefreshTokenCookieName: -1}, cleared)
+}
+
+func TestUsersController_RevertEmailChange(t *testing.T) {
+	dto := domain.RevertEmailChangeDTO{Token: "revert-token"}
+	restored := &domain.User{UUID: "user-uuid", Email: "old@example.com"}
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("RevertEmailChange", dto.Token).Return(restored, nil)
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionEmailChangeRevert &&
+				d.ResourceType == domain.AuditResourceUser &&
+				d.ResourceUUID == restored.UUID &&
+				d.Status == domain.AuditStatusSuccess
+		})).Return(nil)
+
+		w, req := getControllerArgs("POST", "/users/revert-email-change", dto)
+
+		controller.RevertEmailChange(w, req)
+
+		var response api.ResponseBody[any]
+		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "user.emailChange.reverted", response.Message)
+		assertAuthCookiesCleared(t, w)
+		serviceMock.AssertCalled(t, "RevertEmailChange", dto.Token)
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("error - missing token", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+
+		w, req := getControllerArgs("POST", "/users/revert-email-change", domain.RevertEmailChangeDTO{})
+
+		controller.RevertEmailChange(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		serviceMock.AssertNotCalled(t, "RevertEmailChange", mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("error - stale token", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("RevertEmailChange", dto.Token).Return(nil, domain.NewUnauthorizedError("users.emailChange.staleToken"))
+
+		w, req := getControllerArgs("POST", "/users/revert-email-change", dto)
+
+		controller.RevertEmailChange(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Empty(t, w.Result().Cookies())
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("error - old email taken", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("RevertEmailChange", dto.Token).Return(nil, domain.NewConflictError("users.email.conflict"))
+
+		w, req := getControllerArgs("POST", "/users/revert-email-change", dto)
+
+		controller.RevertEmailChange(w, req)
 
 		assert.Equal(t, http.StatusConflict, w.Code)
 	})
