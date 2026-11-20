@@ -328,3 +328,33 @@ func TestEmailVerificationService_SendSignupCode(t *testing.T) {
 		assert.ErrorIs(t, err, sendErr)
 	})
 }
+
+func TestEmailVerificationService_SendOAuthSignupCode(t *testing.T) {
+	t.Run("says the code signs in or links the provider and must not be shared", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		var sent domain.EmailMessage
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			sent = args.Get(1).(domain.EmailMessage)
+		})
+
+		err := service.SendOAuthSignupCode(context.Background(), "new@example.com", "123456", domain.OAuthProviderMicrosoft)
+
+		require.NoError(t, err)
+		assert.Equal(t, "new@example.com", sent.To)
+		assert.Equal(t, "Your sign-in code", sent.Subject)
+		assert.Equal(t, "Your sign-in code is 123456. Someone is signing in with a Microsoft account that uses this email. Entering this code signs them in, and the Microsoft account is linked to the account for this email (or a new account is created). Only enter it in the browser where you started signing in. It expires in 10 minutes. Never share this code with anyone. If you did not try to sign in, ignore this email.", sent.Text)
+		assert.Equal(t, "<p>Your sign-in code is <strong>123456</strong>. Someone is signing in with a Microsoft account that uses this email. Entering this code signs them in, and the Microsoft account is linked to the account for this email (or a new account is created). Only enter it in the browser where you started signing in. It expires in 10 minutes.</p><p>Never share this code with anyone. If you did not try to sign in, ignore this email.</p>", sent.HTML)
+	})
+
+	t.Run("error - returns provider error", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeURL, emailChangeRevertURL)
+		sendErr := errors.New("smtp down")
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
+
+		err := service.SendOAuthSignupCode(context.Background(), "new@example.com", "123456", domain.OAuthProviderGitHub)
+
+		assert.ErrorIs(t, err, sendErr)
+	})
+}

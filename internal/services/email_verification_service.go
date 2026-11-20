@@ -148,6 +148,27 @@ func codeEmail(to string, subject string, label string, code string, instruction
 	}
 }
 
+func (s *emailVerificationService) SendOAuthSignupCode(ctx context.Context, email string, code string, provider domain.OAuthProviderName) error {
+	name := oauthProviderDisplayName(provider)
+	return s.emailProvider.Send(ctx, codeEmail(email, "Your sign-in code", "sign-in code", code,
+		fmt.Sprintf("Someone is signing in with a %s account that uses this email. Entering this code signs them in, and the %s account is linked to the account for this email (or a new account is created). Only enter it in the browser where you started signing in.", name, name),
+		domain.SignupCodeTTL,
+		"Never share this code with anyone. If you did not try to sign in, ignore this email."))
+}
+
+func oauthProviderDisplayName(provider domain.OAuthProviderName) string {
+	switch provider {
+	case domain.OAuthProviderGoogle:
+		return "Google"
+	case domain.OAuthProviderGitHub:
+		return "GitHub"
+	case domain.OAuthProviderMicrosoft:
+		return "Microsoft"
+	default:
+		return string(provider)
+	}
+}
+
 func (s *emailVerificationService) tokenLink(ctx context.Context, baseURL string, dto domain.GenerateTokenDTO) (string, error) {
 	token, err := s.tokens.GenerateToken(ctx, dto)
 	if err != nil {

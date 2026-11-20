@@ -147,9 +147,11 @@ type VerifyOAuthStateDTO struct {
 }
 
 type OAuthLoginResult struct {
-	User        *User
-	Tokens      AuthTokens
-	RedirectURI string
+	User                *User
+	Tokens              AuthTokens
+	RedirectURI         string
+	PendingSignupUUID   string
+	VerificationLimited bool
 }
 
 type OAuthProvider interface {

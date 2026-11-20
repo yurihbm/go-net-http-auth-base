@@ -33,6 +33,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		usersService *mocks.UsersServiceMock
 		authRepo     *mocks.AuthRepositoryMock
 		transactor   *mocks.TransactorMock
+		pending      *mocks.PendingSignupServiceMock
 	}
 
 	setup := func(t *testing.T, userInfo *domain.OAuthProviderUserInfo) fixture {
@@ -41,6 +42,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		authRepo := new(mocks.AuthRepositoryMock)
 		registry := new(mocks.OAuthProviderRegistryMock)
 		transactor := newTransactorMock()
+		pending := new(mocks.PendingSignupServiceMock)
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
 		sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil).Maybe()
 		sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil).Maybe()
@@ -48,8 +50,8 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
 		registry.On("Get", provider).Return(providerMock, nil)
 		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).Return(userInfo, nil)
-		service := services.NewAuthService(usersService, nil, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
-		return fixture{service, usersService, authRepo, transactor}
+		service := services.NewAuthService(usersService, pending, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
+		return fixture{service, usersService, authRepo, transactor, pending}
 	}
 
 	login := func(t *testing.T, f fixture) (*domain.OAuthLoginResult, error) {
@@ -63,19 +65,69 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		return f.service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 	}
 
-	t.Run("Case 3 refuses an unverified provider email", func(t *testing.T) {
+	t.Run("unverified provider email starts a pending signup and writes nothing", func(t *testing.T) {
+		for _, tc := range []struct {
+			name     string
+			existing *domain.User
+		}{
+			{"no account with that email", nil},
+			{"account with that email", &domain.User{UUID: userUUID, Email: email}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: "  User@Example.COM ", EmailVerified: false})
+				f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
+				f.pending.On("StartOAuth", domain.StartOAuthSignupDTO{Name: "User", Email: email, Provider: provider, ProviderUserID: providerUserID}).Return("pending-uuid", nil).Once()
+
+				result, err := login(t, f)
+
+				require.NoError(t, err)
+				assert.Equal(t, "pending-uuid", result.PendingSignupUUID)
+				assert.Equal(t, "http://localhost:3000/callback", result.RedirectURI)
+				assert.Nil(t, result.User)
+				assert.Empty(t, result.Tokens)
+				f.usersService.AssertNotCalled(t, "CreateOAuth", mock.Anything)
+				f.authRepo.AssertNotCalled(t, "CreateUserOAuthProvider", mock.Anything)
+				f.pending.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("unverified provider email with a linked provider still signs in", func(t *testing.T) {
 		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: false})
-		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
-		f.usersService.On("GetByEmail", email).Return(nil, userNotFound).Once()
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(&domain.UserOAuthProvider{UserUUID: userUUID}, nil).Once()
+		f.usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
 
 		result, err := login(t, f)
 
-		var validationErr *domain.ValidationError
-		require.True(t, errors.As(err, &validationErr))
-		assert.Equal(t, "auth.providerCallback.emailNotVerified", err.Error())
+		require.NoError(t, err)
+		assert.Equal(t, userUUID, result.User.UUID)
+		assert.Empty(t, result.PendingSignupUUID)
+		f.pending.AssertNotCalled(t, "StartOAuth", mock.Anything)
+	})
+
+	t.Run("unverified provider email hitting the send limit reports verification limited", func(t *testing.T) {
+		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: false})
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
+		f.pending.On("StartOAuth", mock.Anything).Return("", domain.ErrEmailSendLimit).Once()
+
+		result, err := login(t, f)
+
+		require.NoError(t, err)
+		assert.True(t, result.VerificationLimited)
+		assert.Equal(t, "http://localhost:3000/callback", result.RedirectURI)
+		assert.Empty(t, result.PendingSignupUUID)
+	})
+
+	t.Run("unverified provider email with another StartOAuth failure returns it", func(t *testing.T) {
+		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: false})
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
+		sendErr := domain.NewInternalServerError("auth.signup.sendFailed", errors.New("smtp"))
+		f.pending.On("StartOAuth", mock.Anything).Return("", sendErr).Once()
+
+		result, err := login(t, f)
+
+		assert.Equal(t, sendErr, err)
 		assert.Nil(t, result)
-		f.usersService.AssertNotCalled(t, "CreateOAuth", mock.Anything)
-		f.authRepo.AssertNotCalled(t, "CreateUserOAuthProvider", mock.Anything)
 	})
 
 	t.Run("Case 2 links within a transaction when the provider email is verified", func(t *testing.T) {

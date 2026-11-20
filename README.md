@@ -192,6 +192,13 @@ Every response uses the [standard format](#api-response-format). Authenticated e
 
 The Swagger UI has the full request and response schemas.
 
+OAuth callback contract for the frontend: the callback always ends in a `302` to the `redirect_uri` of the login step.
+When the provider does not vouch for the email (GitHub unverified primary email, Microsoft), the user is not signed in:
+the redirect carries `?verification=required` (existing query params are kept) and the `pending_signup` cookie, and a
+code was emailed to the provider address. Show a code form and send `POST /auth/signup/verify` with
+`credentials: "include"`; success signs the user in. `?error=verification_limited` means that address hit the email send
+limit, so no code was sent and nothing is pending. Other failures use the provider's `?error=<code>` as before.
+
 ## ⚙️ Configuration
 
 All variables are read and validated once at startup in `config/config.go`; the app refuses to start on a missing required value or a malformed one. `.env.example` is the starting point.
@@ -385,7 +392,7 @@ Logs carry `trace_id`/`span_id`, so a trace in Tempo links to its logs in Loki (
 - Accounts only exist once the email is proven: sign-up emails a 6-digit code that only works in the browser that started it (HttpOnly `pending_signup` cookie), with per-address send and failure limits ([ADR-009](docs/adr/ADR-009-otp-email-proof-and-verified-accounts.md))
 - Short-lived JWTs (15 min access, 7 day refresh) sent only as `HttpOnly`, `SameSite=Strict` cookies (`Secure` outside development); the app refuses to boot with a `JWT_SECRET` shorter than 32 characters
 - Server-side, per-device sessions with refresh token rotation and reuse detection; logout ends the current session
-- OAuth with PKCE, a state nonce bound to the browser, an exact `redirect_uri` allow list, and account creation/linking only through verified emails
+- OAuth with PKCE, a state nonce bound to the browser, an exact `redirect_uri` allow list, and account creation/linking only through emails proven by the provider or by a one-time code
 - Self-or-admin authorization on user endpoints, admin-only audit logs and Swagger UI
 - Exact-match CORS and per-IP rate limiting
 - Audit log of security-relevant actions ([docs/AUDIT.md](docs/AUDIT.md))

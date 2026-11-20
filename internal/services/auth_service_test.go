@@ -1236,34 +1236,6 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		sessionsRepo.AssertExpectations(t)
 	})
 
-	t.Run("error - email not verified (Case 2)", func(t *testing.T) {
-		usersService := new(mocks.UsersServiceMock)
-		authRepo := new(mocks.AuthRepositoryMock)
-		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), testSessionMaxAge, testMaxSessions)
-		providerMock := new(mocks.OAuthProviderMock)
-
-		email := "test@example.com"
-		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: email, EmailVerified: false}
-		existingUser := &domain.User{UUID: "user-uuid", Email: email}
-
-		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
-		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
-		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
-		usersService.On("GetByEmail", email).Return(existingUser, nil).Once()
-
-		state := newState(t, service, string(provider))
-		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
-
-		require.NotNil(t, err)
-		var validationErr *domain.ValidationError
-		assert.True(t, errors.As(err, &validationErr))
-		assert.Equal(t, "auth.providerCallback.emailNotVerified", err.Error())
-		assert.Nil(t, result)
-		usersService.AssertNotCalled(t, "CreateOAuth")
-		authRepo.AssertNotCalled(t, "CreateUserOAuthProvider", mock.Anything)
-	})
-
 	t.Run("success - create new user (Case 3)", func(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
@@ -1619,7 +1591,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
 
 		email := "test@example.com"
-		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: email}
+		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: email, EmailVerified: true}
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
@@ -1810,17 +1782,154 @@ func TestAuthService_CompleteSignup(t *testing.T) {
 		assert.Nil(t, result)
 	})
 
-	t.Run("error - oauth pending signups are not supported yet", func(t *testing.T) {
-		service, usersService, pendingSignups, _, _ := newSignupService()
-		oauthPending := &domain.PendingSignup{UUID: pendingUUID, Kind: domain.PendingSignupKindOAuth, Email: "new@example.com"}
+	t.Run("oauth", func(t *testing.T) {
+		const (
+			provider       = domain.OAuthProviderGitHub
+			providerUserID = "gh-1"
+		)
+		oauthPending := &domain.PendingSignup{
+			UUID: pendingUUID, Kind: domain.PendingSignupKindOAuth, Name: "OAuth User", Email: "new@example.com",
+			Provider: provider, ProviderUserID: providerUserID,
+		}
+		linkNotFound := domain.NewNotFoundError("auth.oauthProvider.notFound")
+		link := domain.UserOAuthProvider{UserUUID: userUUID, Provider: provider, ProviderUserID: providerUserID, ProviderEmail: "new@example.com"}
+
+		type oauthFixture struct {
+			service        domain.AuthService
+			usersService   *mocks.UsersServiceMock
+			pendingSignups *mocks.PendingSignupServiceMock
+			authRepo       *mocks.AuthRepositoryMock
+			sessionsRepo   *mocks.SessionsRepositoryMock
+			transactor     *mocks.TransactorMock
+		}
+		newOAuthFixture := func() oauthFixture {
+			f := oauthFixture{
+				usersService:   new(mocks.UsersServiceMock),
+				pendingSignups: new(mocks.PendingSignupServiceMock),
+				authRepo:       new(mocks.AuthRepositoryMock),
+				sessionsRepo:   new(mocks.SessionsRepositoryMock),
+				transactor:     newTransactorMock(),
+			}
+			f.service = services.NewAuthService(f.usersService, f.pendingSignups, f.authRepo, f.sessionsRepo, new(mocks.OAuthProviderRegistryMock), f.transactor, services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
+			f.pendingSignups.On("Attempt", pendingUUID, code).Return(nil).Once()
+			return f
+		}
+
+		t.Run("success - provider already linked signs in to the linked user", func(t *testing.T) {
+			f := newOAuthFixture()
+			user := &domain.User{UUID: userUUID, Email: "other@example.com"}
+			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Once()
+			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(&domain.UserOAuthProvider{UserUUID: userUUID}, nil).Once()
+			f.usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(user, nil).Once()
+			expectStartSession(f.sessionsRepo, userUUID, sessionUUID)
+
+			result, err := f.service.CompleteSignup(context.Background(), pendingUUID, code)
+
+			require.NoError(t, err)
+			assert.Equal(t, user, result.User)
+			assert.NotEmpty(t, result.Tokens.AccessToken)
+			f.authRepo.AssertNotCalled(t, "CreateUserOAuthProvider", mock.Anything)
+			f.usersService.AssertNotCalled(t, "CreateOAuth", mock.Anything)
+		})
+
+		t.Run("success - links into the user that owns the email", func(t *testing.T) {
+			f := newOAuthFixture()
+			user := &domain.User{UUID: userUUID, Email: "new@example.com"}
+			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Once()
+			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Once()
+			f.usersService.On("GetByEmail", "new@example.com").Return(user, nil).Once()
+			f.authRepo.On("CreateUserOAuthProvider", link).Return(&domain.UserOAuthProvider{}, nil).Once()
+			expectStartSession(f.sessionsRepo, userUUID, sessionUUID)
+
+			result, err := f.service.CompleteSignup(context.Background(), pendingUUID, code)
+
+			require.NoError(t, err)
+			assert.Equal(t, user, result.User)
+			f.authRepo.AssertExpectations(t)
+			f.usersService.AssertNotCalled(t, "CreateOAuth", mock.Anything)
+		})
+
+		t.Run("success - creates the user and links", func(t *testing.T) {
+			f := newOAuthFixture()
+			user := &domain.User{UUID: userUUID, Email: "new@example.com"}
+			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Once()
+			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Once()
+			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+			f.usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: "OAuth User", Email: "new@example.com"}).Return(user, nil).Once()
+			f.authRepo.On("CreateUserOAuthProvider", link).Return(&domain.UserOAuthProvider{}, nil).Once()
+			expectStartSession(f.sessionsRepo, userUUID, sessionUUID)
+
+			result, err := f.service.CompleteSignup(context.Background(), pendingUUID, code)
+
+			require.NoError(t, err)
+			assert.Equal(t, user, result.User)
+			f.usersService.AssertExpectations(t)
+			f.authRepo.AssertExpectations(t)
+			f.transactor.AssertNumberOfCalls(t, "WithinTx", 2)
+		})
+
+		t.Run("success - a concurrent link is found by one retry in a fresh transaction", func(t *testing.T) {
+			f := newOAuthFixture()
+			user := &domain.User{UUID: userUUID, Email: "new@example.com"}
+			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Twice()
+			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Once()
+			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+			f.usersService.On("CreateOAuth", mock.Anything).Return(nil, domain.NewConflictError("users.email.conflict")).Once()
+			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(&domain.UserOAuthProvider{UserUUID: userUUID}, nil).Once()
+			f.usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(user, nil).Once()
+			expectStartSession(f.sessionsRepo, userUUID, sessionUUID)
+
+			result, err := f.service.CompleteSignup(context.Background(), pendingUUID, code)
+
+			require.NoError(t, err)
+			assert.Equal(t, user, result.User)
+			f.transactor.AssertNumberOfCalls(t, "WithinTx", 3)
+			f.pendingSignups.AssertNumberOfCalls(t, "Attempt", 1)
+		})
+
+		t.Run("error - a persistent conflict (reservation) is returned after one retry", func(t *testing.T) {
+			f := newOAuthFixture()
+			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Twice()
+			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Twice()
+			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("user.notFound")).Twice()
+			f.usersService.On("CreateOAuth", mock.Anything).Return(nil, domain.NewConflictError("users.email.conflict")).Twice()
+
+			result, err := f.service.CompleteSignup(context.Background(), pendingUUID, code)
+
+			var conflictErr *domain.ConflictError
+			require.ErrorAs(t, err, &conflictErr)
+			assert.Equal(t, "users.email.conflict", err.Error())
+			assert.Nil(t, result)
+			f.transactor.AssertNumberOfCalls(t, "WithinTx", 2)
+			f.sessionsRepo.AssertNotCalled(t, "Create", mock.Anything)
+		})
+
+		t.Run("error - link failure other than a conflict is not retried", func(t *testing.T) {
+			f := newOAuthFixture()
+			linkErr := errors.New("link failed")
+			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Once()
+			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Once()
+			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+			f.usersService.On("CreateOAuth", mock.Anything).Return(&domain.User{UUID: userUUID}, nil).Once()
+			f.authRepo.On("CreateUserOAuthProvider", mock.Anything).Return(nil, linkErr).Once()
+
+			result, err := f.service.CompleteSignup(context.Background(), pendingUUID, code)
+
+			assert.Equal(t, linkErr, err)
+			assert.Nil(t, result)
+			f.transactor.AssertNumberOfCalls(t, "WithinTx", 1)
+		})
+	})
+
+	t.Run("error - credentials conflict is not retried", func(t *testing.T) {
+		service, usersService, pendingSignups, _, transactor := newSignupService()
 		pendingSignups.On("Attempt", pendingUUID, code).Return(nil).Once()
-		pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Once()
+		pendingSignups.On("Consume", pendingUUID, code).Return(pending, nil).Once()
+		usersService.On("Create", newUserDTO).Return(nil, domain.NewConflictError("users.email.conflict")).Once()
 
-		result, err := service.CompleteSignup(context.Background(), pendingUUID, code)
+		_, err := service.CompleteSignup(context.Background(), pendingUUID, code)
 
-		var internalErr *domain.InternalServerError
-		require.ErrorAs(t, err, &internalErr)
-		assert.Nil(t, result)
-		usersService.AssertNotCalled(t, "Create", mock.Anything)
+		require.Error(t, err)
+		transactor.AssertNumberOfCalls(t, "WithinTx", 1)
 	})
 }
