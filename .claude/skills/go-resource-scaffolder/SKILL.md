@@ -18,7 +18,7 @@ This skill generates the boilerplate code for a new resource in the layered arch
 - Generates Unit Tests for Service and Controller
 - Generates Integration Tests for Repository (`internal/repositories/<resources>_repository_test.go`)
 
-The generated code follows the conventions in `AGENTS.md`: `context.Context` first on every service and repository method, `api.DecodeAndValidate` + `api.HandleError` in the controller, swag annotations on every handler, domain errors in the repository, and a factory that reads from `*factories.Dependencies`. It compiles and passes `go vet`, `golangci-lint` and the unit tests right away. The repository methods are placeholders that return an `InternalServerError` until the queries exist, so the repository integration tests fail until step 4 below.
+The generated code follows the conventions in `AGENTS.md` and `.claude/rules/`: `context.Context` first on every service and repository method, `api.DecodeAndValidate` + `api.HandleError` in the controller, swag annotations on every handler, domain errors in the repository, and a factory that reads from `*factories.Dependencies`. It compiles and passes `go vet`, `golangci-lint` and the unit tests right away. The repository methods are placeholders that return an `InternalServerError` until the queries exist, so the repository integration tests fail until step 4 below.
 
 ## Usage
 
@@ -81,9 +81,9 @@ The script prints these steps with the resource names filled in.
     // in the returned literal
     ProductsService: productsService,
     ```
-2.  **Routes**: Register the factory in `cmd/main.go`, next to the other factories:
+2.  **Routes**: Register the factory in `NewHandler` (`internal/factories/handler.go`), next to the other factories:
     ```go
-    factories.ProductsFactory(deps).RegisterRoutes(mux)
+    ProductsFactory(deps).RegisterRoutes(mux)
     ```
 3.  **Schema**: While this repository is still a template, add the table to `postgres/migrations/000001_init_db.up.sql` (and its `DROP` to `.down.sql`) instead of a new migration file. Add the table to `truncateTables` in `internal/repositories/repositories_test.go`.
 4.  **Queries**: Write `postgres/queries/products.sql`, run `make sqlc-gen`, and replace the placeholders in `products_repository.go` following `users_repository.go` (`parseUUID`, `isNoRowsError`, `isConflictError`, `domain.NewInternalServerError`, a `toProduct` mapper). The repository integration tests should then pass.

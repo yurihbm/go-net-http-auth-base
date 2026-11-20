@@ -71,7 +71,7 @@ The project implements a **Clean Architecture** inspired pattern, structured int
 - **Domain-Centric**: The `internal/domain` package defines the core entities and interfaces, serving as the contract between layers.
 - **Dependency Injection**: `factories.NewDependencies` builds the shared repositories, services and middlewares once, and `cmd/main.go` passes them to thin per-controller factories, ensuring loose coupling and testability.
 
-The reasoning behind these choices is recorded in the [Architecture Decision Records](docs/adr/README.md). [AGENTS.md](AGENTS.md) is the most detailed description of the conventions (written for AI agents, but useful for humans too).
+The reasoning behind these choices is recorded in the [Architecture Decision Records](docs/adr/README.md). [AGENTS.md](AGENTS.md) and the path-scoped rules in [`.claude/rules/`](.claude/rules/) describe the conventions in detail, and [docs/AUTH.md](docs/AUTH.md) the authentication and email flows (written for AI agents, but useful for humans too).
 
 ## 💻 Code Standards and Conventions
 
@@ -150,7 +150,7 @@ Examples:
 4.  **Add tests** for your changes.
 5.  **Run tests** to ensure everything is working: `go test ./...`.
 6.  **Run linter** (`golangci-lint run`, if available locally) or check CI status.
-7.  **Update docs**: `make swagger-gen` for handler changes, an ADR for architectural decisions, and README/AGENTS.md when a convention or command changes.
+7.  **Update docs**: `make swagger-gen` for handler changes, an ADR for architectural decisions, and README/AGENTS.md (or the matching `.claude/rules/` file or `docs/AUTH.md`) when a convention, flow or command changes.
 8.  **Commit your changes** using the conventional commit format.
 9.  **Push to your fork** and submit a Pull Request.
 10. **Description**: Provide a clear description of your changes and link to any relevant issues.
