@@ -71,12 +71,12 @@ Scaffolds a complete vertical slice for a new resource, following the project's 
 - **Generates**: Domain, Repository (w/ Integration Tests), Service (w/ Unit Tests), Controller (w/ Unit Tests), and Factory.
 - **Usage**:
   ```bash
-  npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular]
+  npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular]
   ```
 - **Example**:
-  - `npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Product` (Creates `products_controller.go`, etc.)
-  - `npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Auth --singular` (Creates `auth_controller.go`)
-- **After scaffolding**: Follow the printed next steps (wire the service in `dependencies.go`, register the factory in `cmd/main.go`, add the table and queries, implement the repository placeholders). See `.github/skills/go-resource-scaffolder/SKILL.md`.
+  - `npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts Product` (Creates `products_controller.go`, etc.)
+  - `npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts Auth --singular` (Creates `auth_controller.go`)
+- **After scaffolding**: Follow the printed next steps (wire the service in `dependencies.go`, register the factory in `cmd/main.go`, add the table and queries, implement the repository placeholders). See `.claude/skills/go-resource-scaffolder/SKILL.md`.
 
 ### 2. Go Migration Scaffolder (`go-migration-scaffolder`)
 
@@ -85,10 +85,10 @@ Streamlines database schema changes.
 - **Generates**: Up/Down migration files and a corresponding `sqlc` query file.
 - **Usage**:
   ```bash
-  npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
+  npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
   ```
-- **Example**: `npx tsx .github/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table`
-- **Template phase**: While this is still a template, do not run it; schema changes go into `000001_init_db.up.sql`/`.down.sql` (see `.github/skills/go-migration-scaffolder/SKILL.md`).
+- **Example**: `npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table`
+- **Template phase**: While this is still a template, do not run it; schema changes go into `000001_init_db.up.sql`/`.down.sql` (see `.claude/skills/go-migration-scaffolder/SKILL.md`).
 
 ## Building and Running
 

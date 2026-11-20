@@ -27,7 +27,7 @@ To scaffold a new resource, run the `scaffold.ts` script provided in the `script
 ### Command
 
 ```bash
-npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular|-s]
+npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular|-s]
 ```
 
 ### Options
@@ -40,7 +40,7 @@ npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName>
 **Default (Plural naming - Recommended for entities):**
 
 ```bash
-npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Product
+npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts Product
 ```
 
 This will create:
@@ -56,7 +56,7 @@ This will create:
 **Singular naming:**
 
 ```bash
-npx tsx .github/skills/go-resource-scaffolder/scripts/scaffold.ts Auth --singular
+npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts Auth --singular
 ```
 
 This will create:
