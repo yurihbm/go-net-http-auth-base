@@ -43,11 +43,11 @@ func TestTokenService_RoundTrip(t *testing.T) {
 func TestTokenService_Expiration(t *testing.T) {
 	service := services.NewTokenService(tokenSecret)
 	cases := map[domain.TokenAudience]time.Duration{
-		domain.TokenAudienceAccess:            domain.TokenExpirationAccess,
-		domain.TokenAudienceRefresh:           domain.TokenExpirationRefresh,
-		domain.TokenAudienceExchange:          domain.TokenExpirationExchange,
-		domain.TokenAudienceOAuthState:        domain.TokenExpirationOAuthState,
-		domain.TokenAudienceEmailVerification: domain.TokenExpirationEmailVerification,
+		domain.TokenAudienceAccess:      domain.TokenExpirationAccess,
+		domain.TokenAudienceRefresh:     domain.TokenExpirationRefresh,
+		domain.TokenAudienceExchange:    domain.TokenExpirationExchange,
+		domain.TokenAudienceOAuthState:  domain.TokenExpirationOAuthState,
+		domain.TokenAudienceEmailChange: domain.TokenExpirationEmailChange,
 	}
 
 	for audience, ttl := range cases {
@@ -173,11 +173,11 @@ func TestTokenService_VerifyToken(t *testing.T) {
 	t.Run("success - other audiences do not require a session id", func(t *testing.T) {
 		token, err := service.GenerateToken(ctx, domain.GenerateTokenDTO{
 			Subject:  "user-uuid",
-			Audience: domain.TokenAudienceEmailVerification,
+			Audience: domain.TokenAudienceEmailChange,
 		})
 		require.NoError(t, err)
 
-		data, err := service.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceEmailVerification})
+		data, err := service.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceEmailChange})
 
 		require.NoError(t, err)
 		assert.Empty(t, data.SessionID)

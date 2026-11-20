@@ -200,7 +200,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 		f := setup(t, nil, nil)
 		applyChange(t, f)
 
-		_, err := f.service.Create(context.Background(), domain.CreateUserDTO{Name: "Squatter", Email: oldEmail, Password: "password123"})
+		_, err := f.service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: oldEmail, PasswordHash: "hash"})
 
 		var conflictErr *domain.ConflictError
 		require.True(t, errors.As(err, &conflictErr))
@@ -232,7 +232,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 
 		signUpDone := make(chan error, 1)
 		go func() {
-			_, err := service.Create(context.Background(), domain.CreateUserDTO{Name: "Squatter", Email: oldEmail, Password: "password123"})
+			_, err := service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: oldEmail, PasswordHash: "hash"})
 			signUpDone <- err
 		}()
 		require.Eventually(t, func() bool {

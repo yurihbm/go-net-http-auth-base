@@ -244,12 +244,12 @@ Services implement business logic. Key patterns:
   - Password hashing is performed in the service layer using `bcrypt.GenerateFromPassword()`.
   - Input shape is validated in the controller (`api.DecodeAndValidate`); services enforce business rules (e.g., self-or-admin access through `Actor.CanAccess`, which returns a `ForbiddenError`).
   - Services perform partial updates by fetching existing entities, modifying only provided fields, then calling repository update.
-- **Email**: `domain.EmailProvider` (`Send`) is built once in `factories.Dependencies`: `ResendEmailProvider` when `RESEND_API_KEY` is set, otherwise `LogEmailProvider` (development). `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_VERIFICATION_URL`, `EMAIL_CHANGE_URL` and `EMAIL_CHANGE_REVERT_URL` are required outside development; all are loaded and validated in `config/config.go`.
-- **Email Verification**: `domain.EmailVerificationService` (`services.NewEmailVerificationService`, depends only on `TokenService`, `EmailProvider` and the verification and email change URLs) sends the mail (`SendVerificationEmail`) and checks its token (`VerifyVerificationToken`). `UsersService` owns the flow: `Create` (`POST /users`) sends the mail and only logs a failure (`CreateOAuth` never sends), `VerifyEmail` backs `POST /users/verify-email` and `ResendVerification` backs `POST /users/resend-verification` (silent for unknown or already verified emails). The link carries a JWT with audience `email_verification_token` (24h). OAuth account creation requires a provider-verified email, and linking into an existing account requires both provider and local `email_verified`.
-- **Email Change**: `PUT /users/{uuid}` never changes the email (`UserUpdateDTO` has only `name`). `UsersService.RequestEmailChange` backs `POST /users/me/email` (self only, behind step-up; `409` if taken or `users.emailChange.locked`) and mails a link to the new address (`SendEmailChangeEmail`, JWT audience `email_change_token`, 1h, payload `current_email`/`new_email`/`ver`, the user's `email_version`). `ConfirmEmailChange` backs the public `POST /users/confirm-email-change`: it rejects the token (`users.emailChange.staleToken`) unless the account email equals `current_email` and `email_version` equals `ver` (single use without storage, also blocks A to B to A replays), rejects with `users.emailChange.locked` for 72h after the last change (`domain.EmailChangeLock`), then in one `WithinTx` writes the email with `email_verified = true` and stamps `email_changed_at` (`UsersRepository.UpdateEmail`, compare-and-set on the version) and deletes all the user's sessions (`SessionsRepository.DeleteAllByUser`); the handler also clears the auth cookies. After commit it notifies the old address with an undo link (`SendEmailChangedNotice`, failure only logged). The link carries a JWT with audience `email_change_revert_token` (72h, payload `old_email`/`new_email`/`ver` after the change/`changed_at`) and points to `EMAIL_CHANGE_REVERT_URL`. `RevertEmailChange` backs the public `POST /users/revert-email-change`: it requires the account to still have `new_email` at version `ver` (single use, because the revert bumps the version; the lock prevents chained changes), then in one `WithinTx` restores `old_email` (clearing `email_changed_at` so the owner is not locked), deletes all sessions and deletes the OAuth providers linked since `changed_at` (`AuthRepository.DeleteOAuthProvidersCreatedSince`); the handler clears the auth cookies. During the lock the previous email stays reserved: `UsersRepository.UpdateEmail` stores it in `users.previous_email` (cleared by a revert), and `UsersRepository.IsEmailReserved` (case-insensitive, only while `email_changed_at` is inside the lock window) makes `Create`, `CreateOAuth`, `RequestEmailChange` and `ConfirmEmailChange` reject that address with `users.email.conflict` (`Create`, `CreateOAuth` and the confirm check after their write inside a `WithinTx`, so a write that waited on a concurrent confirm sees its reservation and rolls back; bcrypt stays outside the transaction), the same key as a taken email; the revert itself is unaffected. `UsersService.Delete` returns `409 users.emailChange.locked` when the actor deletes their own account during the lock (an admin deleting another user is unaffected). See ADR-007 (superseded by ADR-008).
+- **Email**: `domain.EmailProvider` (`Send`) is built once in `factories.Dependencies`: `ResendEmailProvider` when `RESEND_API_KEY` is set, otherwise `LogEmailProvider` (development). `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_CHANGE_URL` and `EMAIL_CHANGE_REVERT_URL` are required outside development; all are loaded and validated in `config/config.go`.
+- **Sign-Up (Email Proof)**: Every account is verified: it only exists after its email was proven with a 6-digit code typed in the browser that started the flow, never a link, so there is no `email_verified` column (ADR-009). `domain.EmailVerificationService` (`services.NewEmailVerificationService`, depends only on `TokenService`, `EmailProvider` and the email change URLs) builds and sends the emails (`SendSignupCode`, `SendStepUpCode` and the email change links). `domain.PendingSignupService` (`services.NewPendingSignupService`: `PendingSignupRepository`, `EmailSendLimiter`, `UsersRepository`, `Transactor`, `EmailVerificationService` and the `JWT_SECRET` HMAC key) only stores, codes, limits and mails. `StartCredentials` backs `POST /users` (`202 user.create.pending`, no user body): it normalizes the email, rejects a taken or reserved one early with `409 users.email.conflict`, hashes the password with bcrypt (outside any transaction), reserves a send (`EmailSendLimiter.ReserveSend`: 60s cooldown and 5 per hour per address, `429 auth.email.sendLimit`, the slot is never refunded), inserts a `pending_signups` row (UUIDv7 generated in the service, since the code hash needs it before the insert; code stored as `HMAC-SHA256(JWT_SECRET, "signup:<uuid>:" + code)`, valid 10m with 5 attempts; the sign-up lives 1h from creation and is never extended; several rows per email may coexist and the first correct code wins) and mails the code; a send failure deletes the row and is `500 auth.signup.sendFailed`. `StartOAuth` does the same for kind `oauth` (provider and provider user ID, no password, no early conflict check); it is not wired to a route yet. The handler sets the HttpOnly `pending_signup` cookie (`api.SetPendingSignupCookie`: `__Host-` prefix outside development, path `/`, `SameSite=Strict`, 1h). `Resend` backs `POST /auth/signup/resend` (`202 auth.signup.codeResent`): it replaces the code and resets the attempts in one `WithinTx` with the send reservation, so a refused send keeps the old code (the per-address 60s cooldown of `ReserveSend` also limits resends, `429 auth.email.sendLimit`). `Attempt` loads the sign-up, reserves a guess for the address (`EmailSendLimiter.ReserveCodeGuess`, one atomic upsert on `email_send_limits.failures` that only increments below 20 and restarts the 24h window, else `429 auth.email.codeLocked`, so parallel guesses can never exceed the cap), counts the attempt in its own statement (`PendingSignupRepository.Attempt`, a missing, expired or exhausted sign-up refunds the guess) and compares with `hmac.Equal`; a match gives the guess back (`EmailSendLimiter.RefundCodeGuess`, a failure is only logged), a mismatch keeps it and is `401 auth.signup.invalidCode`; missing, malformed, expired or exhausted sign-ups are all `401 auth.signup.noPending`. `Consume` deletes the row by UUID and code hash (`DELETE ... RETURNING`, single use, wins a double submit). `AuthService.CompleteSignup` orchestrates the public `POST /auth/signup/verify` (needs the cookie, else `401 auth.signup.noPending`; body `CodeDTO`): `Attempt` outside any transaction, so wrong codes are never rolled back, then one `WithinTx` with `Consume`, `UsersService.Create` (`NewUserDTO` with the already hashed password, reservation check inside the transaction) and `startSession`; a conflict rolls back and keeps the sign-up. Only kind `credentials` is completed for now (other kinds are `500 auth.signup.unsupportedKind`). The handler answers `201 auth.signup.success` with the user, sets the auth cookies (`api.SetAuthCookies`), deletes the pending cookie and logs `USER_CREATE`. OAuth account creation requires a provider-verified email, and linking into an existing account only requires the provider email to be verified, since every local account is.
+- **Email Change**: `PUT /users/{uuid}` never changes the email (`UserUpdateDTO` has only `name`). `UsersService.RequestEmailChange` backs `POST /users/me/email` (self only, behind step-up; `409` if taken or `users.emailChange.locked`) and mails a link to the new address (`SendEmailChangeEmail`, JWT audience `email_change_token`, 1h, payload `current_email`/`new_email`/`ver`, the user's `email_version`). `ConfirmEmailChange` backs the public `POST /users/confirm-email-change`: it rejects the token (`users.emailChange.staleToken`) unless the account email equals `current_email` and `email_version` equals `ver` (single use without storage, also blocks A to B to A replays), rejects with `users.emailChange.locked` for 72h after the last change (`domain.EmailChangeLock`), then in one `WithinTx` writes the email and stamps `email_changed_at` (`UsersRepository.UpdateEmail`, compare-and-set on the version) and deletes all the user's sessions (`SessionsRepository.DeleteAllByUser`); the handler also clears the auth cookies. After commit it notifies the old address with an undo link (`SendEmailChangedNotice`, failure only logged). The link carries a JWT with audience `email_change_revert_token` (72h, payload `old_email`/`new_email`/`ver` after the change/`changed_at`) and points to `EMAIL_CHANGE_REVERT_URL`. `RevertEmailChange` backs the public `POST /users/revert-email-change`: it requires the account to still have `new_email` at version `ver` (single use, because the revert bumps the version; the lock prevents chained changes), then in one `WithinTx` restores `old_email` (clearing `email_changed_at` so the owner is not locked), deletes all sessions and deletes the OAuth providers linked since `changed_at` (`AuthRepository.DeleteOAuthProvidersCreatedSince`); the handler clears the auth cookies. During the lock the previous email stays reserved: `UsersRepository.UpdateEmail` stores it in `users.previous_email` (cleared by a revert), and `UsersRepository.IsEmailReserved` (case-insensitive, only while `email_changed_at` is inside the lock window) makes `Create`, `CreateOAuth`, `RequestEmailChange` and `ConfirmEmailChange` reject that address with `users.email.conflict` (`Create`, `CreateOAuth` and the confirm check after their write inside a `WithinTx`, so a write that waited on a concurrent confirm sees its reservation and rolls back; bcrypt stays outside the transaction), the same key as a taken email; the revert itself is unaffected. `UsersService.Delete` returns `409 users.emailChange.locked` when the actor deletes their own account during the lock (an admin deleting another user is unaffected). See ADR-007 (superseded by ADR-008).
 - **Email Normalization**: Services always pass emails through the unexported `normalizeEmail` helper (`services/helpers.go`, trim + lowercase) before lookup or write; repositories receive already normalized emails; the database enforces a unique index on `lower(email)`.
-- **Refresh Sessions**: Multi-device: each login (credentials or OAuth, via `startSession`) creates a row in `user_sessions` (`current_jti`, `last_used_at`, `expires_at` = login + `SESSION_MAX_AGE`, never extended on rotation), inside one `WithinTx` that first deletes the user's expired or idle sessions and then trims the user to the newest `MAX_SESSIONS_PER_USER` (optional, default 10; least recently used evicted). Refresh tokens carry `sub`, `sid` and `jti`; access tokens carry `sub` and `sid` (`tokenService` rejects either without `sid`). Refresh loads the session by `sid` + `sub`, rejects it past `expires_at`, and rotates the `jti` through `SessionsRepository.RotateJTI` (per-session atomic compare-and-set, keeping the same `sid`); a reused or stale token, or a lost concurrent refresh, deletes only that session (the user's other devices stay signed in). `infra.ExpiredRecordsSweeper` (startup, then hourly) also deletes expired or idle sessions of all users, and expired step-up challenges, in batches of 1000, so rows of users who never log in again do not linger. There is no grace window, so clients must send one refresh at a time. Confirming or reverting an email change deletes every session of the user. `POST /auth/logout` is authenticated (`AuthMiddleware` puts `SessionUUID` in `shared.RequestContextData`) and deletes only the current session; the stateless access token stays valid for up to 15 minutes after logout, but the session can no longer be refreshed. With an expired access token, clients refresh first and then log out. `POST /auth/logout-others` (`AuthService.LogoutOthers`, authenticated, `204`) deletes every other session of the user through `SessionsRepository.DeleteOthersByUser`, after checking the current session still exists and is not expired (`401` otherwise, so a revoked session cannot wipe the owner's new ones).
-- **Step-Up**: Sensitive routes (`POST /users/me/email`, `DELETE /users/{uuid}` including admins) need an OTP sent to the user's current email. `domain.StepUpService` (`services.NewStepUpService`): `RequestCode` (`POST /auth/step-up`, `202`) checks the session is live, generates a 6-digit code with `crypto/rand`, stores `HMAC-SHA256(JWT_SECRET, sid:code)` in `step_up_challenges` (`StepUpRepository.Upsert`: 10m TTL, `429 auth.stepUp.cooldown` within 60s per session) and mails it with `EmailVerificationService.SendStepUpCode` (a send failure deletes the challenge so the cooldown does not trap the user, and is a `500`, unlike verification emails). `VerifyCode` (`POST /auth/step-up/verify`, body `StepUpVerifyDTO`) counts the attempt first (`StepUpRepository.Attempt`, max 5; missing, expired or exhausted challenges are all `401 auth.stepUp.noChallenge`), compares with `hmac.Equal` and, in one `WithinTx`, deletes the challenge and sets `user_sessions.step_up_until` to now + 5m; it returns `{ "step_up_until": <unix> }`. `StepUpMiddleware` (depends on `domain.StepUpChecker`, runs inside `AuthMiddleware`, wired as `authMiddleware.Use(stepUpMiddleware.Use(handler))`) loads the session through `IsElevated` and answers `403 auth.stepUp.required` when it is not elevated. `user_sessions.step_up_failures` counts every wrong code of the session (`SessionsRepository.IncrementStepUpFailures`, never reset by new codes or successful verifications); at `StepUpMaxSessionFailures` (10) the session is deleted and `VerifyCode` returns `401 auth.stepUp.sessionRevoked`, and the controller clears the auth cookies. `users.step_up_failures` and `step_up_failures_window_start` add a per-user cap across sessions: `VerifyCode` first reserves a guess (`UsersRepository.ReserveStepUpGuess`, one conditional UPDATE that increments only below `StepUpMaxUserFailures` (20) and restarts the count when the 24h window expired; no row is `429 auth.stepUp.userLocked`), so parallel guesses across sessions cannot pass the cap, and refunds it (`RefundStepUpGuess`, failure only logged) on a correct code or a failed attempt; `RequestCode` also answers `429 auth.stepUp.userLocked` while the cap is reached, until the window ends. `AuthMiddleware` stays stateless, so only sensitive routes read the session row. See ADR-008.
+- **Refresh Sessions**: Multi-device: each login (credentials or OAuth, via `startSession`) creates a row in `user_sessions` (`current_jti`, `last_used_at`, `expires_at` = login + `SESSION_MAX_AGE`, never extended on rotation), inside one `WithinTx` that first deletes the user's expired or idle sessions and then trims the user to the newest `MAX_SESSIONS_PER_USER` (optional, default 10; least recently used evicted). Refresh tokens carry `sub`, `sid` and `jti`; access tokens carry `sub` and `sid` (`tokenService` rejects either without `sid`). Refresh loads the session by `sid` + `sub`, rejects it past `expires_at`, and rotates the `jti` through `SessionsRepository.RotateJTI` (per-session atomic compare-and-set, keeping the same `sid`); a reused or stale token, or a lost concurrent refresh, deletes only that session (the user's other devices stay signed in). `infra.ExpiredRecordsSweeper` (startup, then hourly) also deletes expired or idle sessions of all users, expired step-up challenges, expired pending sign-ups and `email_send_limits` rows whose send and failure windows both ended, in batches of 1000, so rows of users who never log in again do not linger. There is no grace window, so clients must send one refresh at a time. Confirming or reverting an email change deletes every session of the user. `POST /auth/logout` is authenticated (`AuthMiddleware` puts `SessionUUID` in `shared.RequestContextData`) and deletes only the current session; the stateless access token stays valid for up to 15 minutes after logout, but the session can no longer be refreshed. With an expired access token, clients refresh first and then log out. `POST /auth/logout-others` (`AuthService.LogoutOthers`, authenticated, `204`) deletes every other session of the user through `SessionsRepository.DeleteOthersByUser`, after checking the current session still exists and is not expired (`401` otherwise, so a revoked session cannot wipe the owner's new ones).
+- **Step-Up**: Sensitive routes (`POST /users/me/email`, `DELETE /users/{uuid}` including admins) need an OTP sent to the user's current email. `domain.StepUpService` (`services.NewStepUpService`): `RequestCode` (`POST /auth/step-up`, `202`) checks the session is live, generates a 6-digit code with `crypto/rand`, stores `HMAC-SHA256(JWT_SECRET, sid:code)` in `step_up_challenges` (`StepUpRepository.Upsert`: 10m TTL, `429 auth.stepUp.cooldown` within 60s per session) and mails it with `EmailVerificationService.SendStepUpCode` (a send failure deletes the challenge so the cooldown does not trap the user, and is a `500`). `VerifyCode` (`POST /auth/step-up/verify`, body `CodeDTO`) counts the attempt first (`StepUpRepository.Attempt`, max 5; missing, expired or exhausted challenges are all `401 auth.stepUp.noChallenge`), compares with `hmac.Equal` and, in one `WithinTx`, deletes the challenge and sets `user_sessions.step_up_until` to now + 5m; it returns `{ "step_up_until": <unix> }`. `StepUpMiddleware` (depends on `domain.StepUpChecker`, runs inside `AuthMiddleware`, wired as `authMiddleware.Use(stepUpMiddleware.Use(handler))`) loads the session through `IsElevated` and answers `403 auth.stepUp.required` when it is not elevated. `user_sessions.step_up_failures` counts every wrong code of the session (`SessionsRepository.IncrementStepUpFailures`, never reset by new codes or successful verifications); at `StepUpMaxSessionFailures` (10) the session is deleted and `VerifyCode` returns `401 auth.stepUp.sessionRevoked`, and the controller clears the auth cookies. `users.step_up_failures` and `step_up_failures_window_start` add a per-user cap across sessions: `VerifyCode` first reserves a guess (`UsersRepository.ReserveStepUpGuess`, one conditional UPDATE that increments only below `StepUpMaxUserFailures` (20) and restarts the count when the 24h window expired; no row is `429 auth.stepUp.userLocked`), so parallel guesses across sessions cannot pass the cap, and refunds it (`RefundStepUpGuess`, failure only logged) on a correct code or a failed attempt; `RequestCode` also answers `429 auth.stepUp.userLocked` while the cap is reached, until the window ends. `AuthMiddleware` stays stateless, so only sensitive routes read the session row. See ADR-008.
 - **Token Interfaces**: All JWTs are signed and verified by the dependency-free `tokenService` (`services.NewTokenService`, holds only the JWT secret; `domain.TokenService`), used by `AuthService` (which delegates its token methods to it) and `EmailVerificationService`. `domain.TokenVerifier` (`VerifyToken`) is what middlewares depend on; `domain.TokenGenerator` (`GenerateToken`) is separate and not part of `AuthService`. Depend on the narrowest one.
 - **Error Handling**: Services return domain-specific errors with meaningful messages (e.g., `"users.forbidden"`). See `docs/ERRORS.md`.
 - **Multi-Step Orchestration**: Flows spanning several steps and services (e.g., `AuthService.OAuthLogin`, which verifies the state token, resolves/creates the user via `UsersService`, links the OAuth provider, and mints tokens) are implemented as a single service method. Controllers stay thin: decode input, call the one service method, then handle the HTTP concerns (cookies, redirect, audit log).
@@ -257,36 +257,32 @@ Services implement business logic. Key patterns:
 **Example Structure**:
 
 ```go
-type usersService struct {
-    repo              domain.UsersRepository
-    emailVerification domain.EmailVerificationService
+type pendingSignupService struct {
+    pending    domain.PendingSignupRepository
+    limiter    domain.EmailSendLimiter
+    users      domain.UsersRepository
+    transactor domain.Transactor
+    emails     domain.EmailVerificationService
+    hmacKey    []byte
 }
 
-func NewUserService(repo domain.UsersRepository, emailVerification domain.EmailVerificationService) domain.UsersService {
-    return &usersService{repo: repo, emailVerification: emailVerification}
-}
+func (s *pendingSignupService) StartCredentials(ctx context.Context, dto domain.CreateUserDTO) (string, error) {
+    email := normalizeEmail(dto.Email)
+    if err := s.ensureEmailAvailable(ctx, email); err != nil {
+        return "", err
+    }
 
-func (s *usersService) Create(ctx context.Context, dto domain.CreateUserDTO) (*domain.User, error) {
     hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
     if err != nil {
-        return nil, domain.NewInternalServerError("users.create.passwordHashingFailed", err)
+        return "", domain.NewInternalServerError("users.create.passwordHashingFailed", err)
     }
-    user := domain.User{
+
+    return s.start(ctx, domain.PendingSignup{
+        Kind:         domain.PendingSignupKindCredentials,
         Name:         dto.Name,
-        Email:        normalizeEmail(dto.Email),
+        Email:        email,
         PasswordHash: string(hash),
-        Role:         domain.RoleUser,
-    }
-    created, err := s.repo.Create(ctx, user)
-    if err != nil {
-        return nil, err
-    }
-
-    if err := s.emailVerification.SendVerificationEmail(ctx, created); err != nil {
-        slog.ErrorContext(ctx, "verification email failed", "error", err, "user_uuid", created.UUID)
-    }
-
-    return created, nil
+    })
 }
 ```
 
@@ -320,10 +316,9 @@ func NewUsersPostgresRepository(db postgres.DBTX) domain.UsersRepository {
 
 func (r *UsersPostgresRepository) Create(ctx context.Context, user domain.User) (*domain.User, error) {
     params := postgres.CreateUserParams{
-        Name:          user.Name,
-        Email:         user.Email,
-        PasswordHash:  pgtype.Text{String: user.PasswordHash, Valid: true},
-        EmailVerified: user.EmailVerified,
+        Name:         user.Name,
+        Email:        user.Email,
+        PasswordHash: pgtype.Text{String: user.PasswordHash, Valid: true},
     }
 
     createdUser, err := r.q.CreateUser(ctx, params)
@@ -341,14 +336,13 @@ func (r *UsersPostgresRepository) Create(ctx context.Context, user domain.User) 
 func toDomainUser(user postgres.User) domain.User {
     var uuidBytes = user.Uuid.Bytes
     return domain.User{
-        UUID:          uuid.UUID(uuidBytes).String(),
-        Name:          user.Name,
-        Email:         user.Email,
-        Role:          domain.UserRole(user.Role),
-        EmailVerified: user.EmailVerified,
-        PasswordHash:  user.PasswordHash.String,
-        CreatedAt:     user.CreatedAt.Time.Unix(),
-        UpdatedAt:     user.UpdatedAt.Time.Unix(),
+        UUID:         uuid.UUID(uuidBytes).String(),
+        Name:         user.Name,
+        Email:        user.Email,
+        Role:         domain.UserRole(user.Role),
+        PasswordHash: user.PasswordHash.String,
+        CreatedAt:    user.CreatedAt.Time.Unix(),
+        UpdatedAt:    user.UpdatedAt.Time.Unix(),
     }
 }
 ```
@@ -379,25 +373,25 @@ func toDomainUser(user postgres.User) domain.User {
 ```go
 func TestUsersController_CreateUser(t *testing.T) {
     dto := domain.CreateUserDTO{Name: "John Doe", Email: "john.doe@example.com", Password: "password123"}
-    user := &domain.User{UUID: "test-uuid", Name: dto.Name, Email: dto.Email, Role: domain.RoleUser}
 
     t.Run("success", func(t *testing.T) {
-        controller, serviceMock, auditMock, _ := newTestUsersController()
-        serviceMock.On("Create", dto).Return(user, nil)
+        controller, pendingMock, auditMock := newTestSignupUsersController(true)
+        pendingMock.On("StartCredentials", dto).Return("pending-uuid", nil).Once()
         auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
-            return d.Action == domain.AuditActionUserCreate && d.Status == domain.AuditStatusSuccess
-        })).Return(nil)
+            return d.Action == domain.AuditActionSignupRequest && d.Status == domain.AuditStatusSuccess
+        })).Return(nil).Once()
 
-        w, req := getControllerArgs("POST", "/users/", dto)
+        w, req := getControllerArgs("POST", "/users", dto)
         controller.CreateUser(w, req)
 
-        var response api.ResponseBody[domain.User]
+        var response api.ResponseBody[any]
         err := json.Unmarshal(w.Body.Bytes(), &response)
 
         assert.Nil(t, err)
-        assert.Equal(t, http.StatusCreated, w.Code)
-        assert.Equal(t, *user, response.Data)
-        serviceMock.AssertCalled(t, "Create", dto)
+        assert.Equal(t, http.StatusAccepted, w.Code)
+        assert.Equal(t, "user.create.pending", response.Message)
+        assert.Equal(t, "pending-uuid", findCookie(w.Result().Cookies(), "__Host-pending_signup").Value)
+        pendingMock.AssertExpectations(t)
     })
 }
 ```
@@ -413,28 +407,27 @@ func TestUsersController_CreateUser(t *testing.T) {
 **Example**:
 
 ```go
-func TestUsersService_Create(t *testing.T) {
-    dto := domain.CreateUserDTO{Name: "Test User", Email: "Test@Example.com", Password: "password123"}
-    created := &domain.User{UUID: "generated-uuid", Name: "Test User", Email: "test@example.com", Role: domain.RoleUser}
+func TestPendingSignupService_StartCredentials(t *testing.T) {
+    dto := domain.CreateUserDTO{Name: "New User", Email: "  New@Example.com ", Password: "password123"}
 
     t.Run("success", func(t *testing.T) {
-        repo := new(mocks.UsersRepositoryMock)
-        sender := new(mocks.EmailVerificationServiceMock)
-        service := services.NewUserService(repo, sender)
-
-        repo.On("Create", mock.AnythingOfType("domain.User")).Return(created, nil).Once().Run(func(args mock.Arguments) {
-            userArg := args.Get(0).(domain.User)
-            assert.Equal(t, "test@example.com", userArg.Email)
-            assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(userArg.PasswordHash), []byte(dto.Password)))
+        service, m := newTestPendingSignupService()
+        var stored domain.PendingSignup
+        var code string
+        expectEmailAvailable(m, "new@example.com")
+        expectReserveSend(m, "new@example.com", nil)
+        expectCreatePending(m, &stored)
+        m.emails.On("SendSignupCode", "new@example.com", mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+            code = args.String(1)
         })
-        sender.On("SendVerificationEmail", mock.Anything, created).Return(nil).Once()
 
-        user, err := service.Create(context.Background(), dto)
+        pendingUUID, err := service.StartCredentials(context.Background(), dto)
 
-        assert.NoError(t, err)
-        assert.Equal(t, created, user)
-        repo.AssertExpectations(t)
-        sender.AssertExpectations(t)
+        require.NoError(t, err)
+        assert.Equal(t, pendingUUID, stored.UUID)
+        assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte(dto.Password)))
+        assert.Equal(t, signupHash(pendingUUID, code), stored.CodeHash)
+        m.emails.AssertExpectations(t)
     })
 }
 ```
@@ -473,7 +466,7 @@ func TestMain(m *testing.M) {
 }
 
 func truncateTables(ctx context.Context, db *pgxpool.Pool) {
-    tables := []string{"audit_logs", "user_sessions", "user_oauth_providers", "users"}
+    tables := []string{"audit_logs", "email_send_limits", "pending_signups", "step_up_challenges", "user_sessions", "user_oauth_providers", "users"}
     for _, table := range tables {
         if _, err := db.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table)); err != nil {
             log.Fatalf("Failed to truncate table %s: %v", table, err)
@@ -484,8 +477,8 @@ func truncateTables(ctx context.Context, db *pgxpool.Pool) {
 
 #### E2E Tests
 
-- **Scope**: `internal/e2e` (`package e2e_test`, test files only) serves `factories.NewHandler` with `httptest.NewServer` over the real ephemeral PostgreSQL, with no mocks. It covers these flows: sign-up and login (including email verification), session lifecycle (rotation, per-device logout), concurrent refresh, authorization (user vs admin), step-up, the email change flow (confirm, replay, lock, undo link) and logout-others. Validation, 404/409 errors and rate limiting stay in unit tests. See ADR-006.
-- **Email Capture**: `factories.NewDependencies` takes optional `factories.Option`s; `factories.WithEmailProvider` replaces the provider chosen from the config (production passes none). `mailbox_test.go` has `capturingEmailProvider` (concurrency-safe, keeps the last email per recipient) with `stepUpCode` and `linkToken` helpers that read the 6-digit code or the link `token` from the email text; `TestMain` sets the `EMAIL_*` URLs and passes the mailbox. `client.stepUp(email)` performs a real step-up with it.
+- **Scope**: `internal/e2e` (`package e2e_test`, test files only) serves `factories.NewHandler` with `httptest.NewServer` over the real ephemeral PostgreSQL, with no mocks. It covers these flows: sign-up by code (cookie binding, replay) and login, session lifecycle (rotation, per-device logout), concurrent refresh, authorization (user vs admin), step-up, the email change flow (confirm, replay, lock, undo link) and logout-others. Validation, 404/409 errors and rate limiting stay in unit tests. See ADR-006.
+- **Email Capture**: `factories.NewDependencies` takes optional `factories.Option`s; `factories.WithEmailProvider` replaces the provider chosen from the config (production passes none). `mailbox_test.go` has `capturingEmailProvider` (concurrency-safe, keeps the last email per recipient) with `otpCode` and `linkToken` helpers that read the 6-digit code (sign-up and step-up) or the link `token` from the email text; `TestMain` sets the `EMAIL_*` URLs and passes the mailbox. `client.stepUp(email)` performs a real step-up with it.
 - **TestMain Setup**: `e2e_test.go` calls `NewTestPool`, sets the env (`API_ENV=development` so cookies are not `Secure` over http; `JWT_SECRET`; high `RATE_LIMIT_*` because every request shares the `127.0.0.1` bucket; an empty `RESEND_API_KEY` so a key exported from `.env` by the Makefile never sends real email), runs `config.Load`, the audit partitions `RunMaintenance`, `NewDependencies` and `NewHandler`, and exposes `serverURL`. Setup lives in `run(m) int`, which defers the container cleanup and server close and returns 1 on setup errors.
 - **Fixtures**: `helpers_test.go` has `truncateTables(t, ctx, pool)` (call it first in each test), `seedUser`/`seedAdmin` (create through the real users repository with a bcrypt hash; extend with new `seedX` helpers, each test seeds only what it uses) and `newClient`, one cookie jar per device, with `do` and `login`.
 - **Naming**: `Test<Flow>` (e.g. `TestSessionLifecycle`) is the exception to `Test<Type>_<Method>`, with subtests per step. Each test calls `t.Skip` when `testing.Short()`.

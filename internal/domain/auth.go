@@ -12,7 +12,6 @@ const (
 	TokenAudienceRefresh           TokenAudience = "refresh_token"
 	TokenAudienceExchange          TokenAudience = "exchange_token"
 	TokenAudienceOAuthState        TokenAudience = "oauth_state_token"
-	TokenAudienceEmailVerification TokenAudience = "email_verification_token"
 	TokenAudienceEmailChange       TokenAudience = "email_change_token"
 	TokenAudienceEmailChangeRevert TokenAudience = "email_change_revert_token"
 )
@@ -22,7 +21,6 @@ const (
 	TokenExpirationRefresh           = time.Hour * 24 * 7 // 7 days
 	TokenExpirationExchange          = time.Minute        // 1 minute
 	TokenExpirationOAuthState        = time.Minute * 5    // 5 minutes
-	TokenExpirationEmailVerification = time.Hour * 24     // 24 hours
 	TokenExpirationEmailChange       = time.Hour          // 1 hour
 	TokenExpirationEmailChangeRevert = time.Hour * 72     // 72 hours
 )
@@ -69,6 +67,10 @@ type CredentialsLoginDTO struct {
 	Password string `json:"password" validate:"required"`
 }
 
+type CodeDTO struct {
+	Code string `json:"code" validate:"required,len=6,numeric"`
+}
+
 type AuthTokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -100,14 +102,6 @@ type GenerateTokenDTO struct {
 	SessionID string        `json:"session_id,omitempty"`
 	Role      UserRole      `json:"role,omitempty"`
 	Payload   any           `json:"payload,omitempty"`
-}
-
-type VerifyEmailDTO struct {
-	Token string `json:"token" validate:"required"`
-}
-
-type ResendVerificationDTO struct {
-	Email string `json:"email" validate:"required,email"`
 }
 
 type AddUserOAuthProviderDTO struct {
@@ -196,6 +190,7 @@ type AuthService interface {
 	GetOAuthProviderUserInfo(ctx context.Context, provider OAuthProviderName, code string, codeVerifier string) (*OAuthProviderUserInfo, error)
 	VerifyOAuthState(context.Context, VerifyOAuthStateDTO) (string, error)
 	OAuthLogin(context.Context, OAuthLoginDTO) (*OAuthLoginResult, error)
+	CompleteSignup(ctx context.Context, pendingUUID string, code string) (*SignupResult, error)
 }
 
 type AuthRepository interface {

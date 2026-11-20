@@ -11,7 +11,6 @@ CREATE TABLE users (
     email text UNIQUE NOT NULL,
     password_hash text,
     role user_role NOT NULL DEFAULT 'user',
-    email_verified boolean NOT NULL DEFAULT false,
     email_version int NOT NULL DEFAULT 0,
     email_changed_at timestamptz,
     step_up_failures int NOT NULL DEFAULT 0,
@@ -87,6 +86,41 @@ CREATE TABLE step_up_challenges (
 CREATE INDEX idx_step_up_challenges_user ON step_up_challenges (user_uuid);
 
 CREATE INDEX idx_step_up_challenges_expires_at ON step_up_challenges (expires_at);
+
+CREATE TYPE pending_signup_kind AS ENUM (
+    'credentials',
+    'oauth'
+);
+
+CREATE TABLE pending_signups (
+    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    kind pending_signup_kind NOT NULL,
+    name text NOT NULL,
+    email text NOT NULL,
+    password_hash text,
+    provider oauth_provider,
+    provider_user_id text,
+    code_hash text NOT NULL,
+    attempts int NOT NULL DEFAULT 0,
+    code_expires_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    CONSTRAINT pending_signups_kind_fields CHECK (
+        (kind = 'credentials' AND password_hash IS NOT NULL AND provider IS NULL AND provider_user_id IS NULL)
+        OR (kind = 'oauth' AND password_hash IS NULL AND provider IS NOT NULL AND provider_user_id IS NOT NULL)
+    )
+);
+
+CREATE INDEX idx_pending_signups_expires_at ON pending_signups (expires_at);
+
+CREATE TABLE email_send_limits (
+    email text NOT NULL PRIMARY KEY,
+    window_start timestamptz DEFAULT now() NOT NULL,
+    sends int NOT NULL DEFAULT 0,
+    last_sent_at timestamptz,
+    failures int NOT NULL DEFAULT 0,
+    failures_window_start timestamptz
+);
 
 CREATE TABLE audit_logs (
     uuid uuid DEFAULT uuidv7() NOT NULL,

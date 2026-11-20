@@ -14,6 +14,7 @@ Status, Context, Decision and Consequences.
 | [ADR-006](ADR-006-e2e-testing.md)               | End-to-End Testing Approach           | Accepted |
 | [ADR-007](ADR-007-email-change.md)              | Verified Email Change                 | Superseded by ADR-008 |
 | [ADR-008](ADR-008-step-up-and-email-change-hardening.md) | Step-Up and Email Change Hardening | Accepted |
+| [ADR-009](ADR-009-otp-email-proof-and-verified-accounts.md) | One-Time Code Email Proof and Always-Verified Accounts | Accepted |
 
 ## Writing a new ADR
 

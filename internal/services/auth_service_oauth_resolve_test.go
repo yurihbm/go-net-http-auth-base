@@ -48,7 +48,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
 		registry.On("Get", provider).Return(providerMock, nil)
 		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).Return(userInfo, nil)
-		service := services.NewAuthService(usersService, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
 		return fixture{service, usersService, authRepo, transactor}
 	}
 
@@ -78,25 +78,10 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		f.authRepo.AssertNotCalled(t, "CreateUserOAuthProvider", mock.Anything)
 	})
 
-	t.Run("Case 2 refuses linking to an unverified local account", func(t *testing.T) {
+	t.Run("Case 2 links within a transaction when the provider email is verified", func(t *testing.T) {
 		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: true})
 		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
-		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email, EmailVerified: false}, nil).Once()
-
-		result, err := login(t, f)
-
-		var validationErr *domain.ValidationError
-		require.True(t, errors.As(err, &validationErr))
-		assert.Equal(t, "auth.providerCallback.localEmailNotVerified", err.Error())
-		assert.Nil(t, result)
-		f.authRepo.AssertNotCalled(t, "CreateUserOAuthProvider", mock.Anything)
-		f.usersService.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
-	})
-
-	t.Run("Case 2 links within a transaction when both emails are verified", func(t *testing.T) {
-		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: true})
-		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
-		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email, EmailVerified: true}, nil).Once()
+		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
 		f.authRepo.On("CreateUserOAuthProvider", domain.UserOAuthProvider{
 			UserUUID: userUUID, Provider: provider, ProviderUserID: providerUserID, ProviderEmail: email,
 		}).Return(&domain.UserOAuthProvider{}, nil).Once()
@@ -113,7 +98,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: "  User@Example.COM ", EmailVerified: true})
 		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
 		f.usersService.On("GetByEmail", email).Return(nil, userNotFound).Once()
-		f.usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: "User", Email: email, EmailVerified: true}).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
+		f.usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: "User", Email: email}).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
 		f.authRepo.On("CreateUserOAuthProvider", domain.UserOAuthProvider{
 			UserUUID: userUUID, Provider: provider, ProviderUserID: providerUserID, ProviderEmail: email,
 		}).Return(&domain.UserOAuthProvider{}, nil).Once()
@@ -158,7 +143,7 @@ func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
 	t.Run("re-resolves to the existing link when a replayed callback linked it first", func(t *testing.T) {
 		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: true})
 		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
-		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email, EmailVerified: true}, nil).Once()
+		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
 		f.authRepo.On("CreateUserOAuthProvider", mock.Anything).Return(nil, domain.NewConflictError("auth.oauthProvider.conflict")).Once()
 		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(&domain.UserOAuthProvider{UserUUID: userUUID}, nil).Once()
 		f.usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()

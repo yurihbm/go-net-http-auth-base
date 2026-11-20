@@ -25,13 +25,7 @@ type StepUpChallenge struct {
 	UserUUID    string
 	SessionUUID string
 	CodeHash    string
-	Attempts    int
 	ExpiresAt   int64
-	CreatedAt   int64
-}
-
-type StepUpVerifyDTO struct {
-	Code string `json:"code" validate:"required,len=6,numeric"`
 }
 
 type StepUpRepository interface {

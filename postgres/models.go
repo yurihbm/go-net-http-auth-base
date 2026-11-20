@@ -54,6 +54,48 @@ func (ns NullOauthProvider) Value() (driver.Value, error) {
 	return string(ns.OauthProvider), nil
 }
 
+type PendingSignupKind string
+
+const (
+	PendingSignupKindCredentials PendingSignupKind = "credentials"
+	PendingSignupKindOauth       PendingSignupKind = "oauth"
+)
+
+func (e *PendingSignupKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PendingSignupKind(s)
+	case string:
+		*e = PendingSignupKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PendingSignupKind: %T", src)
+	}
+	return nil
+}
+
+type NullPendingSignupKind struct {
+	PendingSignupKind PendingSignupKind
+	Valid             bool // Valid is true if PendingSignupKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPendingSignupKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.PendingSignupKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PendingSignupKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPendingSignupKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PendingSignupKind), nil
+}
+
 type UserRole string
 
 const (
@@ -126,6 +168,30 @@ type AuditLogsDefault struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type EmailSendLimit struct {
+	Email               string
+	WindowStart         pgtype.Timestamptz
+	Sends               int32
+	LastSentAt          pgtype.Timestamptz
+	Failures            int32
+	FailuresWindowStart pgtype.Timestamptz
+}
+
+type PendingSignup struct {
+	Uuid           pgtype.UUID
+	Kind           PendingSignupKind
+	Name           string
+	Email          string
+	PasswordHash   pgtype.Text
+	Provider       NullOauthProvider
+	ProviderUserID pgtype.Text
+	CodeHash       string
+	Attempts       int32
+	CodeExpiresAt  pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+}
+
 type StepUpChallenge struct {
 	Uuid        pgtype.UUID
 	UserUuid    pgtype.UUID
@@ -142,7 +208,6 @@ type User struct {
 	Email                     string
 	PasswordHash              pgtype.Text
 	Role                      UserRole
-	EmailVerified             bool
 	EmailVersion              int32
 	EmailChangedAt            pgtype.Timestamptz
 	StepUpFailures            int32

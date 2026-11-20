@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
@@ -22,20 +23,37 @@ func TestSignupAndLogin(t *testing.T) {
 	c := newClient(t)
 	dto := domain.CreateUserDTO{Name: "Jane Doe", Email: "jane.doe@example.com", Password: "password123"}
 
-	created := c.do(http.MethodPost, "/users", dto)
-	require.Equal(t, http.StatusCreated, created.Status)
-	assert.Equal(t, "user.create.success", created.Body.Message)
+	pending := c.do(http.MethodPost, "/users", dto)
+	require.Equal(t, http.StatusAccepted, pending.Status)
+	assert.Equal(t, "user.create.pending", pending.Body.Message)
+	pendingCookie := c.cookie(api.OAuthFlowCookieName(api.PendingSignupCookieName, false))
+	require.NotNil(t, pendingCookie)
+	code := mailbox.otpCode(t, dto.Email)
+
+	t.Run("no account exists before the code is verified", func(t *testing.T) {
+		resp := newClient(t).login(dto.Email, dto.Password)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.Status)
+	})
+
+	t.Run("another browser without the cookie cannot verify the code", func(t *testing.T) {
+		resp := newClient(t).do(http.MethodPost, "/auth/signup/verify", domain.CodeDTO{Code: code})
+
+		assert.Equal(t, http.StatusUnauthorized, resp.Status)
+		assert.Equal(t, "auth.signup.noPending", resp.Body.Error)
+	})
+
 	var user domain.User
-	require.NoError(t, json.Unmarshal(created.Body.Data, &user))
-	assert.Equal(t, dto.Email, user.Email)
+	t.Run("verifying the code creates the account and signs in", func(t *testing.T) {
+		resp := c.do(http.MethodPost, "/auth/signup/verify", domain.CodeDTO{Code: code})
 
-	t.Run("login sets both auth cookies", func(t *testing.T) {
-		resp := c.login(dto.Email, dto.Password)
-
-		assert.Equal(t, http.StatusOK, resp.Status)
-		assert.Equal(t, "auth.login.success", resp.Body.Message)
+		require.Equal(t, http.StatusCreated, resp.Status)
+		assert.Equal(t, "auth.signup.success", resp.Body.Message)
+		require.NoError(t, json.Unmarshal(resp.Body.Data, &user))
+		assert.Equal(t, dto.Email, user.Email)
 		assert.NotNil(t, c.cookie(api.AccessTokenCookieName))
 		assert.NotNil(t, c.cookie(api.RefreshTokenCookieName))
+		assert.Nil(t, c.cookie(api.OAuthFlowCookieName(api.PendingSignupCookieName, false)))
 	})
 
 	t.Run("me returns the signed up user", func(t *testing.T) {
@@ -47,16 +65,26 @@ func TestSignupAndLogin(t *testing.T) {
 		assert.Equal(t, user, me)
 	})
 
-	t.Run("verification link verifies the email", func(t *testing.T) {
-		token := mailbox.linkToken(t, dto.Email)
+	t.Run("replaying the code is rejected", func(t *testing.T) {
+		replay := newClient(t)
+		base, err := url.Parse(serverURL)
+		require.NoError(t, err)
+		replay.jar.SetCookies(base, []*http.Cookie{{Name: pendingCookie.Name, Value: pendingCookie.Value, Path: "/"}})
 
-		resp := newClient(t).do(http.MethodPost, "/users/verify-email", domain.VerifyEmailDTO{Token: token})
-		require.Equal(t, http.StatusOK, resp.Status)
+		resp := replay.do(http.MethodPost, "/auth/signup/verify", domain.CodeDTO{Code: code})
 
-		me := c.do(http.MethodGet, "/users/me", nil)
-		var verified domain.User
-		require.NoError(t, json.Unmarshal(me.Body.Data, &verified))
-		assert.True(t, verified.EmailVerified)
+		assert.Equal(t, http.StatusUnauthorized, resp.Status)
+		assert.Equal(t, "auth.signup.noPending", resp.Body.Error)
+	})
+
+	t.Run("login sets both auth cookies", func(t *testing.T) {
+		other := newClient(t)
+		resp := other.login(dto.Email, dto.Password)
+
+		assert.Equal(t, http.StatusOK, resp.Status)
+		assert.Equal(t, "auth.login.success", resp.Body.Message)
+		assert.NotNil(t, other.cookie(api.AccessTokenCookieName))
+		assert.NotNil(t, other.cookie(api.RefreshTokenCookieName))
 	})
 
 	t.Run("delete then login fails", func(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"net/url"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 )
@@ -12,48 +13,17 @@ import (
 type emailVerificationService struct {
 	tokens               domain.TokenService
 	emailProvider        domain.EmailProvider
-	verificationURL      string
 	emailChangeURL       string
 	emailChangeRevertURL string
 }
 
-func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, verificationURL string, emailChangeURL string, emailChangeRevertURL string) domain.EmailVerificationService {
+func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, emailChangeURL string, emailChangeRevertURL string) domain.EmailVerificationService {
 	return &emailVerificationService{
 		tokens:               tokens,
 		emailProvider:        emailProvider,
-		verificationURL:      verificationURL,
 		emailChangeURL:       emailChangeURL,
 		emailChangeRevertURL: emailChangeRevertURL,
 	}
-}
-
-func (s *emailVerificationService) SendVerificationEmail(ctx context.Context, user *domain.User) error {
-	link, err := s.tokenLink(ctx, s.verificationURL, domain.GenerateTokenDTO{
-		Subject:  user.UUID,
-		Audience: domain.TokenAudienceEmailVerification,
-	})
-	if err != nil {
-		return err
-	}
-
-	return s.emailProvider.Send(ctx, domain.EmailMessage{
-		To:      user.Email,
-		Subject: "Verify your email address",
-		Text:    fmt.Sprintf("Verify your email address by opening this link: %s", link),
-		HTML:    fmt.Sprintf(`<p>Verify your email address by clicking <a href="%s">this link</a>.</p>`, html.EscapeString(link)),
-	})
-}
-
-func (s *emailVerificationService) VerifyVerificationToken(ctx context.Context, token string) (string, error) {
-	tokenData, err := s.tokens.VerifyToken(ctx, domain.VerifyTokenDTO{
-		Token:    token,
-		Audience: domain.TokenAudienceEmailVerification,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return tokenData.Subject, nil
 }
 
 func (s *emailVerificationService) SendEmailChangeEmail(ctx context.Context, user *domain.User, newEmail string) error {
@@ -154,12 +124,28 @@ func (s *emailVerificationService) VerifyEmailChangeRevertToken(ctx context.Cont
 }
 
 func (s *emailVerificationService) SendStepUpCode(ctx context.Context, email string, code string) error {
-	return s.emailProvider.Send(ctx, domain.EmailMessage{
-		To:      email,
-		Subject: "Your verification code",
-		Text:    fmt.Sprintf("Your verification code is %s. It expires in %d minutes. If you did not request it, ignore this email.", code, int(domain.StepUpCodeTTL.Minutes())),
-		HTML:    fmt.Sprintf("<p>Your verification code is <strong>%s</strong>. It expires in %d minutes. If you did not request it, ignore this email.</p>", html.EscapeString(code), int(domain.StepUpCodeTTL.Minutes())),
-	})
+	return s.emailProvider.Send(ctx, codeEmail(email, "Your verification code", "verification code", code,
+		"", domain.StepUpCodeTTL,
+		"If you did not request it, ignore this email."))
+}
+
+func (s *emailVerificationService) SendSignupCode(ctx context.Context, email string, code string) error {
+	return s.emailProvider.Send(ctx, codeEmail(email, "Your sign-up code", "sign-up code", code,
+		"Enter it in the browser where you started creating your account.", domain.SignupCodeTTL,
+		"Never share this code with anyone. If you did not try to create an account, ignore this email."))
+}
+
+func codeEmail(to string, subject string, label string, code string, instructions string, ttl time.Duration, warning string) domain.EmailMessage {
+	body := fmt.Sprintf("It expires in %d minutes.", int(ttl.Minutes()))
+	if instructions != "" {
+		body = instructions + " " + body
+	}
+	return domain.EmailMessage{
+		To:      to,
+		Subject: subject,
+		Text:    fmt.Sprintf("Your %s is %s. %s %s", label, code, body, warning),
+		HTML:    fmt.Sprintf("<p>Your %s is <strong>%s</strong>. %s</p><p>%s</p>", label, html.EscapeString(code), html.EscapeString(body), html.EscapeString(warning)),
+	}
 }
 
 func (s *emailVerificationService) tokenLink(ctx context.Context, baseURL string, dto domain.GenerateTokenDTO) (string, error) {

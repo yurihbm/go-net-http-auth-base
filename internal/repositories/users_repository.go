@@ -58,10 +58,9 @@ func (r *UsersPostgresRepository) FindByEmail(ctx context.Context, email string)
 
 func (r *UsersPostgresRepository) Create(ctx context.Context, user domain.User) (*domain.User, error) {
 	params := postgres.CreateUserParams{
-		Name:          user.Name,
-		Email:         user.Email,
-		PasswordHash:  pgtype.Text{String: user.PasswordHash, Valid: true},
-		EmailVerified: user.EmailVerified,
+		Name:         user.Name,
+		Email:        user.Email,
+		PasswordHash: pgtype.Text{String: user.PasswordHash, Valid: true},
 	}
 
 	createdUser, err := r.q.CreateUser(ctx, params)
@@ -138,7 +137,7 @@ func (r *UsersPostgresRepository) ReserveStepUpGuess(ctx context.Context, uuidSt
 
 	_, err = r.q.ReserveUserStepUpGuess(ctx, postgres.ReserveUserStepUpGuessParams{
 		Uuid:          *uuid,
-		FailureWindow: pgtype.Interval{Microseconds: window.Microseconds(), Valid: true},
+		FailureWindow: toInterval(window),
 		MaxFailures:   int32(domain.StepUpMaxUserFailures),
 	})
 	if err != nil {
@@ -157,18 +156,6 @@ func (r *UsersPostgresRepository) RefundStepUpGuess(ctx context.Context, uuidStr
 	}
 
 	if err := r.q.RefundUserStepUpGuess(ctx, *uuid); err != nil {
-		return domain.NewInternalServerError("users.internalServerError", err)
-	}
-	return nil
-}
-
-func (r *UsersPostgresRepository) MarkEmailVerified(ctx context.Context, uuidStr string) error {
-	uuid, err := parseUsersUUID(uuidStr)
-	if err != nil {
-		return err
-	}
-
-	if err = r.q.MarkUserEmailVerified(ctx, *uuid); err != nil {
 		return domain.NewInternalServerError("users.internalServerError", err)
 	}
 	return nil
@@ -194,7 +181,6 @@ func toDomainUser(user postgres.User) domain.User {
 		Name:                      user.Name,
 		Email:                     user.Email,
 		Role:                      domain.UserRole(user.Role),
-		EmailVerified:             user.EmailVerified,
 		EmailVersion:              int(user.EmailVersion),
 		EmailChangedAt:            unixOrZero(user.EmailChangedAt),
 		StepUpFailures:            int(user.StepUpFailures),

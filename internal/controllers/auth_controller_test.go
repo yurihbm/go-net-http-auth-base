@@ -39,7 +39,7 @@ func newTestAuthControllerWithMiddleware(isSecure bool, allowList []string) (*co
 	auditMock := new(mocks.AuditServiceMock)
 	authMiddleware := new(mocks.AuthMiddlewareMock)
 
-	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), auditMock, authMiddleware, isSecure, allowList)
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), auditMock, authMiddleware, isSecure, allowList)
 	return controller, authServiceMock, auditMock, authMiddleware
 }
 
@@ -48,8 +48,22 @@ func newTestAuthControllerWithStepUp() (*controllers.AuthController, *mocks.Auth
 	stepUpMock := new(mocks.StepUpServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, stepUpMock, auditMock, new(mocks.AuthMiddlewareMock), true, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(authServiceMock, stepUpMock, new(mocks.PendingSignupServiceMock), auditMock, new(mocks.AuthMiddlewareMock), true, []string{allowedRedirectURI})
 	return controller, authServiceMock, stepUpMock, auditMock
+}
+
+func newTestAuthControllerWithSignup(isSecure bool) (*controllers.AuthController, *mocks.AuthServiceMock, *mocks.PendingSignupServiceMock, *mocks.AuditServiceMock) {
+	authServiceMock := new(mocks.AuthServiceMock)
+	pendingMock := new(mocks.PendingSignupServiceMock)
+	auditMock := new(mocks.AuditServiceMock)
+
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), pendingMock, auditMock, new(mocks.AuthMiddlewareMock), isSecure, []string{allowedRedirectURI})
+	return controller, authServiceMock, pendingMock, auditMock
+}
+
+func withPendingSignupCookie(req *http.Request, isSecure bool, value string) *http.Request {
+	req.AddCookie(&http.Cookie{Name: api.OAuthFlowCookieName(api.PendingSignupCookieName, isSecure), Value: value})
+	return req
 }
 
 func withSession(req *http.Request, userUUID string, sessionUUID string) *http.Request {
@@ -104,6 +118,8 @@ func TestAuthController_RegisterRoutes(t *testing.T) {
 			{"POST", "/auth/logout-others"},
 			{"POST", "/auth/step-up"},
 			{"POST", "/auth/step-up/verify"},
+			{"POST", "/auth/signup/verify"},
+			{"POST", "/auth/signup/resend"},
 			{"GET", "/auth/google/login"},
 			{"GET", "/auth/google/callback"},
 		}
@@ -480,7 +496,7 @@ func TestAuthController_VerifyStepUp(t *testing.T) {
 		sessionUUID = "session-uuid"
 		until       = int64(1700000000)
 	)
-	dto := domain.StepUpVerifyDTO{Code: "123456"}
+	dto := domain.CodeDTO{Code: "123456"}
 
 	t.Run("success", func(t *testing.T) {
 		controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
@@ -503,7 +519,7 @@ func TestAuthController_VerifyStepUp(t *testing.T) {
 	t.Run("error - validation", func(t *testing.T) {
 		controller, _, stepUpMock, _ := newTestAuthControllerWithStepUp()
 
-		w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: "12"})
+		w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.CodeDTO{Code: "12"})
 		controller.VerifyStepUp(w, withSession(req, userUUID, sessionUUID))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -531,7 +547,7 @@ func TestAuthController_VerifyStepUp_SessionRevoked(t *testing.T) {
 	stepUpMock.On("VerifyCode", "user-uuid", "session-uuid", "123456").
 		Return(int64(0), domain.ErrStepUpSessionRevoked).Once()
 
-	w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.StepUpVerifyDTO{Code: "123456"})
+	w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.CodeDTO{Code: "123456"})
 	controller.VerifyStepUp(w, withSession(req, "user-uuid", "session-uuid"))
 
 	var response api.ResponseBody[any]
@@ -542,6 +558,176 @@ func TestAuthController_VerifyStepUp_SessionRevoked(t *testing.T) {
 	for _, cookie := range w.Result().Cookies() {
 		assert.Empty(t, cookie.Value)
 		assert.Negative(t, cookie.MaxAge)
+	}
+}
+
+func TestAuthController_VerifySignup(t *testing.T) {
+	dto := domain.CodeDTO{Code: "123456"}
+	user := &domain.User{UUID: "user-uuid", Name: "New User", Email: "new@example.com", Role: domain.RoleUser}
+	result := &domain.SignupResult{User: user, Tokens: domain.AuthTokens{AccessToken: "access", RefreshToken: "refresh"}}
+
+	for _, mode := range []struct {
+		name     string
+		isSecure bool
+	}{{"secure", true}, {"development", false}} {
+		t.Run("success sets the auth cookies and clears the pending cookie - "+mode.name, func(t *testing.T) {
+			controller, authMock, _, auditMock := newTestAuthControllerWithSignup(mode.isSecure)
+			authMock.On("CompleteSignup", "pending-uuid", "123456").Return(result, nil).Once()
+			auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+				return d.Action == domain.AuditActionUserCreate &&
+					d.ResourceType == domain.AuditResourceUser &&
+					d.ResourceUUID == user.UUID &&
+					d.ActorUUID != nil && *d.ActorUUID == user.UUID &&
+					d.Status == domain.AuditStatusSuccess
+			})).Return(nil).Once()
+
+			w, req := getControllerArgs("POST", "/auth/signup/verify", dto)
+			req = withPendingSignupCookie(req, mode.isSecure, "pending-uuid")
+
+			controller.VerifySignup(w, req)
+
+			var response api.ResponseBody[domain.User]
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			assert.Equal(t, http.StatusCreated, w.Code)
+			assert.Equal(t, "auth.signup.success", response.Message)
+			assert.Equal(t, *user, response.Data)
+			cookies := w.Result().Cookies()
+			access := findCookie(cookies, api.AccessTokenCookieName)
+			require.NotNil(t, access)
+			assert.Equal(t, "access", access.Value)
+			assert.Equal(t, mode.isSecure, access.Secure)
+			refresh := findCookie(cookies, api.RefreshTokenCookieName)
+			require.NotNil(t, refresh)
+			assert.Equal(t, "refresh", refresh.Value)
+			pending := findCookie(cookies, api.OAuthFlowCookieName(api.PendingSignupCookieName, mode.isSecure))
+			require.NotNil(t, pending)
+			assert.Less(t, pending.MaxAge, 0)
+			authMock.AssertExpectations(t)
+			auditMock.AssertExpectations(t)
+		})
+	}
+
+	t.Run("error - missing pending cookie", func(t *testing.T) {
+		controller, authMock, _, auditMock := newTestAuthControllerWithSignup(true)
+
+		w, req := getControllerArgs("POST", "/auth/signup/verify", dto)
+
+		controller.VerifySignup(w, req)
+
+		var response api.ResponseBody[any]
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, "auth.signup.noPending", response.Error)
+		authMock.AssertNotCalled(t, "CompleteSignup", mock.Anything, mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("error - development cookie name is ignored in secure mode", func(t *testing.T) {
+		controller, authMock, _, _ := newTestAuthControllerWithSignup(true)
+
+		w, req := getControllerArgs("POST", "/auth/signup/verify", dto)
+		req = withPendingSignupCookie(req, false, "pending-uuid")
+
+		controller.VerifySignup(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		authMock.AssertNotCalled(t, "CompleteSignup", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - invalid code format", func(t *testing.T) {
+		controller, authMock, _, _ := newTestAuthControllerWithSignup(true)
+
+		w, req := getControllerArgs("POST", "/auth/signup/verify", domain.CodeDTO{Code: "12ab"})
+		req = withPendingSignupCookie(req, true, "pending-uuid")
+
+		controller.VerifySignup(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		authMock.AssertNotCalled(t, "CompleteSignup", mock.Anything, mock.Anything)
+	})
+
+	for _, tc := range []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{"invalid code", domain.ErrSignupInvalidCode, http.StatusUnauthorized},
+		{"no pending signup", domain.ErrSignupNoPending, http.StatusUnauthorized},
+		{"email taken", domain.NewConflictError("users.email.conflict"), http.StatusConflict},
+		{"code locked", domain.ErrEmailCodeLocked, http.StatusTooManyRequests},
+	} {
+		t.Run("error - "+tc.name, func(t *testing.T) {
+			controller, authMock, _, auditMock := newTestAuthControllerWithSignup(true)
+			authMock.On("CompleteSignup", "pending-uuid", "123456").Return(nil, tc.err).Once()
+			auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+				return d.Action == domain.AuditActionUserCreate &&
+					d.Status == domain.AuditStatusFailure &&
+					d.FailureReason != nil
+			})).Return(nil).Once()
+
+			w, req := getControllerArgs("POST", "/auth/signup/verify", dto)
+			req = withPendingSignupCookie(req, true, "pending-uuid")
+
+			controller.VerifySignup(w, req)
+
+			assert.Equal(t, tc.status, w.Code)
+			assert.Nil(t, findCookie(w.Result().Cookies(), api.AccessTokenCookieName))
+			assert.Nil(t, findCookie(w.Result().Cookies(), api.OAuthFlowCookieName(api.PendingSignupCookieName, true)))
+			auditMock.AssertExpectations(t)
+		})
+	}
+}
+
+func TestAuthController_ResendSignup(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		controller, _, pendingMock, _ := newTestAuthControllerWithSignup(true)
+		pendingMock.On("Resend", "pending-uuid").Return(nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/signup/resend", nil)
+		req = withPendingSignupCookie(req, true, "pending-uuid")
+
+		controller.ResendSignup(w, req)
+
+		var response api.ResponseBody[any]
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusAccepted, w.Code)
+		assert.Equal(t, "auth.signup.codeResent", response.Message)
+		pendingMock.AssertExpectations(t)
+	})
+
+	t.Run("error - missing pending cookie", func(t *testing.T) {
+		controller, _, pendingMock, _ := newTestAuthControllerWithSignup(true)
+
+		w, req := getControllerArgs("POST", "/auth/signup/resend", nil)
+
+		controller.ResendSignup(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		pendingMock.AssertNotCalled(t, "Resend", mock.Anything)
+	})
+
+	for _, tc := range []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{"no pending signup", domain.ErrSignupNoPending, http.StatusUnauthorized},
+		{"send limit", domain.ErrEmailSendLimit, http.StatusTooManyRequests},
+	} {
+		t.Run("error - "+tc.name, func(t *testing.T) {
+			controller, _, pendingMock, _ := newTestAuthControllerWithSignup(true)
+			pendingMock.On("Resend", "pending-uuid").Return(tc.err).Once()
+
+			w, req := getControllerArgs("POST", "/auth/signup/resend", nil)
+			req = withPendingSignupCookie(req, true, "pending-uuid")
+
+			controller.ResendSignup(w, req)
+
+			var response api.ResponseBody[any]
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			assert.Equal(t, tc.status, w.Code)
+			assert.Equal(t, tc.err.Error(), response.Error)
+		})
 	}
 }
 

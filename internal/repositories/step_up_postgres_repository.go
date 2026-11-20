@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type StepUpPostgresRepository struct {
@@ -37,7 +36,7 @@ func (r *StepUpPostgresRepository) Upsert(ctx context.Context, challenge domain.
 		SessionUuid: *sessionUUID,
 		CodeHash:    challenge.CodeHash,
 		ExpiresAt:   toTimestamptz(&expiresAt),
-		Cooldown:    pgtype.Interval{Microseconds: cooldown.Microseconds(), Valid: true},
+		Cooldown:    toInterval(cooldown),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -75,7 +74,6 @@ func (r *StepUpPostgresRepository) Attempt(ctx context.Context, userUUIDStr stri
 		UserUUID:    userUUIDStr,
 		SessionUUID: sessionUUIDStr,
 		CodeHash:    row.CodeHash,
-		Attempts:    int(row.Attempts),
 	}, nil
 }
 
@@ -96,8 +94,6 @@ func toDomainStepUpChallenge(challenge postgres.StepUpChallenge) domain.StepUpCh
 		UserUUID:    uuid.UUID(challenge.UserUuid.Bytes).String(),
 		SessionUUID: uuid.UUID(challenge.SessionUuid.Bytes).String(),
 		CodeHash:    challenge.CodeHash,
-		Attempts:    int(challenge.Attempts),
 		ExpiresAt:   challenge.ExpiresAt.Time.Unix(),
-		CreatedAt:   challenge.CreatedAt.Time.Unix(),
 	}
 }

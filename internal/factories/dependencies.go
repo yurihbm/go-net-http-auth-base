@@ -19,6 +19,8 @@ type Dependencies struct {
 	AuditService  domain.AuditService
 	StepUpService domain.StepUpService
 
+	PendingSignupService domain.PendingSignupService
+
 	EmailProvider domain.EmailProvider
 
 	AuthMiddleware      middlewares.HandlerMiddleware
@@ -49,7 +51,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	if emailProvider == nil {
 		emailProvider = newEmailProvider(cfg.Email)
 	}
-	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.VerificationURL, cfg.Email.ChangeURL, cfg.Email.ChangeRevertURL)
+	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.ChangeURL, cfg.Email.ChangeRevertURL)
 
 	usersRepository := repositories.NewUsersPostgresRepository(db)
 	authRepository := repositories.NewAuthPostgresRepository(db)
@@ -72,8 +74,17 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	if err != nil {
 		return nil, err
 	}
+	pendingSignupService := services.NewPendingSignupService(
+		repositories.NewPendingSignupsPostgresRepository(db),
+		repositories.NewEmailSendLimitsPostgresRepository(db),
+		usersRepository,
+		transactor,
+		emailVerificationService,
+		[]byte(cfg.JWTSecret),
+	)
 	authService := services.NewAuthService(
 		usersService,
+		pendingSignupService,
 		authRepository,
 		sessionsRepository,
 		oauthProviderRegistry,
@@ -96,15 +107,16 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	auditService := services.NewAuditService(auditRepository)
 
 	return &Dependencies{
-		Pool:                pool,
-		UsersService:        usersService,
-		AuthService:         authService,
-		AuditService:        auditService,
-		StepUpService:       stepUpService,
-		EmailProvider:       emailProvider,
-		AuthMiddleware:      middlewares.NewAuthMiddleware(authService),
-		StepUpMiddleware:    middlewares.NewStepUpMiddleware(stepUpService),
-		AdminRoleMiddleware: middlewares.NewRoleMiddleware([]domain.UserRole{domain.RoleAdmin}),
+		Pool:                 pool,
+		UsersService:         usersService,
+		AuthService:          authService,
+		AuditService:         auditService,
+		StepUpService:        stepUpService,
+		PendingSignupService: pendingSignupService,
+		EmailProvider:        emailProvider,
+		AuthMiddleware:       middlewares.NewAuthMiddleware(authService),
+		StepUpMiddleware:     middlewares.NewStepUpMiddleware(stepUpService),
+		AdminRoleMiddleware:  middlewares.NewRoleMiddleware([]domain.UserRole{domain.RoleAdmin}),
 	}, nil
 }
 

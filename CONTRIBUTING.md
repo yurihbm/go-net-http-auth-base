@@ -25,14 +25,18 @@ This project follows a clean, layered architecture. Understanding this structure
 |                                                                           |
 |  UsersService <------------ AuthService           AuditService            |
 |       |                        |                                          |
-|       v                        v                                          |
-|  EmailVerificationService -> TokenService (JWT)                           |
+|       |                        +----> PendingSignupService               |
+|       v                        v              |                           |
+|  EmailVerificationService <-------------------+                           |
+|       |                        |                                          |
+|       +-------------------> TokenService (JWT)                            |
 +-----------|-------------------|-------------------|-----------------------+
             |                   |                   |
 +-----------v-------------------v-------------------v-----------------------+
 |                      Data Access Layer (Repositories & Providers)         |
 |                                                                           |
 |  UsersRepository  AuthRepository  SessionsRepository  AuditRepository     |
+|  PendingSignupRepository  EmailSendLimiter  StepUpRepository              |
 |  Transactor (WithinTx)            OAuthProviders      EmailProvider       |
 +-----------|---------------------------|-------------------|---------------+
             v                           v                   v

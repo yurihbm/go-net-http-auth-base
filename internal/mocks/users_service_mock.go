@@ -30,7 +30,7 @@ func (m *UsersServiceMock) GetByEmail(ctx context.Context, email string) (*domai
 	return nil, args.Error(1)
 }
 
-func (m *UsersServiceMock) Create(ctx context.Context, dto domain.CreateUserDTO) (*domain.User, error) {
+func (m *UsersServiceMock) Create(ctx context.Context, dto domain.NewUserDTO) (*domain.User, error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {
 		return args.Get(0).(*domain.User), args.Error(1)
@@ -56,16 +56,6 @@ func (m *UsersServiceMock) Update(ctx context.Context, actor domain.Actor, uuid 
 
 func (m *UsersServiceMock) Delete(ctx context.Context, actor domain.Actor, uuid string) error {
 	args := m.Called(actor, uuid)
-	return args.Error(0)
-}
-
-func (m *UsersServiceMock) VerifyEmail(ctx context.Context, token string) error {
-	args := m.Called(token)
-	return args.Error(0)
-}
-
-func (m *UsersServiceMock) ResendVerification(ctx context.Context, email string) error {
-	args := m.Called(email)
 	return args.Error(0)
 }
 
