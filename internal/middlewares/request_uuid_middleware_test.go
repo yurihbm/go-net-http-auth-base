@@ -47,8 +47,11 @@ func TestRequestUUIDMiddleware_Use(t *testing.T) {
 					t.Error("RequestUUID not set in RequestContextData")
 				}
 
-				if _, err := uuid.Parse(reqContextData.RequestUUID); err != nil {
+				parsed, err := uuid.Parse(reqContextData.RequestUUID)
+				if err != nil {
 					t.Errorf("Invalid UUID format: %v", err)
+				} else if parsed.Version() != 7 {
+					t.Errorf("Expected a UUIDv7, got version %d", parsed.Version())
 				}
 			}),
 		)

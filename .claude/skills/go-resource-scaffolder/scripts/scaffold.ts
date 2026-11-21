@@ -149,7 +149,7 @@ try {
     console.log(`     - field:        ${Resources}Service domain.${Resources}Service`);
     console.log(`     - construction: ${resources}Service := services.New${Resources}Service(repositories.New${Resources}PostgresRepository(db))`);
     console.log(`     - literal:      ${Resources}Service: ${resources}Service,`);
-    console.log(`2. Register the routes in cmd/main.go: factories.${Resources}Factory(deps).RegisterRoutes(mux)`);
+    console.log(`2. Register the routes in internal/factories/handler.go (NewHandler): ${Resources}Factory(deps).RegisterRoutes(mux)`);
     console.log(`3. Add the ${resources} table to postgres/migrations/000001_init_db.up.sql/.down.sql and "${resources}" to truncateTables in internal/repositories/repositories_test.go.`);
     console.log(`4. Write postgres/queries/${resources}.sql, run make sqlc-gen and replace the placeholders in ${resources}_repository.go (its integration tests fail until then).`);
     console.log("5. Add the fields to the domain model and DTOs (with validate tags), then run make swagger-gen.");
