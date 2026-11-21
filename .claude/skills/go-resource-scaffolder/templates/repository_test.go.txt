@@ -60,7 +60,7 @@ func Test{{Resources}}PostgresRepository_FindByUUID(t *testing.T) {
 	})
 
 	t.Run("error - not found", func(t *testing.T) {
-		found, err := repo.FindByUUID(context.Background(), uuid.New().String())
+		found, err := repo.FindByUUID(context.Background(), uuid.Must(uuid.NewV7()).String())
 
 		var notFoundErr *domain.NotFoundError
 		assert.ErrorAs(t, err, &notFoundErr)
@@ -89,7 +89,7 @@ func Test{{Resources}}PostgresRepository_Update(t *testing.T) {
 	})
 
 	t.Run("error - not found", func(t *testing.T) {
-		updated, err := repo.Update(context.Background(), domain.{{Resource}}{UUID: uuid.New().String()})
+		updated, err := repo.Update(context.Background(), domain.{{Resource}}{UUID: uuid.Must(uuid.NewV7()).String()})
 
 		var notFoundErr *domain.NotFoundError
 		assert.ErrorAs(t, err, &notFoundErr)

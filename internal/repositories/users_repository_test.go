@@ -110,7 +110,7 @@ func TestUsersPostgresRepository_FindByUUID(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		nonExistentUUID := uuid.New().String()
+		nonExistentUUID := uuid.Must(uuid.NewV7()).String()
 		user, err := repo.FindByUUID(context.Background(), nonExistentUUID)
 		require.Error(t, err)
 		assert.Nil(t, user)
