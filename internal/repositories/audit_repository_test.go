@@ -35,9 +35,9 @@ func seedAuditLog(t *testing.T, repo domain.AuditRepository, log *domain.AuditLo
 func TestAuditPostgresRepository_Create(t *testing.T) {
 	repo := setupAuditRepoTest(t)
 
-	actorUUID := uuid.New().String()
-	requestUUID := uuid.New().String()
-	resourceUUID := uuid.New().String()
+	actorUUID := uuid.Must(uuid.NewV7()).String()
+	requestUUID := uuid.Must(uuid.NewV7()).String()
+	resourceUUID := uuid.Must(uuid.NewV7()).String()
 
 	t.Run("success", func(t *testing.T) {
 		log := &domain.AuditLog{
@@ -62,8 +62,8 @@ func TestAuditPostgresRepository_Create(t *testing.T) {
 			UserAgent:    "Go-Test-Agent",
 			Action:       "SYSTEM_EVENT",
 			ResourceType: "system",
-			ResourceUUID: uuid.New().String(),
-			RequestUUID:  uuid.New().String(),
+			ResourceUUID: uuid.Must(uuid.NewV7()).String(),
+			RequestUUID:  uuid.Must(uuid.NewV7()).String(),
 			Status:       "SUCCESS",
 			// ActorUUID, Changes, FailureReason are nil/empty
 		}
@@ -76,7 +76,7 @@ func TestAuditPostgresRepository_List(t *testing.T) {
 	repo := setupAuditRepoTest(t)
 	ctx := context.Background()
 
-	actorUUID := uuid.New().String()
+	actorUUID := uuid.Must(uuid.NewV7()).String()
 	reason := "invalid credentials"
 
 	// Seed a variety of audit logs for filtering tests
@@ -86,8 +86,8 @@ func TestAuditPostgresRepository_List(t *testing.T) {
 		UserAgent:    "agent-a",
 		Action:       domain.AuditActionLogin,
 		ResourceType: domain.AuditResourceAuth,
-		ResourceUUID: uuid.New().String(),
-		RequestUUID:  uuid.New().String(),
+		ResourceUUID: uuid.Must(uuid.NewV7()).String(),
+		RequestUUID:  uuid.Must(uuid.NewV7()).String(),
 		Status:       domain.AuditStatusSuccess,
 	})
 	seedAuditLog(t, repo, &domain.AuditLog{
@@ -95,8 +95,8 @@ func TestAuditPostgresRepository_List(t *testing.T) {
 		UserAgent:     "agent-b",
 		Action:        domain.AuditActionLogin,
 		ResourceType:  domain.AuditResourceAuth,
-		ResourceUUID:  uuid.New().String(),
-		RequestUUID:   uuid.New().String(),
+		ResourceUUID:  uuid.Must(uuid.NewV7()).String(),
+		RequestUUID:   uuid.Must(uuid.NewV7()).String(),
 		Status:        domain.AuditStatusFailure,
 		FailureReason: &reason,
 	})
@@ -106,8 +106,8 @@ func TestAuditPostgresRepository_List(t *testing.T) {
 		UserAgent:    "agent-c",
 		Action:       domain.AuditActionUserCreate,
 		ResourceType: domain.AuditResourceUser,
-		ResourceUUID: uuid.New().String(),
-		RequestUUID:  uuid.New().String(),
+		ResourceUUID: uuid.Must(uuid.NewV7()).String(),
+		RequestUUID:  uuid.Must(uuid.NewV7()).String(),
 		Status:       domain.AuditStatusSuccess,
 		Changes:      map[string]any{"name": "Alice"},
 	})

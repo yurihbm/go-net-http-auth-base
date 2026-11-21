@@ -96,7 +96,7 @@ func TestAuthPostgresRepository_CreateUserOAuthProvider(t *testing.T) {
 
 	t.Run("user not found (fk violation)", func(t *testing.T) {
 		// Use a valid UUID but one that doesn't exist in the DB
-		nonExistentUserUUID := uuid.New().String()
+		nonExistentUserUUID := uuid.Must(uuid.NewV7()).String()
 		provider := domain.UserOAuthProvider{
 			UserUUID:       nonExistentUserUUID,
 			Provider:       domain.OAuthProviderGoogle,
@@ -192,7 +192,7 @@ func TestAuthPostgresRepository_ListUserOAuthProvidersByUserUUID(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		nonExistentUserUUID := uuid.New().String()
+		nonExistentUserUUID := uuid.Must(uuid.NewV7()).String()
 		providers, err := repo.ListUserOAuthProvidersByUserUUID(context.Background(), nonExistentUserUUID)
 		require.NoError(t, err)
 		assert.Empty(t, providers)
@@ -235,7 +235,7 @@ func TestAuthPostgresRepository_DeleteUserOAuthProvider(t *testing.T) {
 
 	t.Run("idempotent delete", func(t *testing.T) {
 		// Deleting a non-existent UUID should not return an error
-		err := repo.DeleteUserOAuthProvider(context.Background(), uuid.New().String())
+		err := repo.DeleteUserOAuthProvider(context.Background(), uuid.Must(uuid.NewV7()).String())
 		assert.NoError(t, err)
 	})
 
