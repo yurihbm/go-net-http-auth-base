@@ -70,47 +70,6 @@ func TestTokenService_Expiration(t *testing.T) {
 	}
 }
 
-func TestTokenService_VerifyToken_Rejects(t *testing.T) {
-	service := services.NewTokenService(tokenSecret)
-	sign := func(t *testing.T, claims jwt.MapClaims, secret string) string {
-		t.Helper()
-		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
-		require.NoError(t, err)
-		return token
-	}
-
-	cases := map[string]string{
-		"expired": sign(t, jwt.MapClaims{
-			"sub": "user-uuid",
-			"aud": domain.TokenAudienceAccess,
-			"exp": time.Now().Add(-time.Minute).Unix(),
-		}, tokenSecret),
-		"wrong audience": sign(t, jwt.MapClaims{
-			"sub": "user-uuid",
-			"aud": domain.TokenAudienceRefresh,
-			"exp": time.Now().Add(time.Minute).Unix(),
-		}, tokenSecret),
-		"bad signature": sign(t, jwt.MapClaims{
-			"sub": "user-uuid",
-			"aud": domain.TokenAudienceAccess,
-			"exp": time.Now().Add(time.Minute).Unix(),
-		}, "different-secret-key"),
-		"garbage": "not-a-token",
-	}
-
-	for name, token := range cases {
-		t.Run(name, func(t *testing.T) {
-			data, err := service.VerifyToken(context.Background(), domain.VerifyTokenDTO{
-				Token:    token,
-				Audience: domain.TokenAudienceAccess,
-			})
-
-			assert.Equal(t, services.ErrInvalidToken, err)
-			assert.Nil(t, data)
-		})
-	}
-}
-
 func TestTokenService_VerifyToken(t *testing.T) {
 	service := services.NewTokenService(tokenSecret)
 	ctx := context.Background()
@@ -145,6 +104,44 @@ func TestTokenService_VerifyToken(t *testing.T) {
 		assert.Equal(t, "session-uuid", data.SessionID)
 		assert.Equal(t, "refresh-jti", data.ID)
 	})
+
+	sign := func(t *testing.T, claims jwt.MapClaims, secret string) string {
+		t.Helper()
+		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+		require.NoError(t, err)
+		return token
+	}
+
+	cases := map[string]string{
+		"expired": sign(t, jwt.MapClaims{
+			"sub": "user-uuid",
+			"aud": domain.TokenAudienceAccess,
+			"exp": time.Now().Add(-time.Minute).Unix(),
+		}, tokenSecret),
+		"wrong audience": sign(t, jwt.MapClaims{
+			"sub": "user-uuid",
+			"aud": domain.TokenAudienceRefresh,
+			"exp": time.Now().Add(time.Minute).Unix(),
+		}, tokenSecret),
+		"bad signature": sign(t, jwt.MapClaims{
+			"sub": "user-uuid",
+			"aud": domain.TokenAudienceAccess,
+			"exp": time.Now().Add(time.Minute).Unix(),
+		}, "different-secret-key"),
+		"garbage": "not-a-token",
+	}
+
+	for name, token := range cases {
+		t.Run("error - "+name, func(t *testing.T) {
+			data, err := service.VerifyToken(ctx, domain.VerifyTokenDTO{
+				Token:    token,
+				Audience: domain.TokenAudienceAccess,
+			})
+
+			assert.Equal(t, services.ErrInvalidToken, err)
+			assert.Nil(t, data)
+		})
+	}
 
 	for _, audience := range []domain.TokenAudience{domain.TokenAudienceAccess, domain.TokenAudienceRefresh} {
 		sidCases := map[string]any{"missing": nil, "empty": "", "non-string": 123}

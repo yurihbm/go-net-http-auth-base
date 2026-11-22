@@ -539,26 +539,26 @@ func TestAuthController_VerifyStepUp(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		auditMock.AssertExpectations(t)
 	})
-}
 
-func TestAuthController_VerifyStepUp_SessionRevoked(t *testing.T) {
-	controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
-	auditMock.On("Log", mock.Anything).Return(nil)
-	stepUpMock.On("VerifyCode", "user-uuid", "session-uuid", "123456").
-		Return(int64(0), domain.ErrStepUpSessionRevoked).Once()
+	t.Run("error - session revoked", func(t *testing.T) {
+		controller, _, stepUpMock, auditMock := newTestAuthControllerWithStepUp()
+		auditMock.On("Log", mock.Anything).Return(nil)
+		stepUpMock.On("VerifyCode", userUUID, sessionUUID, dto.Code).
+			Return(int64(0), domain.ErrStepUpSessionRevoked).Once()
 
-	w, req := getControllerArgs("POST", "/auth/step-up/verify", domain.CodeDTO{Code: "123456"})
-	controller.VerifyStepUp(w, withSession(req, "user-uuid", "session-uuid"))
+		w, req := getControllerArgs("POST", "/auth/step-up/verify", dto)
+		controller.VerifyStepUp(w, withSession(req, userUUID, sessionUUID))
 
-	var response api.ResponseBody[any]
-	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-	assert.Equal(t, "auth.stepUp.sessionRevoked", response.Error)
-	assert.Len(t, w.Result().Cookies(), 2)
-	for _, cookie := range w.Result().Cookies() {
-		assert.Empty(t, cookie.Value)
-		assert.Negative(t, cookie.MaxAge)
-	}
+		var response api.ResponseBody[any]
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, "auth.stepUp.sessionRevoked", response.Error)
+		assert.Len(t, w.Result().Cookies(), 2)
+		for _, cookie := range w.Result().Cookies() {
+			assert.Empty(t, cookie.Value)
+			assert.Negative(t, cookie.MaxAge)
+		}
+	})
 }
 
 func TestAuthController_VerifySignup(t *testing.T) {
