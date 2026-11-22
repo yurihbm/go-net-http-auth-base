@@ -323,4 +323,72 @@ func TestResendEmailProvider_Send(t *testing.T) {
 		require.ErrorIs(t, err, context.Canceled)
 		assert.Equal(t, 1, requests)
 	})
+
+	t.Run("success - retries a concurrent idempotent request conflict", func(t *testing.T) {
+		var requests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			if requests == 1 {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"name":"concurrent_idempotent_requests","message":"in progress"}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		var waits []time.Duration
+
+		err := newRecordingProvider(server.URL, &waits).Send(context.Background(), msg)
+
+		require.NoError(t, err)
+		assert.Equal(t, 2, requests)
+	})
+
+	t.Run("error - does not retry another 409", func(t *testing.T) {
+		var requests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"name":"invalid_idempotent_request","message":"payload differs"}`))
+		}))
+		defer server.Close()
+		var waits []time.Duration
+
+		err := newRecordingProvider(server.URL, &waits).Send(context.Background(), msg)
+
+		require.EqualError(t, err, "resend: unexpected status 409: invalid_idempotent_request: payload differs")
+		assert.Equal(t, 1, requests)
+		assert.Empty(t, waits)
+	})
+
+	t.Run("error - stops retrying when the total budget is exhausted", func(t *testing.T) {
+		var requests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+		provider := providers.NewResendEmailProviderWithTotalTimeout("re_key", "from@example.com", server.URL, 50*time.Millisecond)
+
+		err := provider.Send(context.Background(), msg)
+
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Equal(t, 1, requests)
+	})
+
+	t.Run("success - bounds the whole send with a total deadline", func(t *testing.T) {
+		var deadline time.Time
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+		provider := providers.NewResendEmailProviderWithWait("re_key", "from@example.com", server.URL, func(ctx context.Context, d time.Duration) error {
+			deadline, _ = ctx.Deadline()
+			return ctx.Err()
+		})
+
+		_ = provider.Send(context.Background(), msg)
+
+		assert.WithinDuration(t, time.Now().Add(15*time.Second), deadline, time.Second)
+	})
 }

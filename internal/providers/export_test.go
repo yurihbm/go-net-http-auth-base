@@ -12,3 +12,9 @@ func NewResendEmailProviderWithWait(apiKey, from, baseURL string, wait func(ctx 
 	p.wait = wait
 	return p
 }
+
+func NewResendEmailProviderWithTotalTimeout(apiKey, from, baseURL string, total time.Duration) domain.EmailProvider {
+	p := NewResendEmailProvider(apiKey, from, baseURL).(*resendEmailProvider)
+	p.totalTimeout = total
+	return p
+}
