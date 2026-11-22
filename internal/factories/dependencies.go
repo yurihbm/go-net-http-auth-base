@@ -50,7 +50,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	tokenService := services.NewTokenService(cfg.JWTSecret)
 	emailProvider := o.emailProvider
 	if emailProvider == nil {
-		emailProvider = newEmailProvider(cfg.Email)
+		emailProvider = newEmailProvider(cfg.Env, cfg.Email)
 	}
 	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.ChangeRevertURL, cfg.Email.OAuthLinkRevertURL)
 
@@ -135,9 +135,9 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	}, nil
 }
 
-func newEmailProvider(cfg config.EmailConfig) domain.EmailProvider {
+func newEmailProvider(env string, cfg config.EmailConfig) domain.EmailProvider {
 	if cfg.ResendAPIKey == "" {
-		return providers.NewLogEmailProvider()
+		return providers.NewLogEmailProvider(env != "prod" && env != "production")
 	}
 	return providers.NewResendEmailProvider(cfg.ResendAPIKey, cfg.From)
 }
