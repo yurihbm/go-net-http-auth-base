@@ -454,6 +454,35 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		sessionsRepo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
 	})
 
+	for name, failAt := range map[string]domain.TokenAudience{
+		"access token generation fails":  domain.TokenAudienceAccess,
+		"refresh token generation fails": domain.TokenAudienceRefresh,
+	} {
+		t.Run("error - "+name, func(t *testing.T) {
+			usersService := new(mocks.UsersServiceMock)
+			sessionsRepo := new(mocks.SessionsRepositoryMock)
+			tokens := new(mocks.TokenServiceMock)
+			service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), tokens, testSessionMaxAge, testMaxSessions)
+			tokens.On("VerifyToken", mock.Anything).Return(&domain.VerifiedTokenData{Subject: userUUID, SessionID: sessionUUID, ID: currentJTI}, nil).Once()
+			sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(activeSession(), nil).Once()
+			sessionsRepo.On("RotateJTI", userUUID, sessionUUID, currentJTI, mock.AnythingOfType("string")).Return(nil).Once()
+			usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(&domain.User{UUID: userUUID}, nil).Once()
+			genErr := errors.New("signing failed")
+			tokens.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool { return dto.Audience == failAt })).Return("", genErr).Once()
+			if failAt == domain.TokenAudienceRefresh {
+				tokens.On("GenerateToken", mock.MatchedBy(func(dto domain.GenerateTokenDTO) bool { return dto.Audience == domain.TokenAudienceAccess })).Return("access", nil).Once()
+			}
+
+			result, err := refresh(service, "refresh-token")
+
+			var internalErr *domain.InternalServerError
+			require.ErrorAs(t, err, &internalErr)
+			assert.Equal(t, "auth.refreshToken.tokenGenerationFailed", err.Error())
+			assert.ErrorIs(t, err, genErr)
+			assert.Empty(t, result)
+		})
+	}
+
 	t.Run("error - session not found", func(t *testing.T) {
 		service, _, sessionsRepo := newService()
 		sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(nil, domain.NewNotFoundError("sessions.notFound")).Once()
@@ -1605,6 +1634,8 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		assert.Nil(t, result)
 		usersService.AssertNotCalled(t, "CreateOAuth", mock.Anything)
 	})
+
+	t.Run("resolve user", testOAuthLoginResolveUser)
 }
 
 func TestAuthService_VerifyOAuthState(t *testing.T) {

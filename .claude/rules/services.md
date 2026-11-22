@@ -40,6 +40,10 @@ func (s *pendingSignupService) StartCredentials(ctx context.Context, dto domain.
         return "", err
     }
 
+    if err := s.reserveSend(ctx, email); err != nil {
+        return "", err
+    }
+
     hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
     if err != nil {
         return "", domain.NewInternalServerError("users.create.passwordHashingFailed", err)
