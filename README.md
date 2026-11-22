@@ -223,6 +223,7 @@ All variables are read and validated once at startup in `config/config.go`; the 
 | `RATE_LIMIT_REQUESTS_PER_SECOND`, `RATE_LIMIT_BURST`                     | `20`, `50`                     | Per-IP token bucket                                                                                 |
 | `RESEND_API_KEY`, `EMAIL_FROM`                                           | - (**required** outside development) | Resend credentials and sender; without a key, emails are only logged                          |
 | `EMAIL_CHANGE_REVERT_URL`                                                | - (**required** outside development) | Frontend URL that receives the "it wasn't me" revert token                                     |
+| `EMAIL_OAUTH_LINK_REVERT_URL`                                             | - (**required** outside development) | Frontend URL that receives the OAuth link undo token                                           |
 | `OTEL_*`                                                                 | see [Observability](#-observability) | OpenTelemetry export                                                                          |
 | `TEST_DB_PORT_START`, `TEST_DB_PORT_END`                                 | `15432`, `15499`               | Host port range for the integration test database container (tests only)                            |
 

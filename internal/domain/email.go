@@ -21,6 +21,12 @@ type EmailChangeRevert struct {
 	ChangedAt int64
 }
 
+type OAuthLinkRevert struct {
+	UserUUID string
+	LinkUUID string
+	Provider OAuthProviderName
+}
+
 type EmailVerificationService interface {
 	SendSignupCode(ctx context.Context, email string, code string) error
 	SendOAuthSignupCode(ctx context.Context, email string, code string, provider OAuthProviderName) error
@@ -28,4 +34,6 @@ type EmailVerificationService interface {
 	SendStepUpCode(ctx context.Context, email string, code string) error
 	SendEmailChangedNotice(ctx context.Context, revert EmailChangeRevert) error
 	VerifyEmailChangeRevertToken(ctx context.Context, token string) (*EmailChangeRevert, error)
+	SendOAuthLinkedNotice(ctx context.Context, to string, revert OAuthLinkRevert) error
+	VerifyOAuthLinkRevertToken(ctx context.Context, token string) (*OAuthLinkRevert, error)
 }

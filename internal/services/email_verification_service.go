@@ -14,13 +14,15 @@ type emailVerificationService struct {
 	tokens               domain.TokenService
 	emailProvider        domain.EmailProvider
 	emailChangeRevertURL string
+	oauthLinkRevertURL   string
 }
 
-func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, emailChangeRevertURL string) domain.EmailVerificationService {
+func NewEmailVerificationService(tokens domain.TokenService, emailProvider domain.EmailProvider, emailChangeRevertURL string, oauthLinkRevertURL string) domain.EmailVerificationService {
 	return &emailVerificationService{
 		tokens:               tokens,
 		emailProvider:        emailProvider,
 		emailChangeRevertURL: emailChangeRevertURL,
+		oauthLinkRevertURL:   oauthLinkRevertURL,
 	}
 }
 
@@ -141,4 +143,49 @@ func (s *emailVerificationService) tokenLink(ctx context.Context, baseURL string
 	link.RawQuery = query.Encode()
 
 	return link.String(), nil
+}
+
+func (s *emailVerificationService) SendOAuthLinkedNotice(ctx context.Context, to string, revert domain.OAuthLinkRevert) error {
+	link, err := s.tokenLink(ctx, s.oauthLinkRevertURL, domain.GenerateTokenDTO{
+		Subject:  revert.UserUUID,
+		Audience: domain.TokenAudienceOAuthLinkRevert,
+		Payload: map[string]any{
+			"link_uuid": revert.LinkUUID,
+			"provider":  string(revert.Provider),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	name := oauthProviderDisplayName(revert.Provider)
+	return s.emailProvider.Send(ctx, domain.EmailMessage{
+		To:      to,
+		Subject: "A sign-in provider was linked to your account",
+		Text:    fmt.Sprintf("%s was linked to your account. If this wasn't you, undo it and sign out every device by opening this link: %s", name, link),
+		HTML:    fmt.Sprintf(`<p>%s was linked to your account. If this wasn't you, <a href="%s">undo it and sign out every device</a>.</p>`, html.EscapeString(name), html.EscapeString(link)),
+	})
+}
+
+func (s *emailVerificationService) VerifyOAuthLinkRevertToken(ctx context.Context, token string) (*domain.OAuthLinkRevert, error) {
+	tokenData, err := s.tokens.VerifyToken(ctx, domain.VerifyTokenDTO{
+		Token:    token,
+		Audience: domain.TokenAudienceOAuthLinkRevert,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	payload, _ := tokenData.Payload.(map[string]any)
+	linkUUID, _ := payload["link_uuid"].(string)
+	provider, _ := payload["provider"].(string)
+	if linkUUID == "" || provider == "" {
+		return nil, ErrInvalidToken
+	}
+
+	return &domain.OAuthLinkRevert{
+		UserUUID: tokenData.Subject,
+		LinkUUID: linkUUID,
+		Provider: domain.OAuthProviderName(provider),
+	}, nil
 }

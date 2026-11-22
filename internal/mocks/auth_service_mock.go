@@ -116,3 +116,8 @@ func (m *AuthServiceMock) VerifyOAuthState(ctx context.Context, dto domain.Verif
 	args := m.Called(dto)
 	return args.String(0), args.Error(1)
 }
+
+func (m *AuthServiceMock) RevertOAuthLink(ctx context.Context, token string) (string, error) {
+	args := m.Called(token)
+	return args.String(0), args.Error(1)
+}

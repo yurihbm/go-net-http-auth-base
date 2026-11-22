@@ -66,7 +66,7 @@ func newAuthServiceOverRealUsers(repo *mocks.UsersRepositoryMock, authRepo *mock
 	sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil)
 	sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil)
 	sessionsRepo.On("DeleteOldestBeyond", mock.Anything, mock.Anything).Return(nil)
-	return services.NewAuthService(services.NewUserService(repo, newTransactorMock()), nil, authRepo, sessionsRepo, registry, newTransactorMock(), tokens, testSessionMaxAge, testMaxSessions)
+	return services.NewAuthService(services.NewUserService(repo, newTransactorMock()), nil, authRepo, sessionsRepo, registry, newTransactorMock(), tokens, services.NewEmailVerificationService(tokens, emailProvider, "https://app.test/revert-email-change", "https://app.test/revert-oauth-link"), testSessionMaxAge, testMaxSessions)
 }
 
 func TestAuthService_EmailNormalization(t *testing.T) {
@@ -99,7 +99,9 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 		registry.On("Get", provider).Return(providerMock, nil)
 		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).
 			Return(&domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: normalizedEmail, EmailVerified: true}, nil)
-		service := newAuthServiceOverRealUsers(repo, authRepo, registry, new(mocks.EmailProviderMock))
+		emailProvider := new(mocks.EmailProviderMock)
+		emailProvider.On("Send", mock.Anything, mock.MatchedBy(func(msg domain.EmailMessage) bool { return msg.To == normalizedEmail })).Return(nil).Once()
+		service := newAuthServiceOverRealUsers(repo, authRepo, registry, emailProvider)
 
 		var stored domain.User
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
@@ -115,7 +117,7 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
 		authRepo.On("CreateUserOAuthProvider", domain.UserOAuthProvider{
 			UserUUID: "local-uuid", Provider: provider, ProviderUserID: providerUserID, ProviderEmail: normalizedEmail,
-		}).Return(&domain.UserOAuthProvider{}, nil).Once()
+		}).Return(&domain.UserOAuthProvider{UUID: "link-uuid", Provider: provider}, nil).Once()
 		state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  string(provider),
 			Audience: domain.TokenAudienceOAuthState,
@@ -129,5 +131,6 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 		assert.Equal(t, "local-uuid", result.User.UUID)
 		repo.AssertNumberOfCalls(t, "Create", 1)
 		authRepo.AssertExpectations(t)
+		emailProvider.AssertExpectations(t)
 	})
 }

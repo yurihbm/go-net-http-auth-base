@@ -52,6 +52,7 @@ func run(m *testing.M) int {
 		"RESEND_API_KEY":                 "",
 		"EMAIL_FROM":                     "noreply@example.com",
 		"EMAIL_CHANGE_REVERT_URL":        "http://app.test/revert-email-change",
+		"EMAIL_OAUTH_LINK_REVERT_URL":    "http://app.test/revert-oauth-link",
 	} {
 		if err := os.Setenv(key, value); err != nil {
 			log.Printf("Could not set %s: %v", key, err)

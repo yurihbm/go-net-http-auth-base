@@ -110,6 +110,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.oauthLogin.missingCodeVerifier` | `UnauthorizedError` | `AuthService.OAuthLogin`: the PKCE code verifier cookie is missing |
 | `auth.oauthLogin.nonceMismatch` | `UnauthorizedError` | `AuthService.OAuthLogin`: the browser nonce does not match the state token |
 | `auth.oauthLogin.providerMismatch` | `UnauthorizedError` | `AuthService.VerifyOAuthState`: the state token was issued for another provider |
+| `auth.oauthLink.staleToken` | `UnauthorizedError` | `AuthService.RevertOAuthLink`: the link the undo token points to no longer exists (already undone or removed) |
 | `auth.oauthProvider.invalid` | `ValidationError` | `AuthService`: unknown OAuth provider |
 | `auth.oauthProvider.userInfoFetchFailed` | `InternalServerError` | `AuthService.GetOAuthProviderUserInfo`: the provider user info request failed |
 | `auth.oauthProvider.notFound` | `NotFoundError` | `AuthRepository`: no link for that provider and user |

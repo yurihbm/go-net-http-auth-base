@@ -157,6 +157,13 @@ definitions:
     required:
     - token
     type: object
+  go-net-http-auth-base_internal_domain.RevertOAuthLinkDTO:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
   go-net-http-auth-base_internal_domain.User:
     properties:
       created_at:
@@ -448,6 +455,43 @@ paths:
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
       summary: Log out of the other devices
+      tags:
+      - auth
+  /auth/oauth/revert-link:
+    post:
+      consumes:
+      - application/json
+      description: 'Public. Consumes the token of the undo link emailed when an OAuth
+        login linked a provider to an existing account: unlinks that provider and
+        deletes every session of the user in one transaction, then clears the auth
+        cookies. Single use, valid for 72 hours.'
+      parameters:
+      - description: Revert token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.RevertOAuthLinkDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Provider unlinked and sessions revoked (auth.oauthLink.reverted)
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Invalid token (auth.invalidToken) or link already removed (auth.oauthLink.staleToken)
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: Undo an OAuth provider link
       tags:
       - auth
   /auth/refresh:

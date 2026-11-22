@@ -92,9 +92,10 @@ type CORSConfig struct {
 }
 
 type EmailConfig struct {
-	ResendAPIKey    string
-	From            string
-	ChangeRevertURL string
+	ResendAPIKey       string
+	From               string
+	ChangeRevertURL    string
+	OAuthLinkRevertURL string
 }
 
 type TelemetryConfig struct {
@@ -187,9 +188,10 @@ func Load() (*Config, error) {
 		},
 
 		Email: EmailConfig{
-			ResendAPIKey:    os.Getenv("RESEND_API_KEY"),
-			From:            os.Getenv("EMAIL_FROM"),
-			ChangeRevertURL: os.Getenv("EMAIL_CHANGE_REVERT_URL"),
+			ResendAPIKey:       os.Getenv("RESEND_API_KEY"),
+			From:               os.Getenv("EMAIL_FROM"),
+			ChangeRevertURL:    os.Getenv("EMAIL_CHANGE_REVERT_URL"),
+			OAuthLinkRevertURL: os.Getenv("EMAIL_OAUTH_LINK_REVERT_URL"),
 		},
 
 		Telemetry: TelemetryConfig{
@@ -246,6 +248,7 @@ func Load() (*Config, error) {
 			{"RESEND_API_KEY", cfg.Email.ResendAPIKey},
 			{"EMAIL_FROM", cfg.Email.From},
 			{"EMAIL_CHANGE_REVERT_URL", cfg.Email.ChangeRevertURL},
+			{"EMAIL_OAUTH_LINK_REVERT_URL", cfg.Email.OAuthLinkRevertURL},
 		}
 		for _, v := range required {
 			if v.value == "" {
