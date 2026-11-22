@@ -185,6 +185,33 @@ func TestUsersService_Create(t *testing.T) {
 		assert.Nil(t, user)
 		repo.AssertExpectations(t)
 	})
+
+	t.Run("error - email reserved during another user's change lock", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil)
+		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid", Email: "taken@example.com"}, nil).Once()
+		repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
+
+		user, err := service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: " Taken@Example.com ", PasswordHash: "hash"})
+
+		var conflictErr *domain.ConflictError
+		require.True(t, errors.As(err, &conflictErr))
+		assert.Equal(t, "users.email.conflict", conflictErr.Error())
+		assert.Nil(t, user)
+		repo.AssertCalled(t, "Create", mock.Anything)
+	})
+
+	t.Run("error - reservation lookup fails", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil)
+		lookupErr := errors.New("db error")
+		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
+		repo.On("IsEmailReserved", "taken@example.com").Return(false, lookupErr).Once()
+
+		_, err := service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: "taken@example.com", PasswordHash: "hash"})
+
+		assert.ErrorIs(t, err, lookupErr)
+	})
 }
 
 func TestUsersService_Update(t *testing.T) {
@@ -352,14 +379,14 @@ func TestUsersService_Delete(t *testing.T) {
 	})
 }
 
-func TestUsersService_Create_ReservedEmail(t *testing.T) {
+func TestUsersService_CreateOAuth(t *testing.T) {
 	t.Run("error - email reserved during another user's change lock", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil)
-		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid", Email: "taken@example.com"}, nil).Once()
+		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
 		repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
 
-		user, err := service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: " Taken@Example.com ", PasswordHash: "hash"})
+		user, err := service.CreateOAuth(context.Background(), domain.CreateOAuthUserDTO{Name: "Squatter", Email: "Taken@example.com"})
 
 		var conflictErr *domain.ConflictError
 		require.True(t, errors.As(err, &conflictErr))
@@ -367,33 +394,6 @@ func TestUsersService_Create_ReservedEmail(t *testing.T) {
 		assert.Nil(t, user)
 		repo.AssertCalled(t, "Create", mock.Anything)
 	})
-
-	t.Run("error - reservation lookup fails", func(t *testing.T) {
-		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil)
-		lookupErr := errors.New("db error")
-		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
-		repo.On("IsEmailReserved", "taken@example.com").Return(false, lookupErr).Once()
-
-		_, err := service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: "taken@example.com", PasswordHash: "hash"})
-
-		assert.ErrorIs(t, err, lookupErr)
-	})
-}
-
-func TestUsersService_CreateOAuth_ReservedEmail(t *testing.T) {
-	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, new(mocks.EmailVerificationServiceMock), nil, nil, nil, nil, newTransactorMock(), nil)
-	repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
-	repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
-
-	user, err := service.CreateOAuth(context.Background(), domain.CreateOAuthUserDTO{Name: "Squatter", Email: "Taken@example.com"})
-
-	var conflictErr *domain.ConflictError
-	require.True(t, errors.As(err, &conflictErr))
-	assert.Equal(t, "users.email.conflict", conflictErr.Error())
-	assert.Nil(t, user)
-	repo.AssertCalled(t, "Create", mock.Anything)
 }
 
 var emailChangeKey = []byte("email-change-test-key")
