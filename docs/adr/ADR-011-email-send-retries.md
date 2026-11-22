@@ -19,12 +19,17 @@ change.
 
 - Each `Send` generates one `Idempotency-Key` (UUIDv7) and sends it on every
   attempt, so a retry after a lost response cannot deliver the email twice.
-- Up to 3 attempts in total, only on transport errors and timeouts, 429 and
-  5xx. Other 4xx responses are never retried, and retries stop as soon as the
-  context is done.
+- Up to 3 attempts in total, only on transport errors and timeouts, 429, 5xx
+  and the 409 named `concurrent_idempotent_requests` (the previous attempt is
+  still being processed after a timeout). Other 4xx responses, including any
+  other 409 such as `invalid_idempotent_request`, are never retried, and
+  retries stop as soon as the context is done.
+- Each attempt times out after 5s and the whole `Send`, backoff included, after
+  15s (a context derived from the caller's), below the 30s server
+  `WriteTimeout`.
 - Backoff is exponential, 200ms then 400ms, waited with a context-aware timer.
-  On 429 a `Retry-After` value in seconds replaces the backoff when it is at
-  most 2s.
+  On any retried response a `Retry-After` value in seconds replaces the
+  backoff when it is at most 2s.
 - The error returned is the one from the last attempt.
 - The provider keeps a single `http.Client` built in its constructor.
 
@@ -37,5 +42,6 @@ change.
 - A durable outbox (table plus background worker) was weighed and deferred: it
   closes that gap but adds a table, a worker and delivery-state handling that
   this template does not need yet.
-- Requests that send synchronously wait at most the backoff sum (600ms, plus
-  the attempt timeouts) longer when Resend is failing.
+- Requests that send synchronously wait at most 15s longer when Resend is
+  failing (5s per attempt, 15s in total), which stays below the 30s
+  `WriteTimeout`.

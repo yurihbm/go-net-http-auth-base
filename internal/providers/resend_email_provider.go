@@ -20,10 +20,13 @@ import (
 const (
 	resendUserAgent        = "go-net-http-auth-base/1.0"
 	resendErrorBodyMaxSize = 4096
-	resendHTTPTimeout      = 10 * time.Second
+	resendAttemptTimeout   = 5 * time.Second
+	resendTotalTimeout     = 15 * time.Second
 	resendMaxAttempts      = 3
 	resendBackoff          = 200 * time.Millisecond
 	resendMaxBackoff       = 2 * time.Second
+
+	resendConcurrentIdempotencyName = "concurrent_idempotent_requests"
 )
 
 type resendErrorResponse struct {
@@ -32,11 +35,12 @@ type resendErrorResponse struct {
 }
 
 type resendEmailProvider struct {
-	apiKey  string
-	from    string
-	baseURL string
-	client  *http.Client
-	wait    func(ctx context.Context, d time.Duration) error
+	apiKey       string
+	from         string
+	baseURL      string
+	client       *http.Client
+	totalTimeout time.Duration
+	wait         func(ctx context.Context, d time.Duration) error
 }
 
 type resendEmailRequest struct {
@@ -53,11 +57,12 @@ func NewResendEmailProvider(apiKey string, from string, baseURL ...string) domai
 		urlToUse = baseURL[0]
 	}
 	return &resendEmailProvider{
-		apiKey:  apiKey,
-		from:    from,
-		baseURL: urlToUse,
-		client:  &http.Client{Timeout: resendHTTPTimeout},
-		wait:    waitWithContext,
+		apiKey:       apiKey,
+		from:         from,
+		baseURL:      urlToUse,
+		client:       &http.Client{Timeout: resendAttemptTimeout},
+		totalTimeout: resendTotalTimeout,
+		wait:         waitWithContext,
 	}
 }
 
@@ -88,6 +93,9 @@ func (p *resendEmailProvider) Send(ctx context.Context, msg domain.EmailMessage)
 	if err != nil {
 		return err
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, p.totalTimeout)
+	defer cancel()
 
 	for attempt := 1; ; attempt++ {
 		retryAfter, retryable, err := p.attempt(ctx, body, idempotencyKey.String())
@@ -120,6 +128,7 @@ func (p *resendEmailProvider) attempt(ctx context.Context, body []byte, idempote
 		return 0, true, err
 	}
 	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, resendErrorBodyMaxSize))
 		if err := resp.Body.Close(); err != nil {
 			slog.Error("failed to close response body", "error", err)
 		}
@@ -129,27 +138,34 @@ func (p *resendEmailProvider) attempt(ctx context.Context, body []byte, idempote
 		return 0, false, nil
 	}
 
-	retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, resendErrorBodyMaxSize))
+	detail := parseResendError(raw)
+	retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 ||
+		(resp.StatusCode == http.StatusConflict && detail.Name == resendConcurrentIdempotencyName)
 	var retryAfter time.Duration
 	if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds > 0 {
 		retryAfter = time.Duration(seconds) * time.Second
 	}
-	return retryAfter, retryable, resendStatusError(resp)
+	return retryAfter, retryable, resendStatusError(resp.StatusCode, detail)
 }
 
-func resendStatusError(resp *http.Response) error {
+func parseResendError(raw []byte) resendErrorResponse {
 	var detail resendErrorResponse
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, resendErrorBodyMaxSize))
-	if err == nil && json.Unmarshal(raw, &detail) == nil {
-		var parts []string
-		for _, part := range []string{detail.Name, detail.Message} {
-			if part != "" {
-				parts = append(parts, part)
-			}
-		}
-		if len(parts) > 0 {
-			return fmt.Errorf("resend: unexpected status %d: %s", resp.StatusCode, strings.Join(parts, ": "))
+	if json.Unmarshal(raw, &detail) != nil {
+		return resendErrorResponse{}
+	}
+	return detail
+}
+
+func resendStatusError(status int, detail resendErrorResponse) error {
+	var parts []string
+	for _, part := range []string{detail.Name, detail.Message} {
+		if part != "" {
+			parts = append(parts, part)
 		}
 	}
-	return fmt.Errorf("resend: unexpected status %d", resp.StatusCode)
+	if len(parts) > 0 {
+		return fmt.Errorf("resend: unexpected status %d: %s", status, strings.Join(parts, ": "))
+	}
+	return fmt.Errorf("resend: unexpected status %d", status)
 }
