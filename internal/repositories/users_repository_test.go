@@ -176,7 +176,7 @@ func TestUsersPostgresRepository_Update(t *testing.T) {
 	})
 
 	t.Run("error - user not found", func(t *testing.T) {
-		returnedUser, err := repo.Update(context.Background(), domain.User{UUID: uuid.NewString()})
+		returnedUser, err := repo.Update(context.Background(), domain.User{UUID: uuid.Must(uuid.NewV7()).String()})
 		require.Error(t, err)
 		assert.Nil(t, returnedUser)
 		var notFoundErr *domain.NotFoundError
@@ -243,7 +243,7 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 	})
 
 	t.Run("error - user not found", func(t *testing.T) {
-		returnedUser, err := repo.UpdateEmail(context.Background(), uuid.NewString(), "ghost@example.com", 0, nil)
+		returnedUser, err := repo.UpdateEmail(context.Background(), uuid.Must(uuid.NewV7()).String(), "ghost@example.com", 0, nil)
 
 		assert.Nil(t, returnedUser)
 		var unauthorizedErr *domain.UnauthorizedError
@@ -326,7 +326,7 @@ func TestUsersPostgresRepository_ReserveStepUpGuess(t *testing.T) {
 	})
 
 	t.Run("error - user not found", func(t *testing.T) {
-		err := repo.ReserveStepUpGuess(ctx, uuid.NewString(), window)
+		err := repo.ReserveStepUpGuess(ctx, uuid.Must(uuid.NewV7()).String(), window)
 
 		assert.ErrorIs(t, err, domain.ErrStepUpUserLocked)
 	})
@@ -458,6 +458,12 @@ func TestUsersPostgresRepository_IsEmailReserved(t *testing.T) {
 
 		reserved, err = repo.IsEmailReserved(ctx, user.Email)
 		require.NoError(t, err)
+		assert.False(t, reserved)
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		reserved, err := repo.IsEmailReserved(canceledContext(), user.Email)
+		assertInternalError(t, err)
 		assert.False(t, reserved)
 	})
 }
