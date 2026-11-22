@@ -135,8 +135,7 @@ func main() {
 
 	recordsSweeper := infra.NewExpiredRecordsSweeper(pool)
 	if err := recordsSweeper.RunMaintenance(ctx); err != nil {
-		slog.Error("Failed to sweep expired sessions", "error", err)
-		os.Exit(1)
+		slog.Error("Failed to sweep expired records", "error", err)
 	}
 
 	var wg sync.WaitGroup
@@ -151,12 +150,12 @@ func main() {
 		},
 	)
 
-	// Sweep expired sessions and step-up challenges in background — stops on shutdown signal.
+	// Sweep expired sessions, challenges, pending sign-ups and email send limits in background — stops on shutdown signal.
 	runEvery(
 		ctx, &wg, expiredRecordsSweepInterval,
 		func() {
 			if err := recordsSweeper.RunMaintenance(ctx); err != nil {
-				slog.Error("Failed to sweep expired sessions", "error", err)
+				slog.Error("Failed to sweep expired records", "error", err)
 			}
 		},
 	)

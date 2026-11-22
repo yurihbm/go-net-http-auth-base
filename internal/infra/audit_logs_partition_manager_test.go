@@ -73,6 +73,14 @@ func TestAuditLogsPartitionManager_EnsurePartition(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("error - database does not support transactions", func(t *testing.T) {
+		assert.Error(t, infra.NewAuditLogsPartitionManager(nil).EnsurePartition(context.Background(), time.Now()))
+	})
+	t.Run("error - canceled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		assert.Error(t, pm.EnsurePartition(ctx, time.Now()))
+	})
 }
 
 func TestAuditLogsPartitionManager_RunMaintenance(t *testing.T) {
@@ -123,5 +131,11 @@ func TestAuditLogsPartitionManager_RunMaintenance(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, exists, "Partition %s should exist (from Jan 31 simulation)", p)
 		}
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		assert.Error(t, pm.RunMaintenance(ctx))
 	})
 }

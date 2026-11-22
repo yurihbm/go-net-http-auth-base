@@ -135,6 +135,8 @@ CREATE TABLE email_send_limits (
     failures_window_start timestamptz
 );
 
+CREATE INDEX idx_email_send_limits_window_start ON email_send_limits (window_start);
+
 CREATE TABLE audit_logs (
     uuid uuid DEFAULT uuidv7() NOT NULL,
     actor_uuid UUID, -- Nullable for system actions or anonymous users
