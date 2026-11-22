@@ -11,6 +11,7 @@ import (
 
 type UsersController struct {
 	userService          domain.UsersService
+	emailChangeService   domain.EmailChangeService
 	pendingSignupService domain.PendingSignupService
 	auditService         domain.AuditService
 	authMiddleware       middlewares.HandlerMiddleware
@@ -22,6 +23,7 @@ var _ Controller = (*UsersController)(nil)
 
 func NewUsersController(
 	service domain.UsersService,
+	emailChangeService domain.EmailChangeService,
 	pendingSignupService domain.PendingSignupService,
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
@@ -30,6 +32,7 @@ func NewUsersController(
 ) *UsersController {
 	return &UsersController{
 		userService:          service,
+		emailChangeService:   emailChangeService,
 		pendingSignupService: pendingSignupService,
 		auditService:         auditService,
 		authMiddleware:       authMiddleware,
@@ -120,7 +123,7 @@ func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Requ
 
 	actor := actorFromRequest(r)
 	_, sessionUUID := sessionFromRequest(r)
-	err = c.userService.RequestEmailChange(r.Context(), actor, sessionUUID, dto.Email)
+	err = c.emailChangeService.RequestEmailChange(r.Context(), actor, sessionUUID, dto.Email)
 	auditResult(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),
 		Action:       domain.AuditActionEmailChangeRequest,
@@ -160,7 +163,7 @@ func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Requ
 
 	actor := actorFromRequest(r)
 	_, sessionUUID := sessionFromRequest(r)
-	user, err := c.userService.ConfirmEmailChange(r.Context(), actor, sessionUUID, dto.Code)
+	user, err := c.emailChangeService.ConfirmEmailChange(r.Context(), actor, sessionUUID, dto.Code)
 	auditResult(r, c.auditService, domain.CreateAuditLogDTO{
 		ActorUUID:    actorUUID(r),
 		Action:       domain.AuditActionEmailChange,
@@ -199,7 +202,7 @@ func (c *UsersController) RevertEmailChange(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	user, err := c.userService.RevertEmailChange(r.Context(), dto.Token)
+	user, err := c.emailChangeService.RevertEmailChange(r.Context(), dto.Token)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return

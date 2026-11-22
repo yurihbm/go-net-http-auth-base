@@ -30,22 +30,34 @@ Controllers handle HTTP requests and responses. Key patterns:
 
 ```go
 type UsersController struct {
-    userService    domain.UsersService
-    auditService   domain.AuditService
-    authMiddleware middlewares.HandlerMiddleware
+    userService          domain.UsersService
+    emailChangeService   domain.EmailChangeService
+    pendingSignupService domain.PendingSignupService
+    auditService         domain.AuditService
+    authMiddleware       middlewares.HandlerMiddleware
+    stepUpMiddleware     middlewares.HandlerMiddleware
+    isSecureCookie       bool
 }
 
 var _ Controller = (*UsersController)(nil)
 
 func NewUsersController(
     service domain.UsersService,
+    emailChangeService domain.EmailChangeService,
+    pendingSignupService domain.PendingSignupService,
     auditService domain.AuditService,
     authMiddleware middlewares.HandlerMiddleware,
+    stepUpMiddleware middlewares.HandlerMiddleware,
+    isSecureCookie bool,
 ) *UsersController {
     return &UsersController{
-        userService:    service,
-        auditService:   auditService,
-        authMiddleware: authMiddleware,
+        userService:          service,
+        emailChangeService:   emailChangeService,
+        pendingSignupService: pendingSignupService,
+        auditService:         auditService,
+        authMiddleware:       authMiddleware,
+        stepUpMiddleware:     stepUpMiddleware,
+        isSecureCookie:       isSecureCookie,
     }
 }
 
@@ -55,7 +67,15 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 }
 
 // factories/users_factory.go
-func UsersFactory(deps *Dependencies) controllers.Controller {
-    return controllers.NewUsersController(deps.UsersService, deps.AuditService, deps.AuthMiddleware)
+func UsersFactory(deps *Dependencies, cfg *config.Config) controllers.Controller {
+    return controllers.NewUsersController(
+        deps.UsersService,
+        deps.EmailChangeService,
+        deps.PendingSignupService,
+        deps.AuditService,
+        deps.AuthMiddleware,
+        deps.StepUpMiddleware,
+        !cfg.IsDevelopment(),
+    )
 }
 ```

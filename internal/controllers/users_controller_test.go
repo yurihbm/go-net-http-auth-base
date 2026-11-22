@@ -25,12 +25,21 @@ func newTestUsersController() (*controllers.UsersController, *mocks.UsersService
 	return controller, serviceMock, auditMock, middlewareMock
 }
 
+func newTestEmailChangeController() (*controllers.UsersController, *mocks.EmailChangeServiceMock, *mocks.AuditServiceMock, *mocks.AuthMiddlewareMock) {
+	emailChangeMock := new(mocks.EmailChangeServiceMock)
+	auditMock := new(mocks.AuditServiceMock)
+	middlewareMock := new(mocks.AuthMiddlewareMock)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), true)
+
+	return controller, emailChangeMock, auditMock, middlewareMock
+}
+
 func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.UsersServiceMock, *mocks.AuditServiceMock, *mocks.AuthMiddlewareMock, *mocks.AuthMiddlewareMock) {
 	serviceMock := new(mocks.UsersServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
 	stepUpMiddlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(serviceMock, new(mocks.PendingSignupServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, true)
+	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, true)
 
 	return controller, serviceMock, auditMock, middlewareMock, stepUpMiddlewareMock
 }
@@ -38,7 +47,7 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, *mocks.PendingSignupServiceMock, *mocks.AuditServiceMock) {
 	pendingMock := new(mocks.PendingSignupServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), pendingMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), isSecure)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), isSecure)
 
 	return controller, pendingMock, auditMock
 }
@@ -81,7 +90,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 		_, serviceMock, _, authMiddleware, _ := newTestUsersControllerWithStepUp()
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
 		serviceMock.On("GetByUUID", mock.Anything, mock.Anything).Return(nil, errors.New("stop")).Maybe()
-		controller := controllers.NewUsersController(serviceMock, new(mocks.PendingSignupServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, true)
+		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, true)
 
 		controller.RegisterRoutes(router)
 
@@ -529,7 +538,7 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 	dto := domain.RequestEmailChangeDTO{Email: "new@example.com"}
 
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
+		controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 		serviceMock.On("RequestEmailChange", actor, actorSessionUUID, dto.Email).Return(nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionEmailChangeRequest &&
@@ -551,7 +560,7 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 	})
 
 	t.Run("error - invalid email", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
+		controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 
 		w, req := getActorControllerArgs("POST", "/users/me/email", domain.RequestEmailChangeDTO{Email: "not-an-email"})
 
@@ -563,7 +572,7 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 	})
 
 	t.Run("error - email taken", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
+		controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 		serviceMock.On("RequestEmailChange", actor, actorSessionUUID, dto.Email).Return(domain.NewConflictError("users.email.conflict"))
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionEmailChangeRequest &&
@@ -585,7 +594,7 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 	user := &domain.User{UUID: actor.UUID, Email: "new@example.com"}
 
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
+		controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 		serviceMock.On("ConfirmEmailChange", actor, actorSessionUUID, dto.Code).Return(user, nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionEmailChange &&
@@ -609,7 +618,7 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 
 	t.Run("error - invalid code", func(t *testing.T) {
 		for name, code := range map[string]string{"missing": "", "too short": "123", "not numeric": "12345a"} {
-			controller, serviceMock, auditMock, _ := newTestUsersController()
+			controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 
 			w, req := getActorControllerArgs("POST", "/users/me/email/confirm", domain.CodeDTO{Code: code})
 
@@ -634,7 +643,7 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 	}
 	for name, tc := range failures {
 		t.Run("error - "+name, func(t *testing.T) {
-			controller, serviceMock, auditMock, _ := newTestUsersController()
+			controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 			serviceMock.On("ConfirmEmailChange", actor, actorSessionUUID, dto.Code).Return(nil, tc.err)
 			auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 				return d.Action == domain.AuditActionEmailChange &&
@@ -667,7 +676,7 @@ func TestUsersController_RevertEmailChange(t *testing.T) {
 	restored := &domain.User{UUID: "user-uuid", Email: "old@example.com"}
 
 	t.Run("success", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
+		controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 		serviceMock.On("RevertEmailChange", dto.Token).Return(restored, nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionEmailChangeRevert &&
@@ -690,7 +699,7 @@ func TestUsersController_RevertEmailChange(t *testing.T) {
 	})
 
 	t.Run("error - missing token", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
+		controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 
 		w, req := getControllerArgs("POST", "/users/revert-email-change", domain.RevertEmailChangeDTO{})
 
@@ -702,7 +711,7 @@ func TestUsersController_RevertEmailChange(t *testing.T) {
 	})
 
 	t.Run("error - stale token", func(t *testing.T) {
-		controller, serviceMock, auditMock, _ := newTestUsersController()
+		controller, serviceMock, auditMock, _ := newTestEmailChangeController()
 		serviceMock.On("RevertEmailChange", dto.Token).Return(nil, domain.NewUnauthorizedError("users.emailChange.staleToken"))
 
 		w, req := getControllerArgs("POST", "/users/revert-email-change", dto)
@@ -715,7 +724,7 @@ func TestUsersController_RevertEmailChange(t *testing.T) {
 	})
 
 	t.Run("error - old email taken", func(t *testing.T) {
-		controller, serviceMock, _, _ := newTestUsersController()
+		controller, serviceMock, _, _ := newTestEmailChangeController()
 		serviceMock.On("RevertEmailChange", dto.Token).Return(nil, domain.NewConflictError("users.email.conflict"))
 
 		w, req := getControllerArgs("POST", "/users/revert-email-change", dto)

@@ -58,24 +58,3 @@ func (m *UsersServiceMock) Delete(ctx context.Context, actor domain.Actor, uuid 
 	args := m.Called(actor, uuid)
 	return args.Error(0)
 }
-
-func (m *UsersServiceMock) RequestEmailChange(ctx context.Context, actor domain.Actor, sessionUUID string, email string) error {
-	args := m.Called(actor, sessionUUID, email)
-	return args.Error(0)
-}
-
-func (m *UsersServiceMock) ConfirmEmailChange(ctx context.Context, actor domain.Actor, sessionUUID string, code string) (*domain.User, error) {
-	args := m.Called(actor, sessionUUID, code)
-	if args.Get(0) != nil {
-		return args.Get(0).(*domain.User), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
-func (m *UsersServiceMock) RevertEmailChange(ctx context.Context, token string) (*domain.User, error) {
-	args := m.Called(token)
-	if args.Get(0) != nil {
-		return args.Get(0).(*domain.User), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
