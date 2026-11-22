@@ -32,7 +32,8 @@ func serveFrom(handler http.Handler, remoteAddr string) int {
 
 func TestRateLimitMiddleware(t *testing.T) {
 	// Limit: 1 req/sec, Burst: 2
-	middleware := middlewares.NewRateLimitMiddleware(t.Context(), rate.Limit(1), 2)
+	now := time.Now()
+	middleware := middlewares.NewRateLimitMiddlewareWithClock(t.Context(), rate.Limit(1), 2, func() time.Time { return now })
 	handler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -69,7 +70,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// 5. Wait for refill
-	time.Sleep(1100 * time.Millisecond) // Wait > 1 sec
+	now = now.Add(1100 * time.Millisecond) // Advance > 1 sec
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
