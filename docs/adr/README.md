@@ -16,6 +16,7 @@ Status, Context, Decision and Consequences.
 | [ADR-008](ADR-008-step-up-and-email-change-hardening.md) | Step-Up and Email Change Hardening | Partially superseded by ADR-009 |
 | [ADR-009](ADR-009-otp-email-proof-and-verified-accounts.md) | One-Time Code Email Proof and Always-Verified Accounts | Accepted |
 | [ADR-010](ADR-010-per-address-code-failure-counter.md) | Per-Address Code Failure Counter and Its Lockout Risk | Accepted |
+| [ADR-011](ADR-011-email-send-retries.md) | Email Send Retries and Idempotency Key | Accepted |
 
 ## Writing a new ADR
 
