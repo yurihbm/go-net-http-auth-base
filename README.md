@@ -205,7 +205,7 @@ All variables are read and validated once at startup in `config/config.go`; the 
 
 | Variable                                                                 | Default                        | Description                                                                                         |
 | ------------------------------------------------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `API_ENV`                                                                | -                              | `development` (log email provider, non-`Secure` cookies), `production` (JSON logs) or any other value |
+| `API_ENV`                                                                | - (**required**)               | `development` (log email provider with the email body, non-`Secure` cookies) or `production` (JSON logs); any other value fails at startup |
 | `API_PORT`                                                               | `8080`                         | HTTP port                                                                                           |
 | `API_URL`                                                                | -                              | Public base URL, used to build the OAuth redirect URLs (`<API_URL>/auth/<provider>/callback`)       |
 | `JWT_SECRET`                                                             | **required**                   | HS256 signing secret, at least 32 characters                                                        |

@@ -305,20 +305,19 @@ func TestLoad(t *testing.T) {
 		})
 	}
 
-	t.Run("requires email vars when API_ENV is unset", func(t *testing.T) {
-		t.Setenv("JWT_SECRET", validJWTSecret)
-		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
-		t.Setenv("API_ENV", "")
-		t.Setenv("RESEND_API_KEY", "")
-		t.Setenv("EMAIL_FROM", "")
-		t.Setenv("EMAIL_CHANGE_REVERT_URL", "")
-		t.Setenv("EMAIL_OAUTH_LINK_REVERT_URL", "")
+	for _, value := range []string{"", "prod", "staging", "Production"} {
+		t.Run("error - API_ENV must be development or production: "+value, func(t *testing.T) {
+			t.Setenv("JWT_SECRET", validJWTSecret)
+			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+			t.Setenv("API_ENV", value)
 
-		cfg, err := config.Load()
+			cfg, err := config.Load()
 
-		require.Error(t, err)
-		assert.Nil(t, cfg)
-	})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "API_ENV")
+			assert.Nil(t, cfg)
+		})
+	}
 
 	t.Run("defaults SESSION_MAX_AGE to 30 days", func(t *testing.T) {
 		t.Setenv("JWT_SECRET", validJWTSecret)
