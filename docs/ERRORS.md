@@ -72,6 +72,8 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `users.emailChange.codeGenerationFailed` | `InternalServerError` | `UsersService.RequestEmailChange`: the random source failed |
 | `users.emailChange.internalServerError` | `InternalServerError` | Unexpected `SessionChallengeRepository` (email change) failures |
 | `users.emailChange.locked`           | `ConflictError`        | `UsersService.RequestEmailChange`/`ConfirmEmailChange`/`Delete`: the email changed less than 72h ago (`Delete` only blocks a user deleting their own account) |
+| `users.emailChange.unauthorized`     | `UnauthorizedError`    | `UsersService.RequestEmailChange`/`ConfirmEmailChange`: the actor has no user UUID |
+| `users.emailChange.unchanged`        | `ValidationError`      | `UsersService.RequestEmailChange`: the new email equals the current one |
 
 ### Sign-up keys
 
@@ -83,10 +85,62 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.signup.codeGenerationFailed`   | `InternalServerError`  | `PendingSignupService`: the random source failed                       |
 | `auth.signup.tokenGenerationFailed`  | `InternalServerError`  | `AuthService.CompleteSignup`: the session could not be started (the user is rolled back) |
 | `auth.signup.internalServerError`    | `InternalServerError`  | Unexpected `PendingSignupRepository` failures                          |
+| `users.create.passwordHashingFailed` | `InternalServerError`  | `PendingSignupService.StartCredentials`: bcrypt could not hash the password (the send reservation is not refunded) |
 | `auth.email.sendLimit`               | `TooManyRequestsError` | `EmailSendLimiter.ReserveSend` (sign-up, email change): an email went to this address in the last 60s, or 5 in the last hour |
 | `auth.email.codeLocked`              | `TooManyRequestsError` | `PendingSignupService.Attempt`/`UsersService.ConfirmEmailChange`: 20 wrong codes for this address in 24h |
 | `auth.email.internalServerError`     | `InternalServerError`  | Unexpected `EmailSendLimiter` failures                                 |
 | `users.email.conflict`               | `ConflictError`        | `PendingSignupService.StartCredentials` and `AuthService.CompleteSignup`: the email belongs to an account or is reserved by a recent email change |
+
+### Session and auth repository keys
+
+| Key                                  | Type                   | Where                                                                  |
+| :----------------------------------- | :--------------------- | :--------------------------------------------------------------------- |
+| `sessions.notFound`                  | `NotFoundError`        | `SessionsRepository`: the session does not exist (or a compare-and-set on its `jti` matched no row) |
+| `sessions.internalServerError`       | `InternalServerError`  | Unexpected `SessionsRepository` failures                               |
+| `auth.internalServerError`           | `InternalServerError`  | Unexpected `AuthRepository` (OAuth provider links) failures            |
+
+### Other keys
+
+| Key | Type | Where |
+| :-- | :-- | :-- |
+| `auth.authenticate.invalidCredentials` | `UnauthorizedError` | `AuthService.CredentialsLogin`: unknown email or wrong password |
+| `auth.authenticate.userFetchFailed` | `InternalServerError` | `AuthService.CredentialsLogin`: the user lookup failed unexpectedly |
+| `auth.authenticate.tokenGenerationFailed` | `InternalServerError` | `AuthService.CredentialsLogin`: the session or tokens could not be created |
+| `auth.oauthLogin.tokenGenerationFailed` | `InternalServerError` | `AuthService.OAuthLogin`: the session or tokens could not be created |
+| `auth.oauthLogin.missingCodeVerifier` | `UnauthorizedError` | `AuthService.OAuthLogin`: the PKCE code verifier cookie is missing |
+| `auth.oauthLogin.nonceMismatch` | `UnauthorizedError` | `AuthService.OAuthLogin`: the browser nonce does not match the state token |
+| `auth.oauthLogin.providerMismatch` | `UnauthorizedError` | `AuthService.VerifyOAuthState`: the state token was issued for another provider |
+| `auth.oauthProvider.invalid` | `ValidationError` | `AuthService`: unknown OAuth provider |
+| `auth.oauthProvider.userInfoFetchFailed` | `InternalServerError` | `AuthService.GetOAuthProviderUserInfo`: the provider user info request failed |
+| `auth.oauthProvider.notFound` | `NotFoundError` | `AuthRepository`: no link for that provider and user |
+| `auth.oauthProvider.conflict` | `ConflictError` | `AuthRepository`: the provider account is already linked |
+| `auth.user.notFound` | `NotFoundError` | `AuthRepository`: the user of a provider link does not exist (foreign key) |
+| `auth.providerCallback.invalidProvider` | `ValidationError` | `AuthController`: the provider path value is not a known provider |
+| `auth.providerCallback.invalidStatePayload` | `ValidationError` | `AuthService.VerifyOAuthState`: the state payload has no valid `redirect_uri` |
+| `auth.providerCallback.invalidUserInfo` | `ValidationError` | `AuthService`: the provider user info is incomplete or invalid |
+| `auth.providerCallback.missingParams` | `ValidationError` | `AuthController` OAuth callback: `code` or `state` is missing |
+| `auth.login.invalidRedirectUri` | `ValidationError` | `AuthController`: `redirect_uri` is not an allowed origin |
+| `auth.refresh.missingRefreshToken` | `UnauthorizedError` | `AuthController.RefreshToken`: no refresh token cookie |
+| `auth.refreshToken.tokenGenerationFailed` | `InternalServerError` | `AuthService.RefreshToken`: the new tokens could not be generated |
+| `auth.invalidToken` | `UnauthorizedError` | `AuthService`/`TokenService`: the token is malformed, expired, has the wrong audience or no longer matches its session |
+| `auth.verifyToken.invalidTokenSigningMethod` | `UnauthorizedError` | `TokenService.VerifyToken`: the token is not signed with HMAC |
+| `auth.tokenGenerationFailed` | `InternalServerError` | `TokenService.GenerateToken`: signing failed |
+| `auth.unauthorized` | `UnauthorizedError` | `AuthMiddleware`: missing or invalid access token cookie (written directly, not through `HandleError`) |
+| `auth.forbidden` | `ForbiddenError` | `RoleMiddleware`: the role is not allowed (written directly, not through `HandleError`) |
+| `user.getMe.unauthorized` | `UnauthorizedError` | `UsersController.GetMe`: no user in the request context |
+| `users.forbidden` | `ForbiddenError` | `Actor.CanAccess` in `UsersService`: not self or admin |
+| `users.notFound` | `NotFoundError` | `UsersRepository` (no rows), `SessionsRepository` (foreign key): the user does not exist |
+| `users.invalidUserUUID` | `ValidationError` | `UsersRepository`: the user UUID is malformed |
+| `users.oauthProvider.invalidUUID` | `ValidationError` | `AuthRepository`: the user UUID of a provider link is malformed |
+| `user.internalServerError` | `InternalServerError` | `UsersRepository.Delete`: unexpected failure |
+| `sessions.invalidUUID` | `ValidationError` | `SessionsRepository`, `SessionChallengeRepository`: the session UUID is malformed |
+| `auth.signup.invalidUUID` | `ValidationError` | `PendingSignupRepository`: the pending sign-up UUID is malformed |
+| `auditLogs.invalidActorUUID` | `ValidationError` | `AuditRepository`: the actor UUID filter is malformed |
+| `auditLogs.invalidCursor` | `ValidationError` | `AuditRepository`: the pagination cursor is malformed |
+| `auditLogs.internalServerError` | `InternalServerError` | Unexpected `AuditRepository` failures |
+| `audit.list.badRequest` | `ValidationError` | `AuditController.List`: invalid `limit`, date or cursor query parameter |
+| `request.invalid` | `ValidationError` | `api.DecodeAndValidate`: the body is not valid JSON of the expected shape |
+| `request.validation_failed` | `ValidationError` | `api.DecodeAndValidate`: a field failed validation (details per field) |
 
 ## Implementation Details
 

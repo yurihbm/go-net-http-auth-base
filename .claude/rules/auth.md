@@ -44,7 +44,7 @@ Invariants to keep:
 
 - Every account is verified: it only exists after a 6-digit code proved the email (no `email_verified` column, no verification links). OAuth with a provider-verified email may create or link right away; otherwise it goes through a pending sign-up. Microsoft always reports `EmailVerified=false`.
 - Codes are generated with `crypto/rand`, stored only as `HMAC-SHA256(JWT_SECRET, "<purpose>:...:" + code)` and compared with `hmac.Equal`. Wrong-code counters are reserved before the attempt (atomic, capped) and never rolled back by a transaction.
-- bcrypt and email sending stay outside transactions. A failed send of a code deletes the stored challenge or pending row.
+- bcrypt and email sending stay outside transactions. A failed send right after creating a challenge or pending row deletes it; a failed sign-up `Resend` keeps the row (the new code already replaced the old one, and the user resends after the cooldown).
 - Emails always go through `normalizeEmail` in services. A previous email stays reserved (`users.email.conflict`) during the 72h `domain.EmailChangeLock`.
 - Sessions: one `user_sessions` row per device; refresh rotates `jti` by compare-and-set, and a reused or stale token deletes only that session. `expires_at` is never extended. Confirming or reverting an email change deletes every session and clears the auth cookies.
 - `AuthMiddleware` stays stateless; only routes behind `StepUpMiddleware` (`authMiddleware.Use(stepUpMiddleware.Use(handler))`) read the session row.
