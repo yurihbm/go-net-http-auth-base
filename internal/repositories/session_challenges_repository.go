@@ -52,7 +52,7 @@ func (r *SessionChallengesPostgresRepository) Upsert(ctx context.Context, challe
 		EmailVersion: pgtype.Int4{Int32: int32(challenge.EmailVersion), Valid: challenge.Purpose == domain.SessionChallengeEmailChange},
 		CodeHash:     challenge.CodeHash,
 		ExpiresAt:    toTimestamptz(&expiresAt),
-		Cooldown:     toInterval(cooldown),
+		Cooldown:     postgres.ToInterval(cooldown),
 	})
 	if err != nil {
 		if fkErr := isForeignKeyViolationError(err, "sessions.notFound"); fkErr != nil {

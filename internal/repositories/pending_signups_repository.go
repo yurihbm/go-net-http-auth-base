@@ -95,7 +95,7 @@ func (r *PendingSignupsPostgresRepository) Resend(ctx context.Context, uuidStr s
 	pending, err := r.q.ResendPendingSignup(ctx, postgres.ResendPendingSignupParams{
 		Uuid:     *pendingUUID,
 		CodeHash: codeHash,
-		CodeTtl:  toInterval(codeTTL),
+		CodeTtl:  postgres.ToInterval(codeTTL),
 	})
 	return pendingSignupResult(pending, err, domain.ErrSignupNoPending)
 }

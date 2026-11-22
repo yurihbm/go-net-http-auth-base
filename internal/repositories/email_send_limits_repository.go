@@ -24,8 +24,8 @@ func NewEmailSendLimitsPostgresRepository(db postgres.DBTX) domain.EmailSendLimi
 func (r *EmailSendLimitsPostgresRepository) ReserveSend(ctx context.Context, email string, cooldown time.Duration, window time.Duration, maxSends int) error {
 	_, err := r.q.ReserveEmailSend(ctx, postgres.ReserveEmailSendParams{
 		Email:      email,
-		SendWindow: toInterval(window),
-		Cooldown:   toInterval(cooldown),
+		SendWindow: postgres.ToInterval(window),
+		Cooldown:   postgres.ToInterval(cooldown),
 		MaxSends:   int32(maxSends),
 	})
 	if err != nil {
@@ -40,7 +40,7 @@ func (r *EmailSendLimitsPostgresRepository) ReserveSend(ctx context.Context, ema
 func (r *EmailSendLimitsPostgresRepository) ReserveCodeGuess(ctx context.Context, email string, window time.Duration) error {
 	_, err := r.q.ReserveEmailCodeGuess(ctx, postgres.ReserveEmailCodeGuessParams{
 		Email:         email,
-		FailureWindow: toInterval(window),
+		FailureWindow: postgres.ToInterval(window),
 		MaxFailures:   int32(domain.EmailMaxCodeFailures),
 	})
 	if err != nil {
