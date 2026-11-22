@@ -8,6 +8,7 @@ import (
 func UsersFactory(deps *Dependencies, cfg *config.Config) controllers.Controller {
 	return controllers.NewUsersController(
 		deps.UsersService,
+		deps.EmailChangeService,
 		deps.PendingSignupService,
 		deps.AuditService,
 		deps.AuthMiddleware,

@@ -60,7 +60,8 @@ func TestEmailChange_Transaction(t *testing.T) {
 	key := []byte("email-change-transaction-key")
 
 	type fixture struct {
-		service           domain.UsersService
+		service           domain.EmailChangeService
+		users             domain.UsersService
 		emailChanges      domain.SessionChallengeRepository
 		limiter           domain.EmailSendLimiter
 		usersRepo         domain.UsersRepository
@@ -98,7 +99,8 @@ func TestEmailChange_Transaction(t *testing.T) {
 		}
 
 		return fixture{
-			service:           services.NewUserService(usersRepo, emailVerification, serviceSessionsRepo, serviceAuthRepo, emailChanges, limiter, repositories.NewPostgresTransactor(testDB), key),
+			service:           services.NewEmailChangeService(usersRepo, emailVerification, serviceSessionsRepo, serviceAuthRepo, emailChanges, limiter, repositories.NewPostgresTransactor(testDB), key),
+			users:             services.NewUserService(usersRepo, repositories.NewPostgresTransactor(testDB)),
 			emailChanges:      emailChanges,
 			limiter:           limiter,
 			usersRepo:         usersRepo,
@@ -227,7 +229,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 		f := setup(t, nil, nil)
 		applyChange(t, f)
 
-		_, err := f.service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: oldEmail, PasswordHash: "hash"})
+		_, err := f.users.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: oldEmail, PasswordHash: "hash"})
 
 		var conflictErr *domain.ConflictError
 		require.True(t, errors.As(err, &conflictErr))
@@ -246,7 +248,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 		releaseOnce := sync.Once{}
 		release := func() { releaseOnce.Do(func() { close(blocking.release) }) }
 		t.Cleanup(release)
-		service := services.NewUserService(f.usersRepo, f.emailVerification, blocking, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), key)
+		service := services.NewEmailChangeService(f.usersRepo, f.emailVerification, blocking, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), key)
 		code := requestCode(t, f)
 		f.emailVerification.On("SendEmailChangedNotice", mock.Anything).Return(nil)
 
@@ -259,7 +261,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 
 		signUpDone := make(chan error, 1)
 		go func() {
-			_, err := service.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: oldEmail, PasswordHash: "hash"})
+			_, err := f.users.Create(context.Background(), domain.NewUserDTO{Name: "Squatter", Email: oldEmail, PasswordHash: "hash"})
 			signUpDone <- err
 		}()
 		require.Eventually(t, func() bool {
@@ -282,7 +284,7 @@ func TestEmailChange_Transaction(t *testing.T) {
 			Version:   1,
 			ChangedAt: time.Now().Unix(),
 		}, nil)
-		revertService := services.NewUserService(f.usersRepo, f.emailVerification, f.sessionsRepo, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), key)
+		revertService := services.NewEmailChangeService(f.usersRepo, f.emailVerification, f.sessionsRepo, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), key)
 		_, err := revertService.RevertEmailChange(context.Background(), "revert-token")
 		require.NoError(t, err)
 		stored, err := f.usersRepo.FindByUUID(context.Background(), f.user.UUID)

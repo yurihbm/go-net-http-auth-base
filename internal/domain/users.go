@@ -79,9 +79,6 @@ type UsersService interface {
 	Create(context.Context, NewUserDTO) (*User, error)
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
 	Update(context.Context, Actor, string, UserUpdateDTO) (*User, error)
-	RequestEmailChange(ctx context.Context, actor Actor, sessionUUID string, email string) error
-	ConfirmEmailChange(ctx context.Context, actor Actor, sessionUUID string, code string) (*User, error)
-	RevertEmailChange(context.Context, string) (*User, error)
 	Delete(context.Context, Actor, string) error
 }
 
