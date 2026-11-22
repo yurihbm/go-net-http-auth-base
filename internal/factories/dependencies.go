@@ -137,7 +137,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 
 func newEmailProvider(env string, cfg config.EmailConfig) domain.EmailProvider {
 	if cfg.ResendAPIKey == "" {
-		return providers.NewLogEmailProvider(env != "prod" && env != "production")
+		return providers.NewLogEmailProvider(env != "production")
 	}
 	return providers.NewResendEmailProvider(cfg.ResendAPIKey, cfg.From)
 }

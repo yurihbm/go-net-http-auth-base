@@ -124,8 +124,8 @@ func read[T any](r *envReader, lookup func(string, T) (T, error), key string, de
 
 // Load reads and parses every environment variable the application depends
 // on, applying defaults where applicable. It returns an error if a required
-// variable (DATABASE_URL, JWT_SECRET) is missing or any value is malformed
-// or out of range.
+// variable (DATABASE_URL, JWT_SECRET) is missing, API_ENV is not "development"
+// or "production", or any value is malformed or out of range.
 func Load() (*Config, error) {
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
@@ -143,6 +143,11 @@ func Load() (*Config, error) {
 		return nil, errors.New("DATABASE_URL not set in environment")
 	}
 
+	apiEnv := os.Getenv("API_ENV")
+	if apiEnv != "development" && apiEnv != "production" {
+		return nil, errors.New(`API_ENV must be "development" or "production"`)
+	}
+
 	port := os.Getenv("API_PORT")
 	if port == "" {
 		port = defaultPort
@@ -151,7 +156,7 @@ func Load() (*Config, error) {
 	r := &envReader{}
 
 	cfg := &Config{
-		Env:    os.Getenv("API_ENV"),
+		Env:    apiEnv,
 		Port:   port,
 		APIURL: os.Getenv("API_URL"),
 
