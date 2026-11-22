@@ -44,6 +44,10 @@ func (s *pendingSignupService) StartCredentials(ctx context.Context, dto domain.
 		return "", err
 	}
 
+	if err := s.reserveSend(ctx, email); err != nil {
+		return "", err
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return "", domain.NewInternalServerError("users.create.passwordHashingFailed", err)
@@ -58,10 +62,15 @@ func (s *pendingSignupService) StartCredentials(ctx context.Context, dto domain.
 }
 
 func (s *pendingSignupService) StartOAuth(ctx context.Context, dto domain.StartOAuthSignupDTO) (string, error) {
+	email := normalizeEmail(dto.Email)
+	if err := s.reserveSend(ctx, email); err != nil {
+		return "", err
+	}
+
 	return s.start(ctx, domain.PendingSignup{
 		Kind:           domain.PendingSignupKindOAuth,
 		Name:           dto.Name,
-		Email:          normalizeEmail(dto.Email),
+		Email:          email,
 		Provider:       dto.Provider,
 		ProviderUserID: dto.ProviderUserID,
 	})
@@ -115,10 +124,6 @@ func (s *pendingSignupService) Consume(ctx context.Context, pendingUUID string, 
 }
 
 func (s *pendingSignupService) start(ctx context.Context, pending domain.PendingSignup) (string, error) {
-	if err := s.reserveSend(ctx, pending.Email); err != nil {
-		return "", err
-	}
-
 	pendingUUID, err := uuid.NewV7()
 	if err != nil {
 		return "", domain.NewInternalServerError("auth.signup.codeGenerationFailed", err)
