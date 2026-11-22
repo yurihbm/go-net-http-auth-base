@@ -120,6 +120,7 @@ func TestAuthController_RegisterRoutes(t *testing.T) {
 			{"POST", "/auth/step-up/verify"},
 			{"POST", "/auth/signup/verify"},
 			{"POST", "/auth/signup/resend"},
+			{"POST", "/auth/oauth/revert-link"},
 			{"GET", "/auth/google/login"},
 			{"GET", "/auth/google/callback"},
 		}
@@ -1177,5 +1178,59 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		assert.NotEmpty(t, response.Error)
 		authServiceMock.AssertExpectations(t)
 		auditMock.AssertExpectations(t)
+	})
+}
+
+func TestAuthController_RevertOAuthLink(t *testing.T) {
+	dto := domain.RevertOAuthLinkDTO{Token: "revert-token"}
+
+	t.Run("success", func(t *testing.T) {
+		controller, serviceMock, auditMock := newTestAuthController()
+		serviceMock.On("RevertOAuthLink", dto.Token).Return("user-uuid", nil).Once()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionOAuthLinkRevert &&
+				d.ResourceType == domain.AuditResourceUser &&
+				d.ResourceUUID == "user-uuid" &&
+				d.Status == domain.AuditStatusSuccess
+		})).Return(nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/oauth/revert-link", dto)
+		controller.RevertOAuthLink(w, req)
+
+		var response api.ResponseBody[any]
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "auth.oauthLink.reverted", response.Message)
+		cleared := map[string]bool{}
+		for _, cookie := range w.Result().Cookies() {
+			cleared[cookie.Name] = cookie.MaxAge < 0
+		}
+		assert.True(t, cleared["access_token"])
+		assert.True(t, cleared["refresh_token"])
+		serviceMock.AssertExpectations(t)
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("error - missing token", func(t *testing.T) {
+		controller, serviceMock, auditMock := newTestAuthController()
+
+		w, req := getControllerArgs("POST", "/auth/oauth/revert-link", domain.RevertOAuthLinkDTO{})
+		controller.RevertOAuthLink(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		serviceMock.AssertNotCalled(t, "RevertOAuthLink", mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("error - stale token", func(t *testing.T) {
+		controller, serviceMock, auditMock := newTestAuthController()
+		serviceMock.On("RevertOAuthLink", dto.Token).Return("", domain.NewUnauthorizedError("auth.oauthLink.staleToken")).Once()
+
+		w, req := getControllerArgs("POST", "/auth/oauth/revert-link", dto)
+		controller.RevertOAuthLink(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Empty(t, w.Result().Cookies())
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
 	})
 }

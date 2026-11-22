@@ -66,6 +66,7 @@ func TestCompleteSignup_Transaction(t *testing.T) {
 			new(mocks.OAuthProviderRegistryMock),
 			transactor,
 			services.NewTokenService("test-secret-key"),
+			nil,
 			30*24*time.Hour,
 			10,
 		)

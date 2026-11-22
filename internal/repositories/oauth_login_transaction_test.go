@@ -41,9 +41,11 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		codeVerifier   = "code-verifier"
 	)
 
+	var emails *mocks.EmailVerificationServiceMock
 	setup := func(t *testing.T, linkErr error) (domain.AuthService, domain.UsersRepository, domain.AuthRepository, string) {
 		t.Helper()
 		truncateTables(context.Background(), testDB)
+		emails = new(mocks.EmailVerificationServiceMock)
 
 		db := repositories.NewTxAwareDB(testDB)
 		usersRepo := repositories.NewUsersPostgresRepository(db)
@@ -72,6 +74,7 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 			registry,
 			repositories.NewPostgresTransactor(testDB),
 			services.NewTokenService("test-secret-key"),
+			emails,
 			30*24*time.Hour,
 			10,
 		)
@@ -124,12 +127,20 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		require.NoError(t, testDB.QueryRow(context.Background(), "SELECT count(*) FROM user_oauth_providers").Scan(&links))
 		assert.Equal(t, 1, users)
 		assert.Equal(t, 1, links)
+		emails.AssertNotCalled(t, "SendOAuthLinkedNotice", mock.Anything, mock.Anything)
 	})
 
 	t.Run("links an existing local account", func(t *testing.T) {
 		service, usersRepo, authRepo, state := setup(t, nil)
 		existing, err := usersRepo.Create(context.Background(), domain.User{Name: "Local", Email: email, Role: domain.RoleUser})
 		require.NoError(t, err)
+		var notice domain.OAuthLinkRevert
+		emails.On("SendOAuthLinkedNotice", email, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			notice = args.Get(1).(domain.OAuthLinkRevert)
+			var committed int
+			require.NoError(t, testDB.QueryRow(context.Background(), "SELECT count(*) FROM user_oauth_providers WHERE uuid = $1", notice.LinkUUID).Scan(&committed))
+			assert.Equal(t, 1, committed, "notice sent before the link was committed")
+		})
 
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{Provider: provider, State: state, Code: code, Nonce: nonce, CodeVerifier: codeVerifier})
 
@@ -138,6 +149,8 @@ func TestOAuthLogin_Transaction(t *testing.T) {
 		linked, err := authRepo.GetUserOAuthProviderByProviderAndProviderUserID(context.Background(), provider, providerUserID)
 		require.NoError(t, err)
 		assert.Equal(t, existing.UUID, linked.UserUUID)
+		assert.Equal(t, domain.OAuthLinkRevert{UserUUID: existing.UUID, LinkUUID: linked.UUID, Provider: provider}, notice)
+		emails.AssertExpectations(t)
 	})
 
 	t.Run("leaves no orphaned user when linking fails", func(t *testing.T) {

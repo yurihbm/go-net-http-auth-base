@@ -52,7 +52,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	if emailProvider == nil {
 		emailProvider = newEmailProvider(cfg.Email)
 	}
-	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.ChangeRevertURL)
+	emailVerificationService := services.NewEmailVerificationService(tokenService, emailProvider, cfg.Email.ChangeRevertURL, cfg.Email.OAuthLinkRevertURL)
 
 	usersRepository := repositories.NewUsersPostgresRepository(db)
 	authRepository := repositories.NewAuthPostgresRepository(db)
@@ -103,6 +103,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		oauthProviderRegistry,
 		transactor,
 		tokenService,
+		emailVerificationService,
 		cfg.SessionMaxAge,
 		cfg.MaxSessionsPerUser,
 	)

@@ -23,6 +23,7 @@ func testOAuthLoginResolveUser(t *testing.T) {
 		codeVerifier   = "code-verifier"
 		email          = "user@example.com"
 		userUUID       = "user-uuid"
+		linkUUID       = "link-uuid"
 	)
 
 	providerNotFound := domain.NewNotFoundError("auth.oauthProvider.notFound")
@@ -34,6 +35,8 @@ func testOAuthLoginResolveUser(t *testing.T) {
 		authRepo     *mocks.AuthRepositoryMock
 		transactor   *mocks.TransactorMock
 		pending      *mocks.PendingSignupServiceMock
+		emails       *mocks.EmailVerificationServiceMock
+		sessionsRepo *mocks.SessionsRepositoryMock
 	}
 
 	setup := func(t *testing.T, userInfo *domain.OAuthProviderUserInfo) fixture {
@@ -44,14 +47,15 @@ func testOAuthLoginResolveUser(t *testing.T) {
 		transactor := newTransactorMock()
 		pending := new(mocks.PendingSignupServiceMock)
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
+		emails := new(mocks.EmailVerificationServiceMock)
 		sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil).Maybe()
 		sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil).Maybe()
 		sessionsRepo.On("DeleteOldestBeyond", mock.Anything, mock.Anything).Return(nil).Maybe()
 		providerMock := new(mocks.OAuthProviderMock)
 		registry.On("Get", provider).Return(providerMock, nil)
 		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).Return(userInfo, nil)
-		service := services.NewAuthService(usersService, pending, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key"), testSessionMaxAge, testMaxSessions)
-		return fixture{service, usersService, authRepo, transactor, pending}
+		service := services.NewAuthService(usersService, pending, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key"), emails, testSessionMaxAge, testMaxSessions)
+		return fixture{service, usersService, authRepo, transactor, pending, emails, sessionsRepo}
 	}
 
 	login := func(t *testing.T, f fixture) (*domain.OAuthLoginResult, error) {
@@ -136,14 +140,93 @@ func testOAuthLoginResolveUser(t *testing.T) {
 		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
 		f.authRepo.On("CreateUserOAuthProvider", domain.UserOAuthProvider{
 			UserUUID: userUUID, Provider: provider, ProviderUserID: providerUserID, ProviderEmail: email,
-		}).Return(&domain.UserOAuthProvider{}, nil).Once()
+		}).Return(&domain.UserOAuthProvider{UUID: linkUUID, Provider: provider}, nil).Once()
+		f.emails.On("SendOAuthLinkedNotice", email, domain.OAuthLinkRevert{UserUUID: userUUID, LinkUUID: linkUUID, Provider: provider}).Return(nil).Once()
 
 		result, err := login(t, f)
 
 		require.NoError(t, err)
 		assert.Equal(t, userUUID, result.User.UUID)
 		f.authRepo.AssertExpectations(t)
+		f.emails.AssertExpectations(t)
 		f.transactor.AssertNumberOfCalls(t, "WithinTx", 2)
+	})
+
+	t.Run("Case 2 still signs in when the link notice cannot be sent", func(t *testing.T) {
+		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: true})
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
+		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
+		f.authRepo.On("CreateUserOAuthProvider", mock.Anything).Return(&domain.UserOAuthProvider{UUID: linkUUID, Provider: provider}, nil).Once()
+		f.emails.On("SendOAuthLinkedNotice", email, mock.Anything).Return(errors.New("smtp down")).Once()
+
+		result, err := login(t, f)
+
+		require.NoError(t, err)
+		assert.Equal(t, userUUID, result.User.UUID)
+		assert.NotEmpty(t, result.Tokens.AccessToken)
+		f.emails.AssertExpectations(t)
+	})
+
+	t.Run("Case 2 sends the link notice after the session started", func(t *testing.T) {
+		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: true})
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
+		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
+		f.authRepo.On("CreateUserOAuthProvider", mock.Anything).Return(&domain.UserOAuthProvider{UUID: linkUUID, Provider: provider}, nil).Once()
+		sessionStarted := false
+		f.sessionsRepo.ExpectedCalls = nil
+		f.sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil)
+		f.sessionsRepo.On("DeleteOldestBeyond", mock.Anything, mock.Anything).Return(nil)
+		f.sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil).Run(func(mock.Arguments) { sessionStarted = true })
+		f.emails.On("SendOAuthLinkedNotice", email, mock.Anything).Return(nil).Once().Run(func(mock.Arguments) {
+			assert.True(t, sessionStarted, "notice sent before the session started")
+		})
+
+		_, err := login(t, f)
+
+		require.NoError(t, err)
+		f.emails.AssertExpectations(t)
+	})
+
+	t.Run("Case 2 still notifies the owner when the session cannot start", func(t *testing.T) {
+		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: true})
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
+		f.usersService.On("GetByEmail", email).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
+		f.authRepo.On("CreateUserOAuthProvider", mock.Anything).Return(&domain.UserOAuthProvider{UUID: linkUUID, Provider: provider}, nil).Once()
+		f.sessionsRepo.ExpectedCalls = nil
+		f.sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil)
+		f.sessionsRepo.On("Create", mock.Anything).Return(nil, errors.New("db down"))
+		f.emails.On("SendOAuthLinkedNotice", email, mock.Anything).Return(nil).Once()
+
+		result, err := login(t, f)
+
+		require.Error(t, err)
+		assert.Nil(t, result)
+		f.emails.AssertExpectations(t)
+	})
+
+	t.Run("no link notice when the provider is already linked (Case 1), a user is created (Case 3) or the email is unverified", func(t *testing.T) {
+		f := setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: true})
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(&domain.UserOAuthProvider{UserUUID: userUUID}, nil).Once()
+		f.usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
+		_, err := login(t, f)
+		require.NoError(t, err)
+		f.emails.AssertNotCalled(t, "SendOAuthLinkedNotice", mock.Anything, mock.Anything)
+
+		f = setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: true})
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
+		f.usersService.On("GetByEmail", email).Return(nil, userNotFound).Once()
+		f.usersService.On("CreateOAuth", mock.Anything).Return(&domain.User{UUID: userUUID, Email: email}, nil).Once()
+		f.authRepo.On("CreateUserOAuthProvider", mock.Anything).Return(&domain.UserOAuthProvider{UUID: linkUUID, Provider: provider}, nil).Once()
+		_, err = login(t, f)
+		require.NoError(t, err)
+		f.emails.AssertNotCalled(t, "SendOAuthLinkedNotice", mock.Anything, mock.Anything)
+
+		f = setup(t, &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "User", Email: email, EmailVerified: false})
+		f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, providerNotFound).Once()
+		f.pending.On("StartOAuth", mock.Anything).Return("pending-uuid", nil).Once()
+		_, err = login(t, f)
+		require.NoError(t, err)
+		f.emails.AssertNotCalled(t, "SendOAuthLinkedNotice", mock.Anything, mock.Anything)
 	})
 
 	t.Run("normalizes the provider email before lookup, create and link", func(t *testing.T) {

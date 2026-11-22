@@ -28,6 +28,12 @@ DELETE FROM user_oauth_providers
 WHERE
     uuid = $1;
 
+-- name: DeleteUserOAuthProviderOfUser :execrows
+DELETE FROM user_oauth_providers
+WHERE
+    uuid = $1
+    AND user_uuid = $2;
+
 -- name: ListUserOAuthProvidersByUserUUID :many
 SELECT
     uuid,

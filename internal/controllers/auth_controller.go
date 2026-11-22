@@ -82,6 +82,7 @@ func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /auth/step-up/verify", c.authMiddleware.Use(c.VerifyStepUp))
 	router.HandleFunc("POST /auth/signup/verify", c.VerifySignup)
 	router.HandleFunc("POST /auth/signup/resend", c.ResendSignup)
+	router.HandleFunc("POST /auth/oauth/revert-link", c.RevertOAuthLink)
 	router.HandleFunc("GET /auth/{provider}/login", c.LoginWithOAuthProvider)
 	router.HandleFunc("GET /auth/{provider}/callback", c.OAuthProviderCallback)
 }
@@ -129,6 +130,43 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
 		Message: "auth.login.success",
+	})
+}
+
+// @Summary		Undo an OAuth provider link
+// @Description	Public. Consumes the token of the undo link emailed when an OAuth login linked a provider to an existing account: unlinks that provider and deletes every session of the user in one transaction, then clears the auth cookies. Single use, valid for 72 hours.
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.RevertOAuthLinkDTO	true	"Revert token"
+// @Success		200		{object}	api.ResponseBody[any]		"Provider unlinked and sessions revoked (auth.oauthLink.reverted)"
+// @Failure		400		{object}	api.ResponseBody[any]		"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]		"Invalid token (auth.invalidToken) or link already removed (auth.oauthLink.staleToken)"
+// @Failure		500		{object}	api.ResponseBody[any]		"Internal server error"
+// @Router			/auth/oauth/revert-link [post]
+func (c *AuthController) RevertOAuthLink(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.RevertOAuthLinkDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	userUUID, err := c.authService.RevertOAuthLink(r.Context(), dto.Token)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		Action:       domain.AuditActionOAuthLinkRevert,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: userUUID,
+		Status:       domain.AuditStatusSuccess,
+	})
+
+	api.DeleteAuthCookies(w)
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
+		Message: "auth.oauthLink.reverted",
 	})
 }
 

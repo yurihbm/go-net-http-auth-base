@@ -46,3 +46,16 @@ func (m *EmailVerificationServiceMock) SendStepUpCode(ctx context.Context, email
 	args := m.Called(email, code)
 	return args.Error(0)
 }
+
+func (m *EmailVerificationServiceMock) SendOAuthLinkedNotice(ctx context.Context, to string, revert domain.OAuthLinkRevert) error {
+	args := m.Called(to, revert)
+	return args.Error(0)
+}
+
+func (m *EmailVerificationServiceMock) VerifyOAuthLinkRevertToken(ctx context.Context, token string) (*domain.OAuthLinkRevert, error) {
+	args := m.Called(token)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.OAuthLinkRevert), args.Error(1)
+	}
+	return nil, args.Error(1)
+}

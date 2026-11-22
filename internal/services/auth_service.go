@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
+	"log/slog"
 	"time"
 
 	"go-net-http-auth-base/internal/domain"
@@ -20,6 +21,7 @@ var (
 	ErrOAuthMissingCodeVerifier = domain.NewUnauthorizedError("auth.oauthLogin.missingCodeVerifier")
 
 	errOAuthEmailUnverified = errors.New("oauth provider email is not verified")
+	errOAuthLinkStaleToken  = domain.NewUnauthorizedError("auth.oauthLink.staleToken")
 )
 
 type authService struct {
@@ -30,6 +32,7 @@ type authService struct {
 	oauthProviderRegistry domain.OAuthProviderRegistry
 	transactor            domain.Transactor
 	tokens                domain.TokenService
+	emailVerification     domain.EmailVerificationService
 	sessionMaxAge         time.Duration
 	maxSessionsPerUser    int
 }
@@ -42,6 +45,7 @@ func NewAuthService(
 	oauthProviderRegistry domain.OAuthProviderRegistry,
 	transactor domain.Transactor,
 	tokens domain.TokenService,
+	emailVerification domain.EmailVerificationService,
 	sessionMaxAge time.Duration,
 	maxSessionsPerUser int,
 ) domain.AuthService {
@@ -53,6 +57,7 @@ func NewAuthService(
 		oauthProviderRegistry,
 		transactor,
 		tokens,
+		emailVerification,
 		sessionMaxAge,
 		maxSessionsPerUser,
 	}
@@ -114,7 +119,7 @@ func (s *authService) completeSignupWithinTx(ctx context.Context, pendingUUID st
 		kind = pending.Kind
 
 		if pending.Kind == domain.PendingSignupKindOAuth {
-			result.User, err = s.findOrCreateOAuthUser(ctx, pending.Provider, &domain.OAuthProviderUserInfo{
+			result.User, _, err = s.findOrCreateOAuthUser(ctx, pending.Provider, &domain.OAuthProviderUserInfo{
 				ID:            pending.ProviderUserID,
 				Name:          pending.Name,
 				Email:         pending.Email,
@@ -438,7 +443,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		return nil, domain.NewValidationError("auth.providerCallback.invalidUserInfo", details)
 	}
 
-	authenticatedUser, err := s.resolveOAuthUser(ctx, dto.Provider, &userInfo)
+	authenticatedUser, linked, err := s.resolveOAuthUser(ctx, dto.Provider, &userInfo)
 	if errors.Is(err, errOAuthEmailUnverified) {
 		return s.startOAuthSignup(ctx, dto.Provider, &userInfo, redirectURI)
 	}
@@ -447,6 +452,14 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 	}
 
 	tokens, err := s.startSession(ctx, authenticatedUser)
+
+	// Sent after the session starts so a slow send cannot leave a session the
+	// client never receives; when the session fails the link is persisted anyway,
+	// so the owner is still told.
+	if linked != nil {
+		s.notifyOAuthLinked(ctx, authenticatedUser, *linked)
+	}
+
 	if err != nil {
 		return nil, domain.NewInternalServerError("auth.oauthLogin.tokenGenerationFailed", err)
 	}
@@ -456,6 +469,42 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		Tokens:      tokens,
 		RedirectURI: redirectURI,
 	}, nil
+}
+
+func (s *authService) notifyOAuthLinked(ctx context.Context, user *domain.User, link domain.UserOAuthProvider) {
+	err := s.emailVerification.SendOAuthLinkedNotice(ctx, user.Email, domain.OAuthLinkRevert{
+		UserUUID: user.UUID,
+		LinkUUID: link.UUID,
+		Provider: link.Provider,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to send the OAuth link notice", "user_uuid", user.UUID, "error", err)
+	}
+}
+
+// The link row is the only state of the undo token, so it is single use: once
+// the link is gone (undone, or removed some other way) the token is stale.
+func (s *authService) RevertOAuthLink(ctx context.Context, token string) (string, error) {
+	revert, err := s.emailVerification.VerifyOAuthLinkRevertToken(ctx, token)
+	if err != nil {
+		return "", err
+	}
+
+	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
+		deleted, err := s.authRepository.DeleteUserOAuthProviderOfUser(ctx, revert.UserUUID, revert.LinkUUID)
+		if err != nil {
+			return err
+		}
+		if !deleted {
+			return errOAuthLinkStaleToken
+		}
+		return s.sessionsRepository.DeleteAllByUser(ctx, revert.UserUUID)
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return revert.UserUUID, nil
 }
 
 func (s *authService) startOAuthSignup(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo, redirectURI string) (*domain.OAuthLoginResult, error) {
@@ -477,8 +526,8 @@ func (s *authService) startOAuthSignup(ctx context.Context, provider domain.OAut
 	return &domain.OAuthLoginResult{RedirectURI: redirectURI, PendingSignupUUID: pendingUUID}, nil
 }
 
-func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, error) {
-	user, err := s.resolveOAuthUserWithinTx(ctx, provider, userInfo)
+func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, *domain.UserOAuthProvider, error) {
+	user, linked, err := s.resolveOAuthUserWithinTx(ctx, provider, userInfo)
 
 	// A concurrent or replayed callback may have created the user or link first;
 	// its transaction has committed, so resolving again finds the existing records.
@@ -487,24 +536,25 @@ func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAut
 		return s.resolveOAuthUserWithinTx(ctx, provider, userInfo)
 	}
 
-	return user, err
+	return user, linked, err
 }
 
-func (s *authService) resolveOAuthUserWithinTx(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, error) {
+func (s *authService) resolveOAuthUserWithinTx(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, *domain.UserOAuthProvider, error) {
 	var user *domain.User
+	var linked *domain.UserOAuthProvider
 	err := s.transactor.WithinTx(ctx, func(ctx context.Context) error {
 		var err error
-		user, err = s.findOrCreateOAuthUser(ctx, provider, userInfo)
+		user, linked, err = s.findOrCreateOAuthUser(ctx, provider, userInfo)
 		return err
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return user, nil
+	return user, linked, nil
 }
 
-func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, error) {
+func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain.OAuthProviderName, userInfo *domain.OAuthProviderUserInfo) (*domain.User, *domain.UserOAuthProvider, error) {
 	var notFoundErr *domain.NotFoundError
 
 	userOAuthProvider, err := s.GetUserOAuthProvider(ctx, domain.GetUserOAuthProviderDTO{
@@ -512,39 +562,42 @@ func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain
 		ProviderUserID: userInfo.ID,
 	})
 	if err != nil && !errors.As(err, &notFoundErr) {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Case 1: provider is already linked to a user.
 	if userOAuthProvider != nil {
-		return s.usersService.GetByUUID(ctx, domain.Actor{UUID: userOAuthProvider.UserUUID}, userOAuthProvider.UserUUID)
+		user, err := s.usersService.GetByUUID(ctx, domain.Actor{UUID: userOAuthProvider.UserUUID}, userOAuthProvider.UserUUID)
+		return user, nil, err
 	}
 
 	// Both Case 2 and Case 3 trust the provider's claim of owning this email;
 	// otherwise the mailbox is proven by code before anything is written.
 	if !userInfo.EmailVerified {
-		return nil, errOAuthEmailUnverified
+		return nil, nil, errOAuthEmailUnverified
 	}
 
 	existingUser, err := s.usersService.GetByEmail(ctx, userInfo.Email)
 	if err != nil && !errors.As(err, &notFoundErr) {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Case 2: provider email matches an existing user account (link provider).
 	// Every account proved its email when it was created, so the provider and
-	// the account belong to the same mailbox owner.
+	// the account belong to the same mailbox owner. The created link is returned
+	// so the caller can notify the owner once the transaction committed.
 	if existingUser != nil {
-		if _, err := s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
+		link, err := s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
 			UserUUID:       existingUser.UUID,
 			Provider:       provider,
 			ProviderUserID: userInfo.ID,
 			ProviderEmail:  userInfo.Email,
-		}); err != nil {
-			return nil, err
+		})
+		if err != nil {
+			return nil, nil, err
 		}
 
-		return existingUser, nil
+		return existingUser, link, nil
 	}
 
 	// Case 3: provider is not used and there is no user with this email (create user and link).
@@ -553,7 +606,7 @@ func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain
 		Email: userInfo.Email,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if _, err := s.AddUserOAuthProvider(ctx, domain.AddUserOAuthProviderDTO{
@@ -562,8 +615,8 @@ func (s *authService) findOrCreateOAuthUser(ctx context.Context, provider domain
 		ProviderUserID: userInfo.ID,
 		ProviderEmail:  userInfo.Email,
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return newUser, nil
+	return newUser, nil, nil
 }

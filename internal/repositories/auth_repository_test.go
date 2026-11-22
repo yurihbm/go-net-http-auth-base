@@ -286,3 +286,67 @@ func TestAuthPostgresRepository_DeleteOAuthProvidersCreatedSince(t *testing.T) {
 		assert.True(t, errors.As(err, &validationErr))
 	})
 }
+
+func TestAuthPostgresRepository_DeleteUserOAuthProviderOfUser(t *testing.T) {
+	repo, usersRepo, createdUser := setupAuthRepoTest(t)
+	ctx := context.Background()
+
+	createProvider := func(t *testing.T, userUUID string, providerUserID string) *domain.UserOAuthProvider {
+		t.Helper()
+		provider, err := repo.CreateUserOAuthProvider(ctx, domain.UserOAuthProvider{
+			UserUUID:       userUUID,
+			Provider:       domain.OAuthProviderGoogle,
+			ProviderUserID: providerUserID,
+			ProviderEmail:  "test@gmail.com",
+		})
+		require.NoError(t, err)
+		return provider
+	}
+
+	t.Run("success deletes the user's own link", func(t *testing.T) {
+		provider := createProvider(t, createdUser.UUID, "own")
+
+		deleted, err := repo.DeleteUserOAuthProviderOfUser(ctx, createdUser.UUID, provider.UUID)
+
+		require.NoError(t, err)
+		assert.True(t, deleted)
+		providers, err := repo.ListUserOAuthProvidersByUserUUID(ctx, createdUser.UUID)
+		require.NoError(t, err)
+		assert.Empty(t, providers)
+	})
+
+	t.Run("keeps another user's link", func(t *testing.T) {
+		other, err := usersRepo.Create(ctx, domain.User{Name: "Other", Email: "other@example.com", PasswordHash: "hash"})
+		require.NoError(t, err)
+		provider := createProvider(t, other.UUID, "others")
+
+		deleted, err := repo.DeleteUserOAuthProviderOfUser(ctx, createdUser.UUID, provider.UUID)
+
+		require.NoError(t, err)
+		assert.False(t, deleted)
+		providers, err := repo.ListUserOAuthProvidersByUserUUID(ctx, other.UUID)
+		require.NoError(t, err)
+		assert.Len(t, providers, 1)
+	})
+
+	t.Run("reports nothing deleted when the link is already gone", func(t *testing.T) {
+		provider := createProvider(t, createdUser.UUID, "twice")
+		_, err := repo.DeleteUserOAuthProviderOfUser(ctx, createdUser.UUID, provider.UUID)
+		require.NoError(t, err)
+
+		deleted, err := repo.DeleteUserOAuthProviderOfUser(ctx, createdUser.UUID, provider.UUID)
+
+		require.NoError(t, err)
+		assert.False(t, deleted)
+	})
+
+	t.Run("error - invalid uuids", func(t *testing.T) {
+		var validationErr *domain.ValidationError
+
+		_, err := repo.DeleteUserOAuthProviderOfUser(ctx, "invalid", uuid.Must(uuid.NewV7()).String())
+		assert.True(t, errors.As(err, &validationErr))
+
+		_, err = repo.DeleteUserOAuthProviderOfUser(ctx, createdUser.UUID, "invalid")
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
