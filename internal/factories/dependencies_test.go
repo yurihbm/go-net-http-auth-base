@@ -20,7 +20,7 @@ func TestNewEmailProvider(t *testing.T) {
 	t.Run("uses the resend provider with an API key", func(t *testing.T) {
 		provider := newEmailProvider(config.EmailConfig{ResendAPIKey: "re_key", From: "no-reply@example.com"})
 
-		assert.Equal(t, providers.NewResendEmailProvider("re_key", "no-reply@example.com"), provider)
+		assert.IsType(t, providers.NewResendEmailProvider("re_key", "no-reply@example.com"), provider)
 	})
 }
 

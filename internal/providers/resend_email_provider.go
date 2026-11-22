@@ -8,16 +8,22 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"go-net-http-auth-base/internal/domain"
+
+	"github.com/google/uuid"
 )
 
 const (
 	resendUserAgent        = "go-net-http-auth-base/1.0"
 	resendErrorBodyMaxSize = 4096
 	resendHTTPTimeout      = 10 * time.Second
+	resendMaxAttempts      = 3
+	resendBackoff          = 200 * time.Millisecond
+	resendMaxBackoff       = 2 * time.Second
 )
 
 type resendErrorResponse struct {
@@ -29,6 +35,8 @@ type resendEmailProvider struct {
 	apiKey  string
 	from    string
 	baseURL string
+	client  *http.Client
+	wait    func(ctx context.Context, d time.Duration) error
 }
 
 type resendEmailRequest struct {
@@ -48,6 +56,19 @@ func NewResendEmailProvider(apiKey string, from string, baseURL ...string) domai
 		apiKey:  apiKey,
 		from:    from,
 		baseURL: urlToUse,
+		client:  &http.Client{Timeout: resendHTTPTimeout},
+		wait:    waitWithContext,
+	}
+}
+
+func waitWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 
@@ -63,18 +84,40 @@ func (p *resendEmailProvider) Send(ctx context.Context, msg domain.EmailMessage)
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/emails", bytes.NewReader(body))
+	idempotencyKey, err := uuid.NewV7()
 	if err != nil {
 		return err
+	}
+
+	for attempt := 1; ; attempt++ {
+		retryAfter, retryable, err := p.attempt(ctx, body, idempotencyKey.String())
+		if err == nil || !retryable || attempt == resendMaxAttempts || ctx.Err() != nil {
+			return err
+		}
+
+		delay := resendBackoff << (attempt - 1)
+		if retryAfter > 0 && retryAfter <= resendMaxBackoff {
+			delay = retryAfter
+		}
+		if waitErr := p.wait(ctx, delay); waitErr != nil {
+			return waitErr
+		}
+	}
+}
+
+func (p *resendEmailProvider) attempt(ctx context.Context, body []byte, idempotencyKey string) (time.Duration, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/emails", bytes.NewReader(body))
+	if err != nil {
+		return 0, false, err
 	}
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", resendUserAgent)
+	req.Header.Set("Idempotency-Key", idempotencyKey)
 
-	client := &http.Client{Timeout: resendHTTPTimeout}
-	resp, err := client.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
-		return err
+		return 0, true, err
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -82,10 +125,16 @@ func (p *resendEmailProvider) Send(ctx context.Context, msg domain.EmailMessage)
 		}
 	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resendStatusError(resp)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return 0, false, nil
 	}
-	return nil
+
+	retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+	var retryAfter time.Duration
+	if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds > 0 {
+		retryAfter = time.Duration(seconds) * time.Second
+	}
+	return retryAfter, retryable, resendStatusError(resp)
 }
 
 func resendStatusError(resp *http.Response) error {

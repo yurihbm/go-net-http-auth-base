@@ -12,6 +12,7 @@ import (
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/providers"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -169,5 +170,157 @@ func TestResendEmailProvider_Send(t *testing.T) {
 		err := provider.Send(ctx, msg)
 
 		require.ErrorIs(t, err, context.Canceled)
+	})
+
+	newRecordingProvider := func(url string, waits *[]time.Duration) domain.EmailProvider {
+		return providers.NewResendEmailProviderWithWait("re_key", "from@example.com", url, func(ctx context.Context, d time.Duration) error {
+			*waits = append(*waits, d)
+			return ctx.Err()
+		})
+	}
+
+	t.Run("success - retries a 5xx with the same idempotency key", func(t *testing.T) {
+		var keys []string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			keys = append(keys, r.Header.Get("Idempotency-Key"))
+			if len(keys) == 1 {
+				w.WriteHeader(http.StatusBadGateway)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		var waits []time.Duration
+
+		err := newRecordingProvider(server.URL, &waits).Send(context.Background(), msg)
+
+		require.NoError(t, err)
+		require.Len(t, keys, 2)
+		assert.NotEmpty(t, keys[0])
+		assert.Equal(t, keys[0], keys[1])
+		parsed, err := uuid.Parse(keys[0])
+		require.NoError(t, err)
+		assert.Equal(t, uuid.Version(7), parsed.Version())
+		assert.Equal(t, []time.Duration{200 * time.Millisecond}, waits)
+	})
+
+	t.Run("success - uses a new idempotency key per Send", func(t *testing.T) {
+		var keys []string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			keys = append(keys, r.Header.Get("Idempotency-Key"))
+		}))
+		defer server.Close()
+		var waits []time.Duration
+		provider := newRecordingProvider(server.URL, &waits)
+
+		require.NoError(t, provider.Send(context.Background(), msg))
+		require.NoError(t, provider.Send(context.Background(), msg))
+
+		require.Len(t, keys, 2)
+		assert.NotEqual(t, keys[0], keys[1])
+	})
+
+	t.Run("success - honors Retry-After on 429 within the cap", func(t *testing.T) {
+		var requests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			if requests == 1 {
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		var waits []time.Duration
+
+		err := newRecordingProvider(server.URL, &waits).Send(context.Background(), msg)
+
+		require.NoError(t, err)
+		assert.Equal(t, []time.Duration{time.Second}, waits)
+	})
+
+	t.Run("success - ignores Retry-After above the cap", func(t *testing.T) {
+		var requests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			if requests == 1 {
+				w.Header().Set("Retry-After", "120")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		var waits []time.Duration
+
+		err := newRecordingProvider(server.URL, &waits).Send(context.Background(), msg)
+
+		require.NoError(t, err)
+		assert.Equal(t, []time.Duration{200 * time.Millisecond}, waits)
+	})
+
+	t.Run("error - does not retry a non-retryable 4xx", func(t *testing.T) {
+		var requests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			w.WriteHeader(http.StatusUnprocessableEntity)
+		}))
+		defer server.Close()
+		var waits []time.Duration
+
+		err := newRecordingProvider(server.URL, &waits).Send(context.Background(), msg)
+
+		require.Error(t, err)
+		assert.Equal(t, 1, requests)
+		assert.Empty(t, waits)
+	})
+
+	t.Run("error - stops after three failed attempts", func(t *testing.T) {
+		var requests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer server.Close()
+		var waits []time.Duration
+
+		err := newRecordingProvider(server.URL, &waits).Send(context.Background(), msg)
+
+		require.EqualError(t, err, "resend: unexpected status 503")
+		assert.Equal(t, 3, requests)
+		assert.Equal(t, []time.Duration{200 * time.Millisecond, 400 * time.Millisecond}, waits)
+	})
+
+	t.Run("error - retries transport errors", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		url := server.URL
+		server.Close()
+		var waits []time.Duration
+
+		err := newRecordingProvider(url, &waits).Send(context.Background(), msg)
+
+		require.Error(t, err)
+		assert.Len(t, waits, 2)
+	})
+
+	t.Run("error - stops retrying when the context is cancelled during backoff", func(t *testing.T) {
+		var requests int
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+		provider := providers.NewResendEmailProviderWithWait("re_key", "from@example.com", server.URL, func(ctx context.Context, d time.Duration) error {
+			cancel()
+			return ctx.Err()
+		})
+
+		err := provider.Send(ctx, msg)
+
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, 1, requests)
 	})
 }
