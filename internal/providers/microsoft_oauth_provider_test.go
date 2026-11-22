@@ -30,16 +30,16 @@ func TestMicrosoftOAuthProvider_GetAuthURL(t *testing.T) {
 	assertPKCEChallenge(t, authURL)
 }
 
-func TestMicrosoftOAuthProvider_GetUserInfo_SendsCodeVerifier(t *testing.T) {
-	cfg, receivedVerifier := newVerifierCapturingTokenConfig(t)
-	provider := providers.NewMicrosoftOAuthProvider(cfg)
-
-	_, _ = provider.GetUserInfo(context.Background(), "test-auth-code", testCodeVerifier)
-
-	assert.Equal(t, testCodeVerifier, *receivedVerifier)
-}
-
 func TestMicrosoftOAuthProvider_GetUserInfo(t *testing.T) {
+	t.Run("sends the code verifier", func(t *testing.T) {
+		cfg, receivedVerifier := newVerifierCapturingTokenConfig(t)
+		provider := providers.NewMicrosoftOAuthProvider(cfg)
+
+		_, _ = provider.GetUserInfo(context.Background(), "test-auth-code", testCodeVerifier)
+
+		assert.Equal(t, testCodeVerifier, *receivedVerifier)
+	})
+
 	t.Run("success - fetches user info correctly", func(t *testing.T) {
 		userInfoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "GET", r.Method)
