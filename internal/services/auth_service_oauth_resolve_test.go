@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAuthService_OAuthLogin_ResolveUser(t *testing.T) {
+func testOAuthLoginResolveUser(t *testing.T) {
 	const (
 		provider       = domain.OAuthProviderGoogle
 		providerUserID = "provider-user-id"

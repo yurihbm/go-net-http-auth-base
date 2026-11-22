@@ -3,6 +3,7 @@ package services_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,6 +144,31 @@ func TestPendingSignupService_StartCredentials(t *testing.T) {
 		m.emails.AssertNotCalled(t, "SendSignupCode", mock.Anything, mock.Anything)
 	})
 
+	t.Run("error - refused reservation returns before hashing the password", func(t *testing.T) {
+		service, m := newTestPendingSignupService()
+		unhashable := domain.CreateUserDTO{Name: "New", Email: signupEmail, Password: strings.Repeat("a", 73)}
+		expectEmailAvailable(m, signupEmail)
+		expectReserveSend(m, signupEmail, domain.ErrEmailSendLimit)
+
+		_, err := service.StartCredentials(context.Background(), unhashable)
+
+		assert.Equal(t, domain.ErrEmailSendLimit, err)
+		m.pending.AssertNotCalled(t, "Create", mock.Anything)
+	})
+
+	t.Run("error - password hashing failure after the reservation", func(t *testing.T) {
+		service, m := newTestPendingSignupService()
+		unhashable := domain.CreateUserDTO{Name: "New", Email: signupEmail, Password: strings.Repeat("a", 73)}
+		expectEmailAvailable(m, signupEmail)
+		expectReserveSend(m, signupEmail, nil)
+
+		_, err := service.StartCredentials(context.Background(), unhashable)
+
+		require.Error(t, err)
+		assert.Equal(t, "users.create.passwordHashingFailed", err.Error())
+		m.pending.AssertNotCalled(t, "Create", mock.Anything)
+	})
+
 	t.Run("error - send failure deletes the pending signup", func(t *testing.T) {
 		service, m := newTestPendingSignupService()
 		var stored domain.PendingSignup
@@ -266,6 +292,7 @@ func TestPendingSignupService_Resend(t *testing.T) {
 		err := service.Resend(context.Background(), signupPendingUUID)
 
 		assert.Equal(t, "auth.signup.sendFailed", err.Error())
+		m.pending.AssertNotCalled(t, "Delete", mock.Anything)
 	})
 }
 

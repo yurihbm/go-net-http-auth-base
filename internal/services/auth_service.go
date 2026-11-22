@@ -176,7 +176,11 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 		return domain.AuthTokens{}, s.revokeSession(ctx, userUUID, sessionUUID)
 	}
 
-	nextJTI := uuid.NewString()
+	nextUUID, err := uuid.NewV7()
+	if err != nil {
+		return domain.AuthTokens{}, domain.NewInternalServerError("auth.refreshToken.tokenGenerationFailed", err)
+	}
+	nextJTI := nextUUID.String()
 	if err := s.sessionsRepository.RotateJTI(ctx, userUUID, sessionUUID, tokenData.ID, nextJTI); err != nil {
 		if errors.As(err, &notFoundErr) {
 			return domain.AuthTokens{}, s.revokeSession(ctx, userUUID, sessionUUID)
@@ -234,7 +238,11 @@ func (s *authService) startSession(ctx context.Context, user *domain.User) (doma
 			return err
 		}
 
-		jti := uuid.NewString()
+		jtiUUID, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		jti := jtiUUID.String()
 		session, err := s.sessionsRepository.Create(ctx, domain.UserSession{
 			UserUUID:   user.UUID,
 			CurrentJTI: jti,
