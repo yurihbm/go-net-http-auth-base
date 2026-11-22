@@ -4,7 +4,7 @@ Reference for the sign-up, OAuth, session, step-up and email change behaviour. E
 
 ## Email Provider
 
-`domain.EmailProvider` (`Send`) is built once in `factories.Dependencies`: `ResendEmailProvider` when `RESEND_API_KEY` is set, otherwise `LogEmailProvider` (development). `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_CHANGE_REVERT_URL` are required outside development; all are loaded and validated in `config/config.go`. `LogEmailProvider` does not log email bodies (the undo link carries a JWT).
+`domain.EmailProvider` (`Send`) is built once in `factories.Dependencies`: `ResendEmailProvider` when `RESEND_API_KEY` is set, otherwise `LogEmailProvider` (development). `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_CHANGE_REVERT_URL` are required outside development; all are loaded and validated in `config/config.go`. `LogEmailProvider` does not log email bodies (the undo link carries a JWT). The Resend adapter retries failed API calls (transport errors, 429, 5xx; up to 3 attempts with a per-send `Idempotency-Key`), but a notice whose send failure is only logged can still be lost when every attempt fails (ADR-011).
 
 ## Email Normalization
 
