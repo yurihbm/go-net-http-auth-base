@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go-net-http-auth-base/internal/domain"
@@ -210,5 +211,54 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 
 		assert.Equal(t, 0, count(t, "pending_signups"))
 		assert.Equal(t, 0, count(t, "email_send_limits"))
+	})
+
+	t.Run("skips when another instance holds the lock", func(t *testing.T) {
+		userUUID := reset(t)
+		insertSession(t, userUUID, -time.Minute, 0)
+		insertPendingSignup(t, -time.Minute)
+
+		holder, err := testDB.Acquire(ctx)
+		require.NoError(t, err)
+		_, err = holder.Exec(ctx, "SELECT pg_advisory_lock($1)", infra.ExpiredRecordsSweepLockID)
+		require.NoError(t, err)
+
+		require.NoError(t, sweeper.RunMaintenance(ctx))
+
+		assert.Equal(t, 1, count(t, "user_sessions"))
+		assert.Equal(t, 1, count(t, "pending_signups"))
+
+		_, err = holder.Exec(ctx, "SELECT pg_advisory_unlock($1)", infra.ExpiredRecordsSweepLockID)
+		require.NoError(t, err)
+		holder.Release()
+		require.NoError(t, sweeper.RunMaintenance(ctx))
+
+		assert.Equal(t, 0, count(t, "user_sessions"))
+		assert.Equal(t, 0, count(t, "pending_signups"))
+	})
+
+	t.Run("completes with a single-connection pool", func(t *testing.T) {
+		userUUID := reset(t)
+		insertSession(t, userUUID, -time.Minute, 0)
+		insertPendingSignup(t, -time.Minute)
+
+		cfg := testDB.Config().Copy()
+		cfg.MaxConns = 1
+		small, err := pgxpool.NewWithConfig(ctx, cfg)
+		require.NoError(t, err)
+		defer small.Close()
+
+		timeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		require.NoError(t, infra.NewExpiredRecordsSweeper(small).RunMaintenance(timeout))
+
+		assert.Equal(t, 0, count(t, "user_sessions"))
+		assert.Equal(t, 0, count(t, "pending_signups"))
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		assert.Error(t, sweeper.RunMaintenance(canceled))
 	})
 }

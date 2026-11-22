@@ -110,7 +110,7 @@ func (r *SessionsPostgresRepository) DeleteExpiredByUser(ctx context.Context, us
 
 	if err := r.q.DeleteExpiredUserSessionsByUser(ctx, postgres.DeleteExpiredUserSessionsByUserParams{
 		UserUuid:    *userUUID,
-		IdleTimeout: toInterval(idleTimeout),
+		IdleTimeout: postgres.ToInterval(idleTimeout),
 	}); err != nil {
 		return domain.NewInternalServerError("sessions.internalServerError", err)
 	}
