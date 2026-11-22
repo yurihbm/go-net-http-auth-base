@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
@@ -74,19 +75,47 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			assert.NotEqual(t, "POST "+path, pattern)
 		}
 	})
-}
 
-func TestUsersController_RegisterRoutes_StepUp(t *testing.T) {
-	t.Run("should protect email change and deletion with step-up", func(t *testing.T) {
+	t.Run("should protect only email change and deletion with step-up", func(t *testing.T) {
 		router := http.NewServeMux()
-		controller, _, _, authMiddleware, stepUpMiddleware := newTestUsersControllerWithStepUp()
+		_, serviceMock, _, authMiddleware, _ := newTestUsersControllerWithStepUp()
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		stepUpMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(2)
+		serviceMock.On("GetByUUID", mock.Anything, mock.Anything).Return(nil, errors.New("stop")).Maybe()
+		controller := controllers.NewUsersController(serviceMock, new(mocks.PendingSignupServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, true)
 
 		controller.RegisterRoutes(router)
 
-		stepUpMiddleware.AssertNumberOfCalls(t, "Use", 2)
+		for _, route := range []struct {
+			method, path string
+			stepUp       bool
+		}{
+			{"POST", "/users", false},
+			{"POST", "/users/revert-email-change", false},
+			{"GET", "/users/me", false},
+			{"POST", "/users/me/email", true},
+			{"POST", "/users/me/email/confirm", false},
+			{"GET", "/users/some-uuid", false},
+			{"PUT", "/users/some-uuid", false},
+			{"DELETE", "/users/some-uuid", true},
+		} {
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, httptest.NewRequest(route.method, route.path, nil))
+
+			assert.Equal(t, route.stepUp, w.Header().Get(stepUpMarkerHeader) != "", route.method+" "+route.path)
+		}
 	})
+}
+
+const stepUpMarkerHeader = "X-Step-Up-Applied"
+
+type stepUpMarker struct{}
+
+func (stepUpMarker) Use(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(stepUpMarkerHeader, "true")
+		w.WriteHeader(http.StatusTeapot)
+	}
 }
 
 func TestUsersController_CreateUser(t *testing.T) {
@@ -140,6 +169,18 @@ func TestUsersController_CreateUser(t *testing.T) {
 		controller, pendingMock, auditMock := newTestSignupUsersController(true)
 
 		w, req := getControllerArgs("POST", "/users", domain.CreateUserDTO{Name: "John Doe", Email: "john@mail.com", Password: "1234556"})
+
+		controller.CreateUser(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		pendingMock.AssertNotCalled(t, "StartCredentials", mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("bad request - password longer than bcrypt accepts", func(t *testing.T) {
+		controller, pendingMock, auditMock := newTestSignupUsersController(true)
+
+		w, req := getControllerArgs("POST", "/users", domain.CreateUserDTO{Name: "John Doe", Email: "john@mail.com", Password: strings.Repeat("a", 73)})
 
 		controller.CreateUser(w, req)
 

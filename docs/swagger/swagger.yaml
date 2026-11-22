@@ -125,6 +125,7 @@ definitions:
       name:
         type: string
       password:
+        maxLength: 72
         minLength: 8
         type: string
     required:
