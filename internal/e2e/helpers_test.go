@@ -59,7 +59,7 @@ func seedUser(t *testing.T) seededUser {
 	hash, err := bcrypt.GenerateFromPassword([]byte(seedPassword), bcrypt.MinCost)
 	require.NoError(t, err)
 
-	email := fmt.Sprintf("user-%s@example.com", uuid.NewString())
+	email := fmt.Sprintf("user-%s@example.com", uuid.Must(uuid.NewV7()).String())
 	created, err := repositories.NewUsersPostgresRepository(testDB).Create(context.Background(), domain.User{
 		Name:         "Seeded User",
 		Email:        email,

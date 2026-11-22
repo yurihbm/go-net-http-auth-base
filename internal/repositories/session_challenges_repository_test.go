@@ -116,7 +116,7 @@ func TestSessionChallengesPostgresRepository_Upsert(t *testing.T) {
 	})
 
 	t.Run("error - unknown session", func(t *testing.T) {
-		err := repo.Upsert(ctx, newStepUpChallenge(user, &domain.UserSession{UUID: uuid.NewString()}, "hash"), domain.StepUpCooldown)
+		err := repo.Upsert(ctx, newStepUpChallenge(user, &domain.UserSession{UUID: uuid.Must(uuid.NewV7()).String()}, "hash"), domain.StepUpCooldown)
 
 		var notFoundErr *domain.NotFoundError
 		assert.True(t, errors.As(err, &notFoundErr))
@@ -160,7 +160,7 @@ func TestSessionChallengesPostgresRepository_Find(t *testing.T) {
 	})
 
 	t.Run("error - challenge of another user", func(t *testing.T) {
-		challenge, err := repo.Find(ctx, uuid.NewString(), session.UUID, domain.SessionChallengeEmailChange)
+		challenge, err := repo.Find(ctx, uuid.Must(uuid.NewV7()).String(), session.UUID, domain.SessionChallengeEmailChange)
 
 		assert.Nil(t, challenge)
 		assert.ErrorIs(t, err, domain.ErrEmailChangeNoChallenge)
@@ -234,7 +234,7 @@ func TestSessionChallengesPostgresRepository_Attempt(t *testing.T) {
 		_, err := testDB.Exec(ctx, "UPDATE session_challenges SET expires_at = now() + interval '10 minutes' WHERE session_uuid = $1", session.UUID)
 		require.NoError(t, err)
 
-		challenge, err := repo.Attempt(ctx, uuid.NewString(), session.UUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts)
+		challenge, err := repo.Attempt(ctx, uuid.Must(uuid.NewV7()).String(), session.UUID, domain.SessionChallengeStepUp, domain.StepUpMaxAttempts)
 
 		assert.Nil(t, challenge)
 		assert.ErrorIs(t, err, domain.ErrStepUpNoChallenge)
@@ -275,7 +275,7 @@ func TestSessionChallengesPostgresRepository_Delete(t *testing.T) {
 	})
 
 	t.Run("success - nothing to delete", func(t *testing.T) {
-		assert.NoError(t, repo.Delete(ctx, uuid.NewString(), domain.SessionChallengeStepUp))
+		assert.NoError(t, repo.Delete(ctx, uuid.Must(uuid.NewV7()).String(), domain.SessionChallengeStepUp))
 	})
 
 	t.Run("error - invalid uuid", func(t *testing.T) {
