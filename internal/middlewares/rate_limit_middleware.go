@@ -18,6 +18,7 @@ type RateLimitMiddleware struct {
 	mu       sync.Mutex
 	rate     rate.Limit
 	burst    int
+	now      func() time.Time
 }
 
 type visitor struct {
@@ -26,10 +27,15 @@ type visitor struct {
 }
 
 func NewRateLimitMiddleware(ctx context.Context, r rate.Limit, b int) GlobalMiddleware {
+	return newRateLimitMiddleware(ctx, r, b, time.Now)
+}
+
+func newRateLimitMiddleware(ctx context.Context, r rate.Limit, b int, now func() time.Time) GlobalMiddleware {
 	m := &RateLimitMiddleware{
 		visitors: make(map[string]*visitor),
 		rate:     r,
 		burst:    b,
+		now:      now,
 	}
 
 	go m.cleanupVisitors(ctx)
@@ -46,7 +52,7 @@ func (m *RateLimitMiddleware) Use(next http.Handler) http.Handler {
 
 		limiter := m.getVisitor(ip)
 
-		if !limiter.Allow() {
+		if !limiter.AllowN(m.now(), 1) {
 			m.setHeaders(w, limiter)
 			api.WriteJSONResponse(w, http.StatusTooManyRequests, api.ResponseBody[any]{
 				Message: "rateLimit.exceeded",
@@ -67,11 +73,11 @@ func (m *RateLimitMiddleware) getVisitor(ip string) *rate.Limiter {
 	v, exists := m.visitors[ip]
 	if !exists {
 		limiter := rate.NewLimiter(m.rate, m.burst)
-		m.visitors[ip] = &visitor{limiter: limiter, lastSeen: time.Now()}
+		m.visitors[ip] = &visitor{limiter: limiter, lastSeen: m.now()}
 		return limiter
 	}
 
-	v.lastSeen = time.Now()
+	v.lastSeen = m.now()
 	return v.limiter
 }
 
@@ -88,7 +94,7 @@ func (m *RateLimitMiddleware) cleanupVisitors(ctx context.Context) {
 
 		m.mu.Lock()
 		for ip, v := range m.visitors {
-			if time.Since(v.lastSeen) > 3*time.Minute {
+			if m.now().Sub(v.lastSeen) > 3*time.Minute {
 				delete(m.visitors, ip)
 			}
 		}
@@ -99,8 +105,8 @@ func (m *RateLimitMiddleware) cleanupVisitors(ctx context.Context) {
 func (m *RateLimitMiddleware) setHeaders(w http.ResponseWriter, limiter *rate.Limiter) {
 	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(m.burst))
 
-	// Tokens() returns the number of tokens currently available.
-	tokens := limiter.Tokens()
+	// TokensAt() returns the number of tokens currently available.
+	tokens := limiter.TokensAt(m.now())
 	w.Header().Set("X-RateLimit-Remaining", strconv.FormatFloat(tokens, 'f', 0, 64))
 
 	// Calculate time to full replenishment
@@ -109,10 +115,10 @@ func (m *RateLimitMiddleware) setHeaders(w http.ResponseWriter, limiter *rate.Li
 		missingTokens := float64(m.burst) - tokens
 		if missingTokens > 0 {
 			secondsToFull := missingTokens / float64(m.rate)
-			resetTime := time.Now().Add(time.Duration(secondsToFull * float64(time.Second))).Unix()
+			resetTime := m.now().Add(time.Duration(secondsToFull * float64(time.Second))).Unix()
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime, 10))
 		} else {
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Unix(), 10))
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(m.now().Unix(), 10))
 		}
 	}
 }
