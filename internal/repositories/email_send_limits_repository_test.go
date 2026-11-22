@@ -78,6 +78,11 @@ func TestEmailSendLimitsPostgresRepository_ReserveSend(t *testing.T) {
 
 		assert.NoError(t, reserveSend(limiter))
 	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		limiter := setupEmailSendLimitsRepoTest(t)
+		assertInternalError(t, limiter.ReserveSend(canceledContext(), limitedEmail, domain.EmailSendCooldown, domain.EmailSendWindow, domain.EmailMaxSendsPerWindow))
+	})
 }
 
 func codeFailures(t *testing.T) int {
@@ -138,6 +143,11 @@ func TestEmailSendLimitsPostgresRepository_ReserveCodeGuess(t *testing.T) {
 		assert.Equal(t, int32(30-domain.EmailMaxCodeFailures), locked.Load())
 		assert.Equal(t, domain.EmailMaxCodeFailures, codeFailures(t))
 	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		limiter := setupEmailSendLimitsRepoTest(t)
+		assertInternalError(t, limiter.ReserveCodeGuess(canceledContext(), limitedEmail, domain.EmailCodeFailureWindow))
+	})
 }
 
 func TestEmailSendLimitsPostgresRepository_RefundCodeGuess(t *testing.T) {
@@ -168,5 +178,10 @@ func TestEmailSendLimitsPostgresRepository_RefundCodeGuess(t *testing.T) {
 		limiter := setupEmailSendLimitsRepoTest(t)
 
 		assert.NoError(t, limiter.RefundCodeGuess(ctx, limitedEmail))
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		limiter := setupEmailSendLimitsRepoTest(t)
+		assertInternalError(t, limiter.RefundCodeGuess(canceledContext(), limitedEmail))
 	})
 }

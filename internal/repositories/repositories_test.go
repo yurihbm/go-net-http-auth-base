@@ -2,15 +2,18 @@ package repositories_test
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"testing"
 
+	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/postgres"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
 )
 
 var testDB *pgxpool.Pool
@@ -44,4 +47,16 @@ func truncateTables(ctx context.Context, db *pgxpool.Pool) {
 			log.Fatalf("Failed to truncate table %s: %v", table, err)
 		}
 	}
+}
+
+func canceledContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
+}
+
+func assertInternalError(t *testing.T, err error) {
+	t.Helper()
+	var internalErr *domain.InternalServerError
+	assert.True(t, errors.As(err, &internalErr), "expected InternalServerError, got %v", err)
 }

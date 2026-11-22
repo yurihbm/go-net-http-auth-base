@@ -78,7 +78,7 @@ func TestSessionsPostgresRepository_Create(t *testing.T) {
 	})
 
 	t.Run("error - unknown user", func(t *testing.T) {
-		_, err := repo.Create(ctx, domain.UserSession{UserUUID: uuid.NewString(), CurrentJTI: "jti", ExpiresAt: time.Now().Add(time.Hour).Unix()})
+		_, err := repo.Create(ctx, domain.UserSession{UserUUID: uuid.Must(uuid.NewV7()).String(), CurrentJTI: "jti", ExpiresAt: time.Now().Add(time.Hour).Unix()})
 
 		var notFoundErr *domain.NotFoundError
 		assert.True(t, errors.As(err, &notFoundErr))
@@ -114,14 +114,14 @@ func TestSessionsPostgresRepository_FindByUUID(t *testing.T) {
 	})
 
 	t.Run("error - not found", func(t *testing.T) {
-		assert.False(t, sessionExists(t, repo, user.UUID, uuid.NewString()))
+		assert.False(t, sessionExists(t, repo, user.UUID, uuid.Must(uuid.NewV7()).String()))
 	})
 
 	t.Run("error - invalid uuid", func(t *testing.T) {
 		var validationErr *domain.ValidationError
 		_, err := repo.FindByUUID(ctx, user.UUID, "invalid")
 		assert.True(t, errors.As(err, &validationErr))
-		_, err = repo.FindByUUID(ctx, "invalid", uuid.NewString())
+		_, err = repo.FindByUUID(ctx, "invalid", uuid.Must(uuid.NewV7()).String())
 		assert.True(t, errors.As(err, &validationErr))
 	})
 
@@ -170,7 +170,7 @@ func TestSessionsPostgresRepository_RotateJTI(t *testing.T) {
 	t.Run("error - wrong user", func(t *testing.T) {
 		session := seedSession(t, repo, user.UUID, "jti-owner")
 
-		err := repo.RotateJTI(ctx, uuid.NewString(), session.UUID, "jti-owner", "next")
+		err := repo.RotateJTI(ctx, uuid.Must(uuid.NewV7()).String(), session.UUID, "jti-owner", "next")
 
 		assert.True(t, errors.As(err, &notFoundErr))
 	})
@@ -183,7 +183,7 @@ func TestSessionsPostgresRepository_RotateJTI(t *testing.T) {
 		var wg sync.WaitGroup
 		for i := range rotations {
 			wg.Go(func() {
-				errs[i] = repo.RotateJTI(ctx, user.UUID, session.UUID, "concurrent", uuid.NewString())
+				errs[i] = repo.RotateJTI(ctx, user.UUID, session.UUID, "concurrent", uuid.Must(uuid.NewV7()).String())
 			})
 		}
 		wg.Wait()
@@ -202,7 +202,7 @@ func TestSessionsPostgresRepository_RotateJTI(t *testing.T) {
 	t.Run("error - invalid uuid", func(t *testing.T) {
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(repo.RotateJTI(ctx, user.UUID, "invalid", "a", "b"), &validationErr))
-		assert.True(t, errors.As(repo.RotateJTI(ctx, "invalid", uuid.NewString(), "a", "b"), &validationErr))
+		assert.True(t, errors.As(repo.RotateJTI(ctx, "invalid", uuid.Must(uuid.NewV7()).String(), "a", "b"), &validationErr))
 	})
 }
 
@@ -221,13 +221,13 @@ func TestSessionsPostgresRepository_Delete(t *testing.T) {
 	})
 
 	t.Run("success - idempotent", func(t *testing.T) {
-		assert.NoError(t, repo.Delete(ctx, user.UUID, uuid.NewString()))
+		assert.NoError(t, repo.Delete(ctx, user.UUID, uuid.Must(uuid.NewV7()).String()))
 	})
 
 	t.Run("success - ignores sessions of another user", func(t *testing.T) {
 		session := seedSession(t, repo, user.UUID, "owned")
 
-		require.NoError(t, repo.Delete(ctx, uuid.NewString(), session.UUID))
+		require.NoError(t, repo.Delete(ctx, uuid.Must(uuid.NewV7()).String(), session.UUID))
 
 		assert.True(t, sessionExists(t, repo, user.UUID, session.UUID))
 	})
@@ -236,53 +236,80 @@ func TestSessionsPostgresRepository_Delete(t *testing.T) {
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(repo.Delete(ctx, user.UUID, "invalid"), &validationErr))
 	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		assertInternalError(t, repo.Delete(canceledContext(), user.UUID, uuid.Must(uuid.NewV7()).String()))
+	})
 }
 
 func TestSessionsPostgresRepository_DeleteExpiredByUser(t *testing.T) {
 	repo, usersRepo, user := setupSessionsRepoTest(t)
 	ctx := context.Background()
-	const idleTimeout = 24 * time.Hour
 
-	active := seedSession(t, repo, user.UUID, "active")
-	expired := seedSession(t, repo, user.UUID, "expired")
-	setSessionTimes(t, expired.UUID, time.Now(), time.Now().Add(-time.Minute))
-	idle := seedSession(t, repo, user.UUID, "idle")
-	setSessionTimes(t, idle.UUID, time.Now().Add(-idleTimeout-time.Minute), time.Now().Add(time.Hour))
-	other, err := usersRepo.Create(ctx, domain.User{Name: "Other", Email: "other@example.com", PasswordHash: "hash"})
-	require.NoError(t, err)
-	otherExpired := seedSession(t, repo, other.UUID, "other-expired")
-	setSessionTimes(t, otherExpired.UUID, time.Now(), time.Now().Add(-time.Minute))
+	t.Run("success", func(t *testing.T) {
+		const idleTimeout = 24 * time.Hour
 
-	require.NoError(t, repo.DeleteExpiredByUser(ctx, user.UUID, idleTimeout))
+		active := seedSession(t, repo, user.UUID, "active")
+		expired := seedSession(t, repo, user.UUID, "expired")
+		setSessionTimes(t, expired.UUID, time.Now(), time.Now().Add(-time.Minute))
+		idle := seedSession(t, repo, user.UUID, "idle")
+		setSessionTimes(t, idle.UUID, time.Now().Add(-idleTimeout-time.Minute), time.Now().Add(time.Hour))
+		other, err := usersRepo.Create(ctx, domain.User{Name: "Other", Email: "other@example.com", PasswordHash: "hash"})
+		require.NoError(t, err)
+		otherExpired := seedSession(t, repo, other.UUID, "other-expired")
+		setSessionTimes(t, otherExpired.UUID, time.Now(), time.Now().Add(-time.Minute))
 
-	assert.True(t, sessionExists(t, repo, user.UUID, active.UUID))
-	assert.False(t, sessionExists(t, repo, user.UUID, expired.UUID))
-	assert.False(t, sessionExists(t, repo, user.UUID, idle.UUID))
-	assert.True(t, sessionExists(t, repo, other.UUID, otherExpired.UUID))
+		require.NoError(t, repo.DeleteExpiredByUser(ctx, user.UUID, idleTimeout))
+
+		assert.True(t, sessionExists(t, repo, user.UUID, active.UUID))
+		assert.False(t, sessionExists(t, repo, user.UUID, expired.UUID))
+		assert.False(t, sessionExists(t, repo, user.UUID, idle.UUID))
+		assert.True(t, sessionExists(t, repo, other.UUID, otherExpired.UUID))
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		assertInternalError(t, repo.DeleteExpiredByUser(canceledContext(), user.UUID, time.Hour))
+	})
+
+	t.Run("error - invalid user uuid", func(t *testing.T) {
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(repo.DeleteExpiredByUser(ctx, "invalid", time.Hour), &validationErr))
+	})
 }
 
 func TestSessionsPostgresRepository_DeleteOldestBeyond(t *testing.T) {
 	repo, usersRepo, user := setupSessionsRepoTest(t)
 	ctx := context.Background()
 
-	now := time.Now()
-	sessions := make([]*domain.UserSession, 4)
-	for i := range sessions {
-		sessions[i] = seedSession(t, repo, user.UUID, uuid.NewString())
-		setSessionTimes(t, sessions[i].UUID, now.Add(-time.Duration(i)*time.Minute), now.Add(time.Hour))
-	}
-	other, err := usersRepo.Create(ctx, domain.User{Name: "Other", Email: "other@example.com", PasswordHash: "hash"})
-	require.NoError(t, err)
-	otherSession := seedSession(t, repo, other.UUID, "other")
-	setSessionTimes(t, otherSession.UUID, now.Add(-time.Hour), now.Add(time.Hour))
+	t.Run("success", func(t *testing.T) {
+		now := time.Now()
+		sessions := make([]*domain.UserSession, 4)
+		for i := range sessions {
+			sessions[i] = seedSession(t, repo, user.UUID, uuid.Must(uuid.NewV7()).String())
+			setSessionTimes(t, sessions[i].UUID, now.Add(-time.Duration(i)*time.Minute), now.Add(time.Hour))
+		}
+		other, err := usersRepo.Create(ctx, domain.User{Name: "Other", Email: "other@example.com", PasswordHash: "hash"})
+		require.NoError(t, err)
+		otherSession := seedSession(t, repo, other.UUID, "other")
+		setSessionTimes(t, otherSession.UUID, now.Add(-time.Hour), now.Add(time.Hour))
 
-	require.NoError(t, repo.DeleteOldestBeyond(ctx, user.UUID, 2))
+		require.NoError(t, repo.DeleteOldestBeyond(ctx, user.UUID, 2))
 
-	assert.True(t, sessionExists(t, repo, user.UUID, sessions[0].UUID))
-	assert.True(t, sessionExists(t, repo, user.UUID, sessions[1].UUID))
-	assert.False(t, sessionExists(t, repo, user.UUID, sessions[2].UUID))
-	assert.False(t, sessionExists(t, repo, user.UUID, sessions[3].UUID))
-	assert.True(t, sessionExists(t, repo, other.UUID, otherSession.UUID))
+		assert.True(t, sessionExists(t, repo, user.UUID, sessions[0].UUID))
+		assert.True(t, sessionExists(t, repo, user.UUID, sessions[1].UUID))
+		assert.False(t, sessionExists(t, repo, user.UUID, sessions[2].UUID))
+		assert.False(t, sessionExists(t, repo, user.UUID, sessions[3].UUID))
+		assert.True(t, sessionExists(t, repo, other.UUID, otherSession.UUID))
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		assertInternalError(t, repo.DeleteOldestBeyond(canceledContext(), user.UUID, 2))
+	})
+
+	t.Run("error - invalid user uuid", func(t *testing.T) {
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(repo.DeleteOldestBeyond(ctx, "invalid", 2), &validationErr))
+	})
 }
 
 func TestSessionsPostgresRepository_SetStepUpUntil(t *testing.T) {
@@ -305,14 +332,14 @@ func TestSessionsPostgresRepository_SetStepUpUntil(t *testing.T) {
 	t.Run("error - session of another user", func(t *testing.T) {
 		session := seedSession(t, repo, user.UUID, "jti-2")
 
-		err := repo.SetStepUpUntil(ctx, uuid.NewString(), session.UUID, time.Now())
+		err := repo.SetStepUpUntil(ctx, uuid.Must(uuid.NewV7()).String(), session.UUID, time.Now())
 
 		var notFoundErr *domain.NotFoundError
 		assert.True(t, errors.As(err, &notFoundErr))
 	})
 
 	t.Run("error - session not found", func(t *testing.T) {
-		err := repo.SetStepUpUntil(ctx, user.UUID, uuid.NewString(), time.Now())
+		err := repo.SetStepUpUntil(ctx, user.UUID, uuid.Must(uuid.NewV7()).String(), time.Now())
 
 		var notFoundErr *domain.NotFoundError
 		assert.True(t, errors.As(err, &notFoundErr))
@@ -349,14 +376,14 @@ func TestSessionsPostgresRepository_IncrementStepUpFailures(t *testing.T) {
 	t.Run("error - session of another user", func(t *testing.T) {
 		session := seedSession(t, repo, user.UUID, "jti-3")
 
-		_, err := repo.IncrementStepUpFailures(ctx, uuid.NewString(), session.UUID)
+		_, err := repo.IncrementStepUpFailures(ctx, uuid.Must(uuid.NewV7()).String(), session.UUID)
 
 		var notFoundErr *domain.NotFoundError
 		assert.True(t, errors.As(err, &notFoundErr))
 	})
 
 	t.Run("error - session not found", func(t *testing.T) {
-		_, err := repo.IncrementStepUpFailures(ctx, user.UUID, uuid.NewString())
+		_, err := repo.IncrementStepUpFailures(ctx, user.UUID, uuid.Must(uuid.NewV7()).String())
 
 		var notFoundErr *domain.NotFoundError
 		assert.True(t, errors.As(err, &notFoundErr))
@@ -395,6 +422,10 @@ func TestSessionsPostgresRepository_DeleteAllByUser(t *testing.T) {
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))
 	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		assertInternalError(t, repo.DeleteAllByUser(canceledContext(), user.UUID))
+	})
 }
 
 func TestSessionsPostgresRepository_DeleteOthersByUser(t *testing.T) {
@@ -421,5 +452,9 @@ func TestSessionsPostgresRepository_DeleteOthersByUser(t *testing.T) {
 
 		var validationErr *domain.ValidationError
 		assert.True(t, errors.As(err, &validationErr))
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		assertInternalError(t, repo.DeleteOthersByUser(canceledContext(), user.UUID, uuid.Must(uuid.NewV7()).String()))
 	})
 }

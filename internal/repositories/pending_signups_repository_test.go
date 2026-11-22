@@ -28,7 +28,7 @@ func seedPendingSignup(t *testing.T, repo domain.PendingSignupRepository, codeHa
 	t.Helper()
 	now := time.Now()
 	pending, err := repo.Create(context.Background(), domain.PendingSignup{
-		UUID:          uuid.NewString(),
+		UUID:          uuid.Must(uuid.NewV7()).String(),
 		Kind:          domain.PendingSignupKindCredentials,
 		Name:          "Pending User",
 		Email:         "pending@example.com",
@@ -81,7 +81,7 @@ func TestPendingSignupsPostgresRepository_Create(t *testing.T) {
 
 	t.Run("success oauth", func(t *testing.T) {
 		pending, err := repo.Create(ctx, domain.PendingSignup{
-			UUID:           uuid.NewString(),
+			UUID:           uuid.Must(uuid.NewV7()).String(),
 			Kind:           domain.PendingSignupKindOAuth,
 			Name:           "OAuth User",
 			Email:          "pending@example.com",
@@ -105,7 +105,7 @@ func TestPendingSignupsPostgresRepository_Create(t *testing.T) {
 
 	t.Run("error - credentials without password hash", func(t *testing.T) {
 		_, err := repo.Create(ctx, domain.PendingSignup{
-			UUID:          uuid.NewString(),
+			UUID:          uuid.Must(uuid.NewV7()).String(),
 			Kind:          domain.PendingSignupKindCredentials,
 			Name:          "Broken",
 			Email:         "broken@example.com",
@@ -142,7 +142,7 @@ func TestPendingSignupsPostgresRepository_FindByUUID(t *testing.T) {
 	})
 
 	t.Run("error - unknown", func(t *testing.T) {
-		_, err := repo.FindByUUID(ctx, uuid.NewString())
+		_, err := repo.FindByUUID(ctx, uuid.Must(uuid.NewV7()).String())
 
 		assertNoPending(t, err)
 	})
@@ -189,6 +189,12 @@ func TestPendingSignupsPostgresRepository_Attempt(t *testing.T) {
 
 		assertNoPending(t, err)
 	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		pending := seedPendingSignup(t, repo, "hash")
+		_, err := repo.Attempt(canceledContext(), pending.UUID, 3)
+		assertInternalError(t, err)
+	})
 }
 
 func TestPendingSignupsPostgresRepository_Consume(t *testing.T) {
@@ -217,6 +223,12 @@ func TestPendingSignupsPostgresRepository_Consume(t *testing.T) {
 		assertNoPending(t, err)
 		_, err = repo.FindByUUID(ctx, pending.UUID)
 		assertNoPending(t, err)
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		pending := seedPendingSignup(t, repo, "hash")
+		_, err := repo.Consume(canceledContext(), pending.UUID, "hash")
+		assertInternalError(t, err)
 	})
 }
 
@@ -256,16 +268,34 @@ func TestPendingSignupsPostgresRepository_Resend(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, resent.ExpiresAt, resent.CodeExpiresAt)
 	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		pending := seedPendingSignup(t, repo, "hash")
+		_, err := repo.Resend(canceledContext(), pending.UUID, "hash", time.Minute)
+		assertInternalError(t, err)
+	})
 }
 
 func TestPendingSignupsPostgresRepository_Delete(t *testing.T) {
 	repo := setupPendingSignupsRepoTest(t)
 	ctx := context.Background()
 
-	pending := seedPendingSignup(t, repo, "hash")
+	t.Run("success", func(t *testing.T) {
+		pending := seedPendingSignup(t, repo, "hash")
 
-	require.NoError(t, repo.Delete(ctx, pending.UUID))
+		require.NoError(t, repo.Delete(ctx, pending.UUID))
 
-	_, err := repo.FindByUUID(ctx, pending.UUID)
-	assertNoPending(t, err)
+		_, err := repo.FindByUUID(ctx, pending.UUID)
+		assertNoPending(t, err)
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		pending := seedPendingSignup(t, repo, "hash")
+
+		assertInternalError(t, repo.Delete(canceledContext(), pending.UUID))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		assert.ErrorIs(t, repo.Delete(ctx, "invalid"), domain.ErrSignupNoPending)
+	})
 }
