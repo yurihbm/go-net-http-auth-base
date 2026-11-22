@@ -64,16 +64,16 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.stepUp.required`               | `ForbiddenError`       | `StepUpMiddleware`: the session has no active step-up                  |
 | `auth.stepUp.sendFailed`             | `InternalServerError`  | `StepUpService.RequestCode`: the code email could not be sent          |
 | `auth.stepUp.codeGenerationFailed`   | `InternalServerError`  | `StepUpService.RequestCode`: the random source failed                  |
-| `users.emailChange.staleToken`       | `UnauthorizedError`    | `UsersService.ConfirmEmailChange` (the challenge's `email_version` no longer matches), `RevertEmailChange` (token email or `email_version` no longer matches), `UsersRepository.UpdateEmail` (`email_version` no longer matches) |
+| `users.emailChange.staleToken`       | `UnauthorizedError`    | `EmailChangeService.ConfirmEmailChange` (the challenge's `email_version` no longer matches), `RevertEmailChange` (token email or `email_version` no longer matches), `UsersRepository.UpdateEmail` (`email_version` no longer matches) |
 | `users.emailChange.noChallenge`      | `UnauthorizedError`    | `SessionChallengeRepository.Attempt` (email change): the session has no challenge, it expired, attempts are exhausted, or it was already used |
-| `users.emailChange.invalidCode`      | `UnauthorizedError`    | `UsersService.ConfirmEmailChange`: the code does not match (counted per new address) |
+| `users.emailChange.invalidCode`      | `UnauthorizedError`    | `EmailChangeService.ConfirmEmailChange`: the code does not match (counted per new address) |
 | `users.emailChange.cooldown`         | `TooManyRequestsError` | `SessionChallengeRepository.Upsert` (email change): a code was already issued for this session in the last 60s |
-| `users.emailChange.sendFailed`       | `InternalServerError`  | `UsersService.RequestEmailChange`: the code email could not be sent (the challenge is deleted) |
-| `users.emailChange.codeGenerationFailed` | `InternalServerError` | `UsersService.RequestEmailChange`: the random source failed |
+| `users.emailChange.sendFailed`       | `InternalServerError`  | `EmailChangeService.RequestEmailChange`: the code email could not be sent (the challenge is deleted) |
+| `users.emailChange.codeGenerationFailed` | `InternalServerError` | `EmailChangeService.RequestEmailChange`: the random source failed |
 | `users.emailChange.internalServerError` | `InternalServerError` | Unexpected `SessionChallengeRepository` (email change) failures |
-| `users.emailChange.locked`           | `ConflictError`        | `UsersService.RequestEmailChange`/`ConfirmEmailChange`/`Delete`: the email changed less than 72h ago (`Delete` only blocks a user deleting their own account) |
-| `users.emailChange.unauthorized`     | `UnauthorizedError`    | `UsersService.RequestEmailChange`/`ConfirmEmailChange`: the actor has no user UUID |
-| `users.emailChange.unchanged`        | `ValidationError`      | `UsersService.RequestEmailChange`: the new email equals the current one |
+| `users.emailChange.locked`           | `ConflictError`        | `EmailChangeService.RequestEmailChange`/`ConfirmEmailChange`, `UsersService.Delete`: the email changed less than 72h ago (`Delete` only blocks a user deleting their own account) |
+| `users.emailChange.unauthorized`     | `UnauthorizedError`    | `EmailChangeService.RequestEmailChange`/`ConfirmEmailChange`: the actor has no user UUID |
+| `users.emailChange.unchanged`        | `ValidationError`      | `EmailChangeService.RequestEmailChange`: the new email equals the current one |
 
 ### Sign-up keys
 
@@ -87,7 +87,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.signup.internalServerError`    | `InternalServerError`  | Unexpected `PendingSignupRepository` failures                          |
 | `users.create.passwordHashingFailed` | `InternalServerError`  | `PendingSignupService.StartCredentials`: bcrypt could not hash the password (the send reservation is not refunded) |
 | `auth.email.sendLimit`               | `TooManyRequestsError` | `EmailSendLimiter.ReserveSend` (sign-up, email change): an email went to this address in the last 60s, or 5 in the last hour |
-| `auth.email.codeLocked`              | `TooManyRequestsError` | `PendingSignupService.Attempt`/`UsersService.ConfirmEmailChange`: 20 wrong codes for this address in 24h |
+| `auth.email.codeLocked`              | `TooManyRequestsError` | `PendingSignupService.Attempt`/`EmailChangeService.ConfirmEmailChange`: 20 wrong codes for this address in 24h |
 | `auth.email.internalServerError`     | `InternalServerError`  | Unexpected `EmailSendLimiter` failures                                 |
 | `users.email.conflict`               | `ConflictError`        | `PendingSignupService.StartCredentials` and `AuthService.CompleteSignup`: the email belongs to an account or is reserved by a recent email change |
 
