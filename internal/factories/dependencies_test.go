@@ -12,19 +12,15 @@ import (
 
 func TestNewEmailProvider(t *testing.T) {
 	t.Run("uses the log provider with the body outside production", func(t *testing.T) {
-		for _, env := range []string{"", "development", "staging"} {
-			provider := newEmailProvider(env, config.EmailConfig{})
+		provider := newEmailProvider("development", config.EmailConfig{})
 
-			assert.Equal(t, providers.NewLogEmailProvider(true), provider, env)
-		}
+		assert.Equal(t, providers.NewLogEmailProvider(true), provider)
 	})
 
 	t.Run("uses the log provider without the body in production", func(t *testing.T) {
-		for _, env := range []string{"prod", "production"} {
-			provider := newEmailProvider(env, config.EmailConfig{})
+		provider := newEmailProvider("production", config.EmailConfig{})
 
-			assert.Equal(t, providers.NewLogEmailProvider(false), provider, env)
-		}
+		assert.Equal(t, providers.NewLogEmailProvider(false), provider)
 	})
 
 	t.Run("uses the resend provider with an API key", func(t *testing.T) {
