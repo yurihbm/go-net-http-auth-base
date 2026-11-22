@@ -101,6 +101,8 @@ func getTokenExpiration(audience domain.TokenAudience) int64 {
 		return time.Now().Add(domain.TokenExpirationOAuthState).Unix()
 	case domain.TokenAudienceEmailChangeRevert:
 		return time.Now().Add(domain.TokenExpirationEmailChangeRevert).Unix()
+	case domain.TokenAudienceOAuthLinkRevert:
+		return time.Now().Add(domain.TokenExpirationOAuthLinkRevert).Unix()
 	default:
 		return time.Now().Add(domain.TokenExpirationAccess).Unix()
 	}

@@ -13,6 +13,7 @@ const (
 	TokenAudienceExchange          TokenAudience = "exchange_token"
 	TokenAudienceOAuthState        TokenAudience = "oauth_state_token"
 	TokenAudienceEmailChangeRevert TokenAudience = "email_change_revert_token"
+	TokenAudienceOAuthLinkRevert   TokenAudience = "oauth_link_revert_token"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 	TokenExpirationExchange          = time.Minute        // 1 minute
 	TokenExpirationOAuthState        = time.Minute * 5    // 5 minutes
 	TokenExpirationEmailChangeRevert = time.Hour * 72     // 72 hours
+	TokenExpirationOAuthLinkRevert   = time.Hour * 72     // 72 hours
 )
 
 type OAuthProviderName string
@@ -63,6 +65,10 @@ type UserOAuthProvider struct {
 type CredentialsLoginDTO struct {
 	Email    string `json:"email"    validate:"required,email"`
 	Password string `json:"password" validate:"required"`
+}
+
+type RevertOAuthLinkDTO struct {
+	Token string `json:"token" validate:"required"`
 }
 
 type CodeDTO struct {
@@ -191,12 +197,14 @@ type AuthService interface {
 	VerifyOAuthState(context.Context, VerifyOAuthStateDTO) (string, error)
 	OAuthLogin(context.Context, OAuthLoginDTO) (*OAuthLoginResult, error)
 	CompleteSignup(ctx context.Context, pendingUUID string, code string) (*SignupResult, error)
+	RevertOAuthLink(ctx context.Context, token string) (userUUID string, err error)
 }
 
 type AuthRepository interface {
 	CreateUserOAuthProvider(context.Context, UserOAuthProvider) (*UserOAuthProvider, error)
 	GetUserOAuthProviderByProviderAndProviderUserID(context.Context, OAuthProviderName, string) (*UserOAuthProvider, error)
 	DeleteUserOAuthProvider(context.Context, string) error
+	DeleteUserOAuthProviderOfUser(ctx context.Context, userUUID string, providerUUID string) (bool, error)
 	ListUserOAuthProvidersByUserUUID(context.Context, string) ([]UserOAuthProvider, error)
 	DeleteOAuthProvidersCreatedSince(ctx context.Context, userUUID string, since time.Time) error
 }

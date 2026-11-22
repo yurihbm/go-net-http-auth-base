@@ -84,6 +84,26 @@ func (r *AuthPostgresRepository) DeleteUserOAuthProvider(ctx context.Context, uu
 	return nil
 }
 
+func (r *AuthPostgresRepository) DeleteUserOAuthProviderOfUser(ctx context.Context, userUUIDStr string, providerUUIDStr string) (bool, error) {
+	userUUID, err := parseUsersUUID(userUUIDStr)
+	if err != nil {
+		return false, err
+	}
+	providerUUID, err := parseUserOAuthProviderUUID(providerUUIDStr)
+	if err != nil {
+		return false, err
+	}
+
+	rows, err := r.q.DeleteUserOAuthProviderOfUser(ctx, postgres.DeleteUserOAuthProviderOfUserParams{
+		Uuid:     *providerUUID,
+		UserUuid: *userUUID,
+	})
+	if err != nil {
+		return false, domain.NewInternalServerError("auth.internalServerError", err)
+	}
+	return rows > 0, nil
+}
+
 func (r *AuthPostgresRepository) DeleteOAuthProvidersCreatedSince(ctx context.Context, userUUIDStr string, since time.Time) error {
 	userUUID, err := parseUsersUUID(userUUIDStr)
 	if err != nil {

@@ -65,6 +65,7 @@ func TestCredentialsLogin_Transaction(t *testing.T) {
 			new(mocks.OAuthProviderRegistryMock),
 			repositories.NewPostgresTransactor(testDB),
 			services.NewTokenService("test-secret-key"),
+			nil,
 			30*24*time.Hour,
 			10,
 		)

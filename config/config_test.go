@@ -115,6 +115,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("RESEND_API_KEY", "re_key")
 		t.Setenv("EMAIL_FROM", "no-reply@example.com")
 		t.Setenv("EMAIL_CHANGE_REVERT_URL", "https://app.example.com/revert-email-change")
+		t.Setenv("EMAIL_OAUTH_LINK_REVERT_URL", "https://app.example.com/revert-oauth-link")
 
 		cfg, err := config.Load()
 
@@ -135,9 +136,10 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, 10, cfg.RateLimit.Burst)
 		assert.Equal(t, time.Minute, cfg.DBStatsLogInterval)
 		assert.Equal(t, config.EmailConfig{
-			ResendAPIKey:    "re_key",
-			From:            "no-reply@example.com",
-			ChangeRevertURL: "https://app.example.com/revert-email-change",
+			ResendAPIKey:       "re_key",
+			From:               "no-reply@example.com",
+			ChangeRevertURL:    "https://app.example.com/revert-email-change",
+			OAuthLinkRevertURL: "https://app.example.com/revert-oauth-link",
 		}, cfg.Email)
 	})
 
@@ -278,9 +280,10 @@ func TestLoad(t *testing.T) {
 	}
 
 	emailVars := map[string]string{
-		"RESEND_API_KEY":          "re_key",
-		"EMAIL_FROM":              "no-reply@example.com",
-		"EMAIL_CHANGE_REVERT_URL": "https://app.example.com/revert-email-change",
+		"RESEND_API_KEY":              "re_key",
+		"EMAIL_FROM":                  "no-reply@example.com",
+		"EMAIL_CHANGE_REVERT_URL":     "https://app.example.com/revert-email-change",
+		"EMAIL_OAUTH_LINK_REVERT_URL": "https://app.example.com/revert-oauth-link",
 	}
 
 	for name := range emailVars {
@@ -309,6 +312,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("RESEND_API_KEY", "")
 		t.Setenv("EMAIL_FROM", "")
 		t.Setenv("EMAIL_CHANGE_REVERT_URL", "")
+		t.Setenv("EMAIL_OAUTH_LINK_REVERT_URL", "")
 
 		cfg, err := config.Load()
 
@@ -401,6 +405,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("RESEND_API_KEY", "")
 		t.Setenv("EMAIL_FROM", "")
 		t.Setenv("EMAIL_CHANGE_REVERT_URL", "")
+		t.Setenv("EMAIL_OAUTH_LINK_REVERT_URL", "")
 
 		cfg, err := config.Load()
 

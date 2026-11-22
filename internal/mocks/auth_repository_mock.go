@@ -48,3 +48,8 @@ func (m *AuthRepositoryMock) DeleteOAuthProvidersCreatedSince(ctx context.Contex
 	args := m.Called(userUUID, since)
 	return args.Error(0)
 }
+
+func (m *AuthRepositoryMock) DeleteUserOAuthProviderOfUser(ctx context.Context, userUUID string, providerUUID string) (bool, error) {
+	args := m.Called(userUUID, providerUUID)
+	return args.Bool(0), args.Error(1)
+}
