@@ -2,13 +2,13 @@ package middlewares
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
 	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/shared"
 
 	"golang.org/x/time/rate"
 )
@@ -45,12 +45,7 @@ func newRateLimitMiddleware(ctx context.Context, r rate.Limit, b int, now func()
 
 func (m *RateLimitMiddleware) Use(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			ip = r.RemoteAddr
-		}
-
-		limiter := m.getVisitor(ip)
+		limiter := m.getVisitor(shared.ClientIP(r))
 
 		if !limiter.AllowN(m.now(), 1) {
 			m.setHeaders(w, limiter)

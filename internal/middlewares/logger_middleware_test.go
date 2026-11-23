@@ -141,7 +141,23 @@ func TestLoggerMiddleware_Use(t *testing.T) {
 
 		logOutput := buf.String()
 		assert.Contains(t, logOutput, "\"userAgent\":\"TestAgent/1.0\"")
-		assert.Contains(t, logOutput, "\"ip\":\"192.168.1.1:1234\"")
+		assert.Contains(t, logOutput, "\"ip\":\"192.168.1.1\"")
+	})
+
+	t.Run("should log the client ip from the request context data", func(t *testing.T) {
+		buf.Reset()
+
+		wrappedHandler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.RemoteAddr = "10.0.0.1:1234"
+		req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{ClientIP: "203.0.113.7"}))
+
+		wrappedHandler.ServeHTTP(httptest.NewRecorder(), req)
+
+		assert.Contains(t, buf.String(), "\"ip\":\"203.0.113.7\"")
 	})
 
 	t.Run("should log requestUUID when present", func(t *testing.T) {

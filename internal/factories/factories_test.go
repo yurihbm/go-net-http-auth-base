@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"testing"
 
 	"go-net-http-auth-base/config"
@@ -80,6 +81,13 @@ func TestLoggerFactory(t *testing.T) {
 	middleware := factories.LoggerFactory()
 	assert.NotNil(t, middleware)
 	assert.IsType(t, &middlewares.LoggerMiddleware{}, middleware)
+}
+
+func TestClientIPFactory(t *testing.T) {
+	middleware := factories.ClientIPFactory([]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")})
+
+	assert.NotNil(t, middleware)
+	assert.IsType(t, &middlewares.ClientIPMiddleware{}, middleware)
 }
 
 func TestCORSFactory(t *testing.T) {

@@ -10,7 +10,7 @@ Status, Context, Decision and Consequences.
 | [ADR-002](ADR-002-error-handling.md)            | Error Handling Strategy               | Accepted |
 | [ADR-003](ADR-003-database-strategy.md)         | Database Strategy (PostgreSQL + sqlc) | Accepted |
 | [ADR-004](ADR-004-logging-observability.md)     | Logging & Observability               | Accepted |
-| [ADR-005](ADR-005-security-approach.md)         | Security Approach                     | Accepted; Microsoft linking statement superseded by ADR-009 |
+| [ADR-005](ADR-005-security-approach.md)         | Security Approach                     | Accepted; Microsoft linking statement superseded by ADR-009, rate limiter proxy statement by ADR-013 |
 | [ADR-006](ADR-006-e2e-testing.md)               | End-to-End Testing Approach           | Accepted |
 | [ADR-007](ADR-007-email-change.md)              | Verified Email Change                 | Superseded by ADR-008 |
 | [ADR-008](ADR-008-step-up-and-email-change-hardening.md) | Step-Up and Email Change Hardening | Partially superseded by ADR-009 |
@@ -18,6 +18,7 @@ Status, Context, Decision and Consequences.
 | [ADR-010](ADR-010-per-address-code-failure-counter.md) | Per-Address Code Failure Counter and Its Lockout Risk | Accepted |
 | [ADR-011](ADR-011-email-send-retries.md) | Email Send Retries and Idempotency Key | Accepted |
 | [ADR-012](ADR-012-notify-and-undo-oauth-links.md) | Notify and Undo OAuth Provider Links | Accepted |
+| [ADR-013](ADR-013-trusted-proxies.md) | Trusted Proxies and Client IP Resolution | Accepted |
 
 ## Writing a new ADR
 
