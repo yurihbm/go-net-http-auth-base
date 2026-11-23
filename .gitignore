@@ -46,3 +46,6 @@ conductor
 
 # Pinned development tools installed by the Makefile (make install-archify)
 .tools
+
+# Claude Code worktrees
+.claude/worktrees/
