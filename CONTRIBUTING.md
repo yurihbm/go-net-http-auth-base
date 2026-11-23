@@ -11,7 +11,7 @@ This project follows a clean, layered architecture. Understanding this structure
 |                                HTTP Layer                                 |
 |                                                                           |
 |  Global chain: requestContextData -> requestUUID -> telemetry -> logger   |
-|                -> cors -> rateLimit -> mux                                |
+|                -> recover -> cors -> rateLimit -> mux                     |
 |  Per route:    auth (access token) -> role (admin)                        |
 |                                                                           |
 |  +-----------------+ +-----------------+ +-----------------+              |

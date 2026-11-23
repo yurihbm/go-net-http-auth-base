@@ -20,6 +20,7 @@ func NewHandler(ctx context.Context, deps *Dependencies, cfg *config.Config, tel
 	rateLimitMiddleware := RateLimitFactory(ctx, cfg.RateLimit)
 	corsMiddleware := CORSFactory(cfg.CORS)
 	loggerMiddleware := LoggerFactory()
+	recoverMiddleware := RecoverFactory()
 	telemetryMiddleware := TelemetryFactory(tel, net.JoinHostPort(cfg.Telemetry.ServiceName, cfg.Port))
 	requestIDMiddleware := RequestUUIDFactory()
 	requestContextDataMiddleware := RequestContextDataFactory()
@@ -27,9 +28,11 @@ func NewHandler(ctx context.Context, deps *Dependencies, cfg *config.Config, tel
 		requestIDMiddleware.Use(
 			telemetryMiddleware.Use(
 				loggerMiddleware.Use(
-					corsMiddleware.Use(
-						rateLimitMiddleware.Use(
-							mux,
+					recoverMiddleware.Use(
+						corsMiddleware.Use(
+							rateLimitMiddleware.Use(
+								mux,
+							),
 						),
 					),
 				),
