@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"net/netip"
 	"testing"
 	"time"
 
@@ -275,6 +276,50 @@ func TestLoad(t *testing.T) {
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.name)
+			assert.Nil(t, cfg)
+		})
+	}
+
+	t.Run("TRUSTED_PROXIES is empty by default", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("TRUSTED_PROXIES", "")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Empty(t, cfg.TrustedProxies)
+	})
+
+	t.Run("parses TRUSTED_PROXIES CIDRs and bare IPs", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("TRUSTED_PROXIES", "10.0.0.0/8, 192.168.1.5,, 2001:db8::1 ,fd00::/8")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Equal(t, []netip.Prefix{
+			netip.MustParsePrefix("10.0.0.0/8"),
+			netip.MustParsePrefix("192.168.1.5/32"),
+			netip.MustParsePrefix("2001:db8::1/128"),
+			netip.MustParsePrefix("fd00::/8"),
+		}, cfg.TrustedProxies)
+	})
+
+	for _, value := range []string{"abc", "10.0.0.0/33", "10.0.0.1,nope", "10.0.0.1/abc"} {
+		t.Run("error - TRUSTED_PROXIES is invalid: "+value, func(t *testing.T) {
+			t.Setenv("JWT_SECRET", validJWTSecret)
+			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+			t.Setenv("API_ENV", "development")
+			t.Setenv("TRUSTED_PROXIES", value)
+
+			cfg, err := config.Load()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "TRUSTED_PROXIES")
 			assert.Nil(t, cfg)
 		})
 	}

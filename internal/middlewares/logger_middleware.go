@@ -42,7 +42,7 @@ func (m *LoggerMiddleware) Use(next http.Handler) http.Handler {
 			slog.String("path", r.URL.Path),
 			slog.Int("status", ww.statusCode),
 			slog.Duration("duration", duration),
-			slog.String("ip", r.RemoteAddr),
+			slog.String("ip", shared.ClientIP(r)),
 			slog.String("userAgent", r.UserAgent()),
 		}
 

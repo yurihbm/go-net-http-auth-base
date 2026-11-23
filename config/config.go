@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/netip"
 	"net/url"
 	"os"
 	"strings"
@@ -56,6 +57,8 @@ type Config struct {
 	RateLimit RateLimitConfig
 	Email     EmailConfig
 	Telemetry TelemetryConfig
+
+	TrustedProxies []netip.Prefix
 
 	DBStatsLogInterval time.Duration
 }
@@ -153,6 +156,11 @@ func Load() (*Config, error) {
 		port = defaultPort
 	}
 
+	trustedProxies, err := parseTrustedProxies(os.Getenv("TRUSTED_PROXIES"))
+	if err != nil {
+		return nil, err
+	}
+
 	r := &envReader{}
 
 	cfg := &Config{
@@ -205,6 +213,8 @@ func Load() (*Config, error) {
 			Endpoint:    read(r, env.LookupString, "OTEL_EXPORTER_OTLP_ENDPOINT", defaultOTelEndpoint),
 			SampleRatio: read(r, env.LookupFloat, "OTEL_TRACES_SAMPLER_ARG", defaultOTelSampleRatio),
 		},
+
+		TrustedProxies: trustedProxies,
 
 		DBStatsLogInterval: read(r, env.LookupDuration, "DB_STATS_LOG_INTERVAL", defaultDBStatsLogInterval),
 	}
@@ -326,6 +336,27 @@ func (c *Config) IsProduction() bool {
 
 func (c *Config) IsDevelopment() bool {
 	return c.Env == "development"
+}
+
+func parseTrustedProxies(value string) ([]netip.Prefix, error) {
+	var prefixes []netip.Prefix
+	for _, item := range parseCommaSeparated(value) {
+		if item == "" {
+			continue
+		}
+
+		prefix, err := netip.ParsePrefix(item)
+		if err != nil {
+			addr, addrErr := netip.ParseAddr(item)
+			if addrErr != nil {
+				return nil, fmt.Errorf("TRUSTED_PROXIES: %q is not a valid IP or CIDR", item)
+			}
+			prefix = netip.PrefixFrom(addr, addr.BitLen())
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+
+	return prefixes, nil
 }
 
 func parseCommaSeparated(value string) []string {

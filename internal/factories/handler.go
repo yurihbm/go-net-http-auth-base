@@ -24,14 +24,17 @@ func NewHandler(ctx context.Context, deps *Dependencies, cfg *config.Config, tel
 	telemetryMiddleware := TelemetryFactory(tel, net.JoinHostPort(cfg.Telemetry.ServiceName, cfg.Port))
 	requestIDMiddleware := RequestUUIDFactory()
 	requestContextDataMiddleware := RequestContextDataFactory()
+	clientIPMiddleware := ClientIPFactory(cfg.TrustedProxies)
 	return requestContextDataMiddleware.Use(
-		requestIDMiddleware.Use(
-			telemetryMiddleware.Use(
-				loggerMiddleware.Use(
-					recoverMiddleware.Use(
-						corsMiddleware.Use(
-							rateLimitMiddleware.Use(
-								mux,
+		clientIPMiddleware.Use(
+			requestIDMiddleware.Use(
+				telemetryMiddleware.Use(
+					loggerMiddleware.Use(
+						recoverMiddleware.Use(
+							corsMiddleware.Use(
+								rateLimitMiddleware.Use(
+									mux,
+								),
 							),
 						),
 					),

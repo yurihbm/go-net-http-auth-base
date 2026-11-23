@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"reflect"
 	"strings"
 
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -74,17 +74,12 @@ func fieldErrMessage(fe validator.FieldError) string {
 }
 
 // GetClientMetadata extracts the client IP address and User-Agent from the
-// request. The IP comes from r.RemoteAddr (port stripped), like the rate
-// limiter: X-Forwarded-For and X-Real-IP are set by the client unless a trusted
-// proxy overwrites them, so they are ignored.
+// request. The IP is the one resolved by the client IP middleware, which only
+// trusts X-Forwarded-For from configured proxies (ADR-013); without it, it is
+// r.RemoteAddr with the port stripped. X-Real-IP is always ignored.
 func GetClientMetadata(r *http.Request) (ip string, userAgent string) {
 	userAgent = r.Header.Get("User-Agent")
 
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
-		return
-	}
-	ip = host
+	ip = shared.ClientIP(r)
 	return
 }
