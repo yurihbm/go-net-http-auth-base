@@ -124,6 +124,18 @@ go-net-http-auth-base/
 
    The server will start on `http://localhost:8080` (if API_PORT is not set) with live reload enabled.
 
+### Creating the first admin
+
+`/audit-logs` and `/swagger/` require the admin role. Sign up normally (with email verification), then promote that account:
+
+```bash
+make promote-admin email=you@example.com
+# production
+docker compose -f docker/docker-compose.prod.yaml exec api ./main promote-admin you@example.com
+```
+
+The command only promotes existing users, never creates them, and is idempotent: running it again for an admin is a no-op.
+
 ## 📝 Available Commands
 
 ### Development

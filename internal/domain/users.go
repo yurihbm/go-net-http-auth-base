@@ -76,6 +76,7 @@ func (a Actor) CanAccess(userUUID string) bool {
 type UsersService interface {
 	GetByUUID(context.Context, Actor, string) (*User, error)
 	GetByEmail(context.Context, string) (*User, error)
+	PromoteToAdmin(ctx context.Context, email string) (user *User, changed bool, err error)
 	Create(context.Context, NewUserDTO) (*User, error)
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
 	Update(context.Context, Actor, string, UserUpdateDTO) (*User, error)
@@ -88,6 +89,7 @@ type UsersRepository interface {
 	Create(context.Context, User) (*User, error)
 	Update(context.Context, User) (*User, error)
 	UpdateEmail(ctx context.Context, uuid string, email string, expectedVersion int, changedAt *time.Time) (*User, error)
+	UpdateRole(ctx context.Context, uuid string, role UserRole) (*User, error)
 	ReserveStepUpGuess(ctx context.Context, uuid string, window time.Duration) error
 	RefundStepUpGuess(ctx context.Context, uuid string) error
 	IsEmailReserved(ctx context.Context, email string) (bool, error)

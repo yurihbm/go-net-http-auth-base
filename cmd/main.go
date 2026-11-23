@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go-net-http-auth-base/config"
+	"go-net-http-auth-base/internal/commands"
 	"go-net-http-auth-base/internal/factories"
 	"go-net-http-auth-base/internal/infra"
 	"go-net-http-auth-base/internal/logger"
@@ -52,6 +53,27 @@ func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, f
 	}()
 }
 
+func runPromoteAdmin(ctx context.Context, cfg *config.Config, args []string) int {
+	pool, err := postgres.NewConnectionPool(ctx, cfg.Database)
+	if err != nil {
+		slog.Error("Failed to connect to database", "error", err)
+		return 1
+	}
+	defer pool.Close()
+
+	deps, err := factories.NewDependencies(pool, cfg)
+	if err != nil {
+		slog.Error("Failed to initialize application dependencies", "error", err)
+		return 1
+	}
+
+	if err := commands.PromoteAdmin(ctx, deps.UsersService, deps.AuditService, os.Stdout, args); err != nil {
+		slog.Error("Failed to promote admin", "error", err)
+		return 1
+	}
+	return 0
+}
+
 // @title			Go net/http Auth Base API
 // @version		1.0
 // @description	REST API for user authentication and user management.
@@ -79,6 +101,10 @@ func main() {
 		syscall.SIGTERM,
 	)
 	defer stopBackgroundTasks()
+
+	if len(os.Args) > 1 && os.Args[1] == commands.PromoteAdminName {
+		os.Exit(runPromoteAdmin(ctx, cfg, os.Args[2:]))
+	}
 
 	tel, err := telemetry.New(ctx, cfg.Telemetry, cfg.Env)
 	if err != nil {

@@ -29,6 +29,22 @@ func (s *usersService) GetByEmail(ctx context.Context, email string) (*domain.Us
 	return s.repo.FindByEmail(ctx, normalizeEmail(email))
 }
 
+func (s *usersService) PromoteToAdmin(ctx context.Context, email string) (*domain.User, bool, error) {
+	user, err := s.repo.FindByEmail(ctx, normalizeEmail(email))
+	if err != nil {
+		return nil, false, err
+	}
+	if user.Role == domain.RoleAdmin {
+		return user, false, nil
+	}
+
+	promoted, err := s.repo.UpdateRole(ctx, user.UUID, domain.RoleAdmin)
+	if err != nil {
+		return nil, false, err
+	}
+	return promoted, true, nil
+}
+
 func (s *usersService) Create(ctx context.Context, dto domain.NewUserDTO) (*domain.User, error) {
 	user := domain.User{
 		Name:         dto.Name,
