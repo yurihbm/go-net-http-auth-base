@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -25,7 +26,7 @@ func (m *RecoverMiddleware) Use(next http.Handler) http.Handler {
 			if v == nil {
 				return
 			}
-			if v == http.ErrAbortHandler {
+			if err, ok := v.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 				panic(v)
 			}
 

@@ -3,6 +3,7 @@ package middlewares_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -92,6 +93,19 @@ func TestRecoverMiddleware_Use(t *testing.T) {
 		}))
 
 		assert.PanicsWithValue(t, http.ErrAbortHandler, func() {
+			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+		})
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("error - wrapped ErrAbortHandler re-panics", func(t *testing.T) {
+		buf.Reset()
+		wrapped := fmt.Errorf("aborted: %w", http.ErrAbortHandler)
+		handler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			panic(wrapped)
+		}))
+
+		assert.PanicsWithValue(t, wrapped, func() {
 			handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 		})
 		assert.Empty(t, buf.String())
