@@ -131,6 +131,11 @@ func runTestPostgresContainer(ctx context.Context) (*testContainerPg.PostgresCon
 		if err == nil {
 			return container, nil
 		}
+		// Run returns the created container even when starting it fails, and
+		// Ryuk is disabled, so it has to be removed here or it leaks.
+		if termErr := testcontainers.TerminateContainer(container); termErr != nil {
+			slog.Error("failed to terminate postgres test container", "error", termErr)
+		}
 		if !isTestDatabasePortConflict(err) {
 			return nil, fmt.Errorf("failed to start postgres container: %w", err)
 		}
