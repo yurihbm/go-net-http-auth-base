@@ -30,6 +30,14 @@ func (m *UsersServiceMock) GetByEmail(ctx context.Context, email string) (*domai
 	return nil, args.Error(1)
 }
 
+func (m *UsersServiceMock) PromoteToAdmin(ctx context.Context, email string) (*domain.User, bool, error) {
+	args := m.Called(email)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Bool(1), args.Error(2)
+	}
+	return nil, args.Bool(1), args.Error(2)
+}
+
 func (m *UsersServiceMock) Create(ctx context.Context, dto domain.NewUserDTO) (*domain.User, error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {

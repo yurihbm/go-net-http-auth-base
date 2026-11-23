@@ -129,6 +129,27 @@ func (r *UsersPostgresRepository) UpdateEmail(ctx context.Context, uuidStr strin
 	return &user, nil
 }
 
+func (r *UsersPostgresRepository) UpdateRole(ctx context.Context, uuidStr string, role domain.UserRole) (*domain.User, error) {
+	uuid, err := parseUsersUUID(uuidStr)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedUser, err := r.q.UpdateUserRole(ctx, postgres.UpdateUserRoleParams{
+		Uuid: *uuid,
+		Role: postgres.UserRole(role),
+	})
+	if err != nil {
+		if noRowsErr := isNoRowsError(err, "users.notFound"); noRowsErr != nil {
+			return nil, noRowsErr
+		}
+		return nil, domain.NewInternalServerError("users.internalServerError", err)
+	}
+
+	user := toDomainUser(updatedUser)
+	return &user, nil
+}
+
 func (r *UsersPostgresRepository) ReserveStepUpGuess(ctx context.Context, uuidStr string, window time.Duration) error {
 	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {

@@ -102,6 +102,68 @@ func TestUsersService_GetByEmail(t *testing.T) {
 	})
 }
 
+func TestUsersService_PromoteToAdmin(t *testing.T) {
+	notFoundErr := domain.NewNotFoundError("users.notFound")
+
+	t.Run("success", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo, newTransactorMock())
+		user := &domain.User{UUID: "some-uuid", Email: "test@example.com", Role: domain.RoleUser}
+		promoted := &domain.User{UUID: "some-uuid", Email: "test@example.com", Role: domain.RoleAdmin}
+		repo.On("FindByEmail", "test@example.com").Return(user, nil).Once()
+		repo.On("UpdateRole", "some-uuid", domain.RoleAdmin).Return(promoted, nil).Once()
+
+		result, changed, err := service.PromoteToAdmin(context.Background(), "  Test@Example.com ")
+
+		require.NoError(t, err)
+		assert.True(t, changed)
+		assert.Equal(t, promoted, result)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("success - already admin", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo, newTransactorMock())
+		admin := &domain.User{UUID: "some-uuid", Email: "test@example.com", Role: domain.RoleAdmin}
+		repo.On("FindByEmail", "test@example.com").Return(admin, nil).Once()
+
+		result, changed, err := service.PromoteToAdmin(context.Background(), "test@example.com")
+
+		require.NoError(t, err)
+		assert.False(t, changed)
+		assert.Equal(t, admin, result)
+		repo.AssertNotCalled(t, "UpdateRole", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - user not found", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo, newTransactorMock())
+		repo.On("FindByEmail", "ghost@example.com").Return(nil, notFoundErr).Once()
+
+		result, changed, err := service.PromoteToAdmin(context.Background(), "ghost@example.com")
+
+		assert.Equal(t, notFoundErr, err)
+		assert.False(t, changed)
+		assert.Nil(t, result)
+		repo.AssertNotCalled(t, "UpdateRole", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - update fails", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo, newTransactorMock())
+		user := &domain.User{UUID: "some-uuid", Email: "test@example.com", Role: domain.RoleUser}
+		updateErr := errors.New("update failed")
+		repo.On("FindByEmail", "test@example.com").Return(user, nil).Once()
+		repo.On("UpdateRole", "some-uuid", domain.RoleAdmin).Return(nil, updateErr).Once()
+
+		result, changed, err := service.PromoteToAdmin(context.Background(), "test@example.com")
+
+		assert.Equal(t, updateErr, err)
+		assert.False(t, changed)
+		assert.Nil(t, result)
+	})
+}
+
 func TestUsersService_Create(t *testing.T) {
 	dto := domain.NewUserDTO{
 		Name:         "Test User",

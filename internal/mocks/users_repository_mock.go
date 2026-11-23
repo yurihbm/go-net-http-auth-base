@@ -55,6 +55,14 @@ func (m *UsersRepositoryMock) UpdateEmail(ctx context.Context, uuid string, emai
 	return nil, args.Error(1)
 }
 
+func (m *UsersRepositoryMock) UpdateRole(ctx context.Context, uuid string, role domain.UserRole) (*domain.User, error) {
+	args := m.Called(uuid, role)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func (m *UsersRepositoryMock) IsEmailReserved(ctx context.Context, email string) (bool, error) {
 	args := m.Called(email)
 	return args.Bool(0), args.Error(1)

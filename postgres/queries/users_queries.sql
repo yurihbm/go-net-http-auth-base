@@ -54,6 +54,17 @@ WHERE
 RETURNING
     *;
 
+-- name: UpdateUserRole :one
+UPDATE
+    users
+SET
+    role = $2,
+    updated_at = now()
+WHERE
+    uuid = $1
+RETURNING
+    *;
+
 -- name: ReserveUserStepUpGuess :one
 UPDATE
     users

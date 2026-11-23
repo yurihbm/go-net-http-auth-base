@@ -26,6 +26,7 @@ const (
 	AuditActionUserCreate         = "USER_CREATE"
 	AuditActionUserUpdate         = "USER_UPDATE"
 	AuditActionUserDelete         = "USER_DELETE"
+	AuditActionUserRoleChange     = "USER_ROLE_CHANGE"
 	AuditActionLogin              = "LOGIN"
 	AuditActionOAuthLogin         = "OAUTH_LOGIN"
 	AuditActionLogout             = "LOGOUT"

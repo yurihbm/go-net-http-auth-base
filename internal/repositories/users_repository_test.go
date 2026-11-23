@@ -259,6 +259,40 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 	})
 }
 
+func TestUsersPostgresRepository_UpdateRole(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	createdUser := seedUser(t, repo)
+
+	t.Run("success", func(t *testing.T) {
+		require.Equal(t, domain.RoleUser, createdUser.Role)
+
+		returnedUser, err := repo.UpdateRole(context.Background(), createdUser.UUID, domain.RoleAdmin)
+
+		require.NoError(t, err)
+		assert.Equal(t, createdUser.UUID, returnedUser.UUID)
+		assert.Equal(t, domain.RoleAdmin, returnedUser.Role)
+		found, err := repo.FindByUUID(context.Background(), createdUser.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.RoleAdmin, found.Role)
+	})
+
+	t.Run("error - user not found", func(t *testing.T) {
+		returnedUser, err := repo.UpdateRole(context.Background(), uuid.Must(uuid.NewV7()).String(), domain.RoleAdmin)
+
+		assert.Nil(t, returnedUser)
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		returnedUser, err := repo.UpdateRole(context.Background(), "invalid", domain.RoleAdmin)
+
+		assert.Nil(t, returnedUser)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+}
+
 func TestUsersPostgresRepository_ReserveStepUpGuess(t *testing.T) {
 	repo := setupUsersRepoTest(t)
 	ctx := context.Background()

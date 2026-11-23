@@ -23,6 +23,7 @@ ARCHIFY_DIR = .tools/archify
 	setup \
 	build \
 	migrate-create \
+	promote-admin \
 	migrate-up \
 	migrate-down \
 	sqlc-gen \
@@ -87,6 +88,14 @@ migrate-create:
 	fi
 	@echo ">> Creating a new database migration: $(name)"
 	migrate create -ext sql -dir postgres/migrations -seq $(name)
+
+# Promote an existing user to admin
+promote-admin:
+	@if [ -z "$(email)" ]; then \
+		echo "Error: email variable is required. Usage: make promote-admin email=user@example.com"; \
+		exit 1; \
+	fi
+	go run ./cmd/main.go promote-admin $(email)
 
 # Run database migrations
 migrate-up:

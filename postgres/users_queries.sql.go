@@ -323,3 +323,40 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 	)
 	return i, err
 }
+
+const updateUserRole = `-- name: UpdateUserRole :one
+UPDATE
+    users
+SET
+    role = $2,
+    updated_at = now()
+WHERE
+    uuid = $1
+RETURNING
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+`
+
+type UpdateUserRoleParams struct {
+	Uuid pgtype.UUID
+	Role UserRole
+}
+
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserRole, arg.Uuid, arg.Role)
+	var i User
+	err := row.Scan(
+		&i.Uuid,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.EmailVersion,
+		&i.EmailChangedAt,
+		&i.StepUpFailures,
+		&i.StepUpFailuresWindowStart,
+		&i.PreviousEmail,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
