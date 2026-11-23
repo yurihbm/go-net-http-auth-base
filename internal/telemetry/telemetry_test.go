@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -188,7 +189,7 @@ func TestNew(t *testing.T) {
 		_, span := tel.TracerProvider.Tracer("test").Start(context.Background(), "op")
 		span.End()
 		var record otellog.Record
-		record.SetBody(otellog.StringValue("hello"))
+		record.SetBody(attribute.StringValue("hello"))
 		tel.LoggerProvider.Logger("test").Emit(context.Background(), record)
 		require.NoError(t, tel.Shutdown(context.Background()))
 
