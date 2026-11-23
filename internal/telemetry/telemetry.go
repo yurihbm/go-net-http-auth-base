@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/log"
-	"go.opentelemetry.io/otel/log/global"
 	lognoop "go.opentelemetry.io/otel/log/noop"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
@@ -72,11 +71,11 @@ func New(ctx context.Context, cfg config.TelemetryConfig, environment string, op
 		return nil, err
 	}
 
-	traceExporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(cfg.Endpoint))
+	traceExporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(strings.TrimRight(cfg.Endpoint, "/")+"/v1/traces"))
 	if err != nil {
 		return nil, err
 	}
-	metricExporter, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(cfg.Endpoint))
+	metricExporter, err := otlpmetrichttp.New(ctx, otlpmetrichttp.WithEndpointURL(strings.TrimRight(cfg.Endpoint, "/")+"/v1/metrics"))
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +112,7 @@ func New(ctx context.Context, cfg config.TelemetryConfig, environment string, op
 	}))
 	otel.SetTracerProvider(tp)
 	otel.SetMeterProvider(mp)
-	global.SetLoggerProvider(lp)
+	otel.SetLoggerProvider(lp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
