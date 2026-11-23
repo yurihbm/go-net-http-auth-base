@@ -19,6 +19,7 @@ Status, Context, Decision and Consequences.
 | [ADR-011](ADR-011-email-send-retries.md) | Email Send Retries and Idempotency Key | Accepted |
 | [ADR-012](ADR-012-notify-and-undo-oauth-links.md) | Notify and Undo OAuth Provider Links | Accepted |
 | [ADR-013](ADR-013-trusted-proxies.md) | Trusted Proxies and Client IP Resolution | Accepted |
+| [ADR-014](ADR-014-traefik-reverse-proxy.md) | Traefik Reverse Proxy and TLS in Production | Accepted |
 
 ## Writing a new ADR
 
