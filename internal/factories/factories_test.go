@@ -200,3 +200,9 @@ func TestNewHandler(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
+
+func TestRecoverFactory(t *testing.T) {
+	middleware := factories.RecoverFactory()
+	assert.NotNil(t, middleware)
+	assert.IsType(t, &middlewares.RecoverMiddleware{}, middleware)
+}
