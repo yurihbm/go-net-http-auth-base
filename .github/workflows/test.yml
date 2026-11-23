@@ -47,3 +47,79 @@ jobs:
         with:
           header: coverage-report
           path: comment.md
+
+  sqlc-drift:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sqlc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/sqlc?sslmode=disable
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.4"
+
+      - name: Install migrate and sqlc
+        run: |
+          MIGRATE_VERSION=$(sed -n 's/^GOLANG_MIGRATE_VERSION = //p' Makefile)
+          SQLC_VERSION=$(sed -n 's/^SQLC_VERSION = //p' Makefile)
+          go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@$MIGRATE_VERSION
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@$SQLC_VERSION
+
+      - name: Apply migrations
+        run: migrate -database "$DATABASE_URL" -path postgres/migrations up
+
+      - name: Check sqlc generated code is up to date
+        run: sqlc diff
+
+  govulncheck:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.4"
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          govulncheck ./...
+
+  docker-build:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: docker build -f docker/Dockerfile .

@@ -11,7 +11,7 @@ const (
 	AccessTokenCookiePath = "/"
 
 	RefreshTokenCookieName = "refresh_token"
-	RefreshTokenCookiePath = "/auth/refresh"
+	RefreshTokenCookiePath = "/auth/refresh" //nolint:gosec // G101 false positive: a URL path, not a credential
 )
 
 const (
