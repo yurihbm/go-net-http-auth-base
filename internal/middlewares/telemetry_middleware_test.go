@@ -54,9 +54,11 @@ func newTelemetryTestEnv() *telemetryTestEnv {
 
 	telemetry := middlewares.NewTelemetryMiddleware(tp, mp, propagation.TraceContext{}, "api.test:8080")
 	handler := middlewares.NewRequestContextDataMiddleware().Use(
-		middlewares.NewRequestUUIDMiddleware().Use(
-			telemetry.Use(
-				middlewares.NewLoggerMiddleware().Use(mux),
+		middlewares.NewClientIPMiddleware(nil).Use(
+			middlewares.NewRequestUUIDMiddleware().Use(
+				telemetry.Use(
+					middlewares.NewLoggerMiddleware().Use(mux),
+				),
 			),
 		),
 	)
@@ -194,6 +196,21 @@ func TestTelemetryMiddleware_Use(t *testing.T) {
 		require.Len(t, points, 1)
 		_, ok = points[0].Attributes.Value("app.request.uuid")
 		assert.False(t, ok)
+	})
+
+	t.Run("client.address is the resolved client ip, not a spoofed X-Forwarded-For", func(t *testing.T) {
+		env := newTelemetryTestEnv()
+		req := httptest.NewRequest(http.MethodGet, "/users/abc", nil)
+		req.RemoteAddr = "203.0.113.9:4000"
+		req.Header.Set("X-Forwarded-For", "1.1.1.1")
+
+		env.serve(req)
+
+		spans := env.recorder.Ended()
+		require.Len(t, spans, 1)
+		value, ok := spanAttr(spans[0].Attributes(), "client.address")
+		assert.True(t, ok)
+		assert.Equal(t, "203.0.113.9", value.AsString())
 	})
 
 	t.Run("5xx marks span as error", func(t *testing.T) {
