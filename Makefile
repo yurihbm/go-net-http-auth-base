@@ -61,7 +61,7 @@ PACKAGES=$(shell go list ./... | grep -v -E 'postgres|domain|mocks|config|logger
 
 test-cover:
 	@echo "Running tests with coverage exclusions..."
-	go test -coverprofile=coverage.out $(PACKAGES)
+	go test -race -coverprofile=coverage.out $(PACKAGES)
 	@echo "Coverage report generated: coverage.out"
 
 show-cover: test-cover

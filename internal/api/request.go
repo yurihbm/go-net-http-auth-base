@@ -47,7 +47,9 @@ func DecodeAndValidate[T any](r *http.Request) (T, error) {
 	}
 	if err := validate.Struct(v); err != nil {
 		details := make(map[string]string)
-		for _, fe := range err.(validator.ValidationErrors) {
+		var validationErrs validator.ValidationErrors
+		errors.As(err, &validationErrs)
+		for _, fe := range validationErrs {
 			details[fe.Field()] = fieldErrMessage(fe)
 		}
 		return v, domain.NewValidationError("request.validation_failed", details)

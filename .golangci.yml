@@ -1,0 +1,31 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gosec
+    - bodyclose
+    - errorlint
+    - noctx
+
+  exclusions:
+    rules:
+      # test fixtures use fake credentials and cookies
+      - path: _test\.go
+        linters:
+          - gosec
+        text: G101|G124
+      # httptest requests never touch the network
+      - path: _test\.go
+        linters:
+          - noctx
+      # int to int32 for config limits and version counters bound by the schema
+      - path: internal/repositories/
+        linters:
+          - gosec
+        text: G115
+      # Secure is set from config (off only in development); delete cookies carry no value
+      - path: internal/api/cookies\.go|internal/controllers/auth_controller\.go
+        linters:
+          - gosec
+        text: G124
