@@ -324,6 +324,45 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 	return i, err
 }
 
+const updateUserPassword = `-- name: UpdateUserPassword :one
+UPDATE
+    users
+SET
+    password_hash = $2
+WHERE
+    uuid = $1
+    AND ($3::int IS NULL
+        OR email_version = $3::int)
+RETURNING
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+`
+
+type UpdateUserPasswordParams struct {
+	Uuid                 pgtype.UUID
+	PasswordHash         pgtype.Text
+	ExpectedEmailVersion pgtype.Int4
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserPassword, arg.Uuid, arg.PasswordHash, arg.ExpectedEmailVersion)
+	var i User
+	err := row.Scan(
+		&i.Uuid,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.EmailVersion,
+		&i.EmailChangedAt,
+		&i.StepUpFailures,
+		&i.StepUpFailuresWindowStart,
+		&i.PreviousEmail,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUserRole = `-- name: UpdateUserRole :one
 UPDATE
     users

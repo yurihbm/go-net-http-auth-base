@@ -10,6 +10,7 @@ func UsersFactory(deps *Dependencies, cfg *config.Config) controllers.Controller
 		deps.UsersService,
 		deps.EmailChangeService,
 		deps.PendingSignupService,
+		deps.PasswordService,
 		deps.AuditService,
 		deps.AuthMiddleware,
 		deps.StepUpMiddleware,

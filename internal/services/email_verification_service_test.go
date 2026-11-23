@@ -375,3 +375,62 @@ func TestEmailVerificationService_VerifyOAuthLinkRevertToken(t *testing.T) {
 		})
 	}
 }
+
+func TestEmailVerificationService_SendPasswordResetCode(t *testing.T) {
+	t.Run("sends the code with a warning to ignore it when not requested", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL, oauthLinkRevertURL)
+		var sent domain.EmailMessage
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			sent = args.Get(1).(domain.EmailMessage)
+		})
+
+		err := service.SendPasswordResetCode(context.Background(), "user@example.com", "123456")
+
+		require.NoError(t, err)
+		assert.Equal(t, "user@example.com", sent.To)
+		assert.Equal(t, "Reset your password", sent.Subject)
+		assert.Equal(t, "Your password reset code is 123456. Enter it in the browser where you requested the reset to choose a new password. It expires in 10 minutes. Never share this code with anyone. If you did not request a password reset, ignore this email.", sent.Text)
+		assert.Contains(t, sent.HTML, "<strong>123456</strong>")
+	})
+
+	t.Run("error - returns provider error", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL, oauthLinkRevertURL)
+		sendErr := errors.New("smtp down")
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
+
+		err := service.SendPasswordResetCode(context.Background(), "user@example.com", "123456")
+
+		assert.ErrorIs(t, err, sendErr)
+	})
+}
+
+func TestEmailVerificationService_SendPasswordChangedNotice(t *testing.T) {
+	t.Run("tells the owner the password changed", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL, oauthLinkRevertURL)
+		var sent domain.EmailMessage
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(nil).Once().Run(func(args mock.Arguments) {
+			sent = args.Get(1).(domain.EmailMessage)
+		})
+
+		err := service.SendPasswordChangedNotice(context.Background(), "user@example.com")
+
+		require.NoError(t, err)
+		assert.Equal(t, "user@example.com", sent.To)
+		assert.Equal(t, "Your password was changed", sent.Subject)
+		assert.Contains(t, sent.Text, "reset your password right away")
+	})
+
+	t.Run("error - returns provider error", func(t *testing.T) {
+		emailProvider := new(mocks.EmailProviderMock)
+		service := services.NewEmailVerificationService(new(mocks.TokenServiceMock), emailProvider, emailChangeRevertURL, oauthLinkRevertURL)
+		sendErr := errors.New("smtp down")
+		emailProvider.On("Send", mock.Anything, mock.Anything).Return(sendErr).Once()
+
+		err := service.SendPasswordChangedNotice(context.Background(), "user@example.com")
+
+		assert.ErrorIs(t, err, sendErr)
+	})
+}

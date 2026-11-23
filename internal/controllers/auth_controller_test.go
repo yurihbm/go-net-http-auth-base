@@ -39,7 +39,7 @@ func newTestAuthControllerWithMiddleware(isSecure bool, allowList []string) (*co
 	auditMock := new(mocks.AuditServiceMock)
 	authMiddleware := new(mocks.AuthMiddlewareMock)
 
-	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), auditMock, authMiddleware, isSecure, allowList)
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, authMiddleware, isSecure, allowList)
 	return controller, authServiceMock, auditMock, authMiddleware
 }
 
@@ -48,7 +48,7 @@ func newTestAuthControllerWithStepUp() (*controllers.AuthController, *mocks.Auth
 	stepUpMock := new(mocks.StepUpServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, stepUpMock, new(mocks.PendingSignupServiceMock), auditMock, new(mocks.AuthMiddlewareMock), true, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(authServiceMock, stepUpMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), true, []string{allowedRedirectURI})
 	return controller, authServiceMock, stepUpMock, auditMock
 }
 
@@ -57,8 +57,21 @@ func newTestAuthControllerWithSignup(isSecure bool) (*controllers.AuthController
 	pendingMock := new(mocks.PendingSignupServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), pendingMock, auditMock, new(mocks.AuthMiddlewareMock), isSecure, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), isSecure, []string{allowedRedirectURI})
 	return controller, authServiceMock, pendingMock, auditMock
+}
+
+func newTestAuthControllerWithPassword(isSecure bool) (*controllers.AuthController, *mocks.PasswordServiceMock, *mocks.AuditServiceMock) {
+	passwordMock := new(mocks.PasswordServiceMock)
+	auditMock := new(mocks.AuditServiceMock)
+
+	controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), isSecure, []string{allowedRedirectURI})
+	return controller, passwordMock, auditMock
+}
+
+func withPasswordResetCookie(req *http.Request, isSecure bool, value string) *http.Request {
+	req.AddCookie(&http.Cookie{Name: api.OAuthFlowCookieName(api.PasswordResetCookieName, isSecure), Value: value})
+	return req
 }
 
 func withPendingSignupCookie(req *http.Request, isSecure bool, value string) *http.Request {
@@ -120,6 +133,8 @@ func TestAuthController_RegisterRoutes(t *testing.T) {
 			{"POST", "/auth/step-up/verify"},
 			{"POST", "/auth/signup/verify"},
 			{"POST", "/auth/signup/resend"},
+			{"POST", "/auth/password/forgot"},
+			{"POST", "/auth/password/reset"},
 			{"POST", "/auth/oauth/revert-link"},
 			{"GET", "/auth/google/login"},
 			{"GET", "/auth/google/callback"},
@@ -1232,5 +1247,166 @@ func TestAuthController_RevertOAuthLink(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Empty(t, w.Result().Cookies())
 		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+}
+
+func TestAuthController_ForgotPassword(t *testing.T) {
+	dto := domain.ForgotPasswordDTO{Email: "user@example.com"}
+
+	for _, mode := range []struct {
+		name       string
+		isSecure   bool
+		cookieName string
+	}{{"secure", true, "__Host-password_reset"}, {"development", false, "password_reset"}} {
+		t.Run("success sets the reset cookie - "+mode.name, func(t *testing.T) {
+			controller, passwordMock, auditMock := newTestAuthControllerWithPassword(mode.isSecure)
+			passwordMock.On("RequestReset", dto.Email).Return("reset-uuid", nil).Once()
+			auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+				return d.Action == domain.AuditActionPasswordResetRequest &&
+					d.ResourceType == domain.AuditResourceUser &&
+					d.ActorUUID == nil &&
+					d.Status == domain.AuditStatusSuccess
+			})).Return(nil).Once()
+
+			w, req := getControllerArgs("POST", "/auth/password/forgot", dto)
+
+			controller.ForgotPassword(w, req)
+
+			var response api.ResponseBody[any]
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			assert.Equal(t, http.StatusAccepted, w.Code)
+			assert.Equal(t, "auth.passwordReset.requested", response.Message)
+			cookie := findCookie(w.Result().Cookies(), mode.cookieName)
+			require.NotNil(t, cookie)
+			assert.Equal(t, "reset-uuid", cookie.Value)
+			assert.Equal(t, mode.isSecure, cookie.Secure)
+			passwordMock.AssertExpectations(t)
+			auditMock.AssertExpectations(t)
+		})
+	}
+
+	t.Run("error - invalid email", func(t *testing.T) {
+		controller, passwordMock, auditMock := newTestAuthControllerWithPassword(true)
+
+		w, req := getControllerArgs("POST", "/auth/password/forgot", domain.ForgotPasswordDTO{Email: "nope"})
+
+		controller.ForgotPassword(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		passwordMock.AssertNotCalled(t, "RequestReset", mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("error - send limit sets no cookie and is audited", func(t *testing.T) {
+		controller, passwordMock, auditMock := newTestAuthControllerWithPassword(true)
+		passwordMock.On("RequestReset", dto.Email).Return("", domain.ErrEmailSendLimit).Once()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionPasswordResetRequest && d.Status == domain.AuditStatusFailure && d.FailureReason != nil
+		})).Return(nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/password/forgot", dto)
+
+		controller.ForgotPassword(w, req)
+
+		assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		assert.Nil(t, findCookie(w.Result().Cookies(), "__Host-password_reset"))
+		auditMock.AssertExpectations(t)
+	})
+}
+
+func TestAuthController_ResetPassword(t *testing.T) {
+	dto := domain.ResetPasswordDTO{Code: "123456", Password: "new-password-1"}
+	user := &domain.User{UUID: "user-uuid", Email: "user@example.com"}
+
+	for _, mode := range []struct {
+		name       string
+		isSecure   bool
+		cookieName string
+	}{{"secure", true, "__Host-password_reset"}, {"development", false, "password_reset"}} {
+		t.Run("success clears the reset and auth cookies - "+mode.name, func(t *testing.T) {
+			controller, passwordMock, auditMock := newTestAuthControllerWithPassword(mode.isSecure)
+			passwordMock.On("ResetPassword", "reset-uuid", dto).Return(user, nil).Once()
+			auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+				return d.Action == domain.AuditActionPasswordReset &&
+					d.ResourceType == domain.AuditResourceUser &&
+					d.ResourceUUID == user.UUID &&
+					d.Status == domain.AuditStatusSuccess
+			})).Return(nil).Once()
+
+			w, req := getControllerArgs("POST", "/auth/password/reset", dto)
+			req = withPasswordResetCookie(req, mode.isSecure, "reset-uuid")
+
+			controller.ResetPassword(w, req)
+
+			var response api.ResponseBody[any]
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, "auth.passwordReset.success", response.Message)
+			cookies := w.Result().Cookies()
+			for _, name := range []string{mode.cookieName, api.AccessTokenCookieName, api.RefreshTokenCookieName} {
+				cookie := findCookie(cookies, name)
+				require.NotNil(t, cookie, name)
+				assert.Empty(t, cookie.Value, name)
+				assert.Less(t, cookie.MaxAge, 0, name)
+			}
+			passwordMock.AssertExpectations(t)
+			auditMock.AssertExpectations(t)
+		})
+	}
+
+	t.Run("error - missing cookie", func(t *testing.T) {
+		controller, passwordMock, _ := newTestAuthControllerWithPassword(true)
+
+		w, req := getControllerArgs("POST", "/auth/password/reset", dto)
+
+		controller.ResetPassword(w, req)
+
+		var response api.ResponseBody[any]
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Equal(t, "auth.passwordReset.invalidCode", response.Error)
+		passwordMock.AssertNotCalled(t, "ResetPassword", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - weak password", func(t *testing.T) {
+		controller, passwordMock, _ := newTestAuthControllerWithPassword(true)
+
+		w, req := getControllerArgs("POST", "/auth/password/reset", domain.ResetPasswordDTO{Code: "123456", Password: "short"})
+		req = withPasswordResetCookie(req, true, "reset-uuid")
+
+		controller.ResetPassword(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		passwordMock.AssertNotCalled(t, "ResetPassword", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - wrong code keeps the cookie and is audited", func(t *testing.T) {
+		controller, passwordMock, auditMock := newTestAuthControllerWithPassword(true)
+		passwordMock.On("ResetPassword", "reset-uuid", dto).Return(nil, domain.ErrPasswordResetInvalidCode).Once()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionPasswordReset && d.Status == domain.AuditStatusFailure && d.FailureReason != nil
+		})).Return(nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/password/reset", dto)
+		req = withPasswordResetCookie(req, true, "reset-uuid")
+
+		controller.ResetPassword(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		assert.Empty(t, w.Result().Cookies())
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("error - locked address", func(t *testing.T) {
+		controller, passwordMock, auditMock := newTestAuthControllerWithPassword(true)
+		passwordMock.On("ResetPassword", "reset-uuid", dto).Return(nil, domain.ErrEmailCodeLocked).Once()
+		auditMock.On("Log", mock.Anything).Return(nil).Once()
+
+		w, req := getControllerArgs("POST", "/auth/password/reset", dto)
+		req = withPasswordResetCookie(req, true, "reset-uuid")
+
+		controller.ResetPassword(w, req)
+
+		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	})
 }

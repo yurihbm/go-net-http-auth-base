@@ -23,7 +23,7 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 
 	reset := func(t *testing.T) string {
 		t.Helper()
-		_, err := testDB.Exec(ctx, "TRUNCATE TABLE email_send_limits, pending_signups, session_challenges, user_sessions, users RESTART IDENTITY CASCADE")
+		_, err := testDB.Exec(ctx, "TRUNCATE TABLE email_send_limits, password_resets, pending_signups, session_challenges, user_sessions, users RESTART IDENTITY CASCADE")
 		require.NoError(t, err)
 		var userUUID string
 		err = testDB.QueryRow(ctx,
@@ -75,6 +75,18 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 		).Scan(&pendingUUID)
 		require.NoError(t, err)
 		return pendingUUID
+	}
+
+	insertPasswordReset := func(t *testing.T, userUUID string, expiresIn time.Duration) string {
+		t.Helper()
+		var resetUUID string
+		err := testDB.QueryRow(ctx,
+			`INSERT INTO password_resets (user_uuid, email, email_version, code_hash, expires_at)
+			VALUES ($1, 'sweep@example.com', 0, 'code', now() + $2::interval) RETURNING uuid::text`,
+			userUUID, expiresIn.String(),
+		).Scan(&resetUUID)
+		require.NoError(t, err)
+		return resetUUID
 	}
 
 	insertEmailSendLimit := func(t *testing.T, email string, windowAgo time.Duration, failuresWindowAgo *time.Duration) {
@@ -173,6 +185,31 @@ func TestExpiredRecordsSweeper_RunMaintenance(t *testing.T) {
 		var pendingUUID string
 		require.NoError(t, testDB.QueryRow(ctx, "SELECT uuid::text FROM pending_signups").Scan(&pendingUUID))
 		assert.Equal(t, live, pendingUUID)
+	})
+
+	t.Run("deletes expired password resets and keeps live ones", func(t *testing.T) {
+		userUUID := reset(t)
+		insertPasswordReset(t, userUUID, -time.Minute)
+		live := insertPasswordReset(t, userUUID, time.Minute)
+
+		require.NoError(t, sweeper.RunMaintenance(ctx))
+
+		assert.Equal(t, 1, count(t, "password_resets"))
+		var resetUUID string
+		require.NoError(t, testDB.QueryRow(ctx, "SELECT uuid::text FROM password_resets").Scan(&resetUUID))
+		assert.Equal(t, live, resetUUID)
+	})
+
+	t.Run("deletes more password resets than one batch", func(t *testing.T) {
+		userUUID := reset(t)
+		for range 7 {
+			insertPasswordReset(t, userUUID, -time.Minute)
+		}
+		insertPasswordReset(t, userUUID, time.Minute)
+
+		require.NoError(t, sweeper.RunMaintenanceWithBatchSize(ctx, 3))
+
+		assert.Equal(t, 1, count(t, "password_resets"))
 	})
 
 	t.Run("deletes email send limits only when both windows expired", func(t *testing.T) {

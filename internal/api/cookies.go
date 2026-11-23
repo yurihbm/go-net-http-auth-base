@@ -19,6 +19,7 @@ const (
 	OAuthVerifierCookieName = "oauth_code_verifier"
 
 	PendingSignupCookieName = "pending_signup"
+	PasswordResetCookieName = "password_reset"
 
 	hostCookiePrefix = "__Host-"
 )
@@ -48,6 +49,26 @@ func DeletePendingSignupCookie(w http.ResponseWriter, secure bool) {
 func newPendingSignupCookie(value string, maxAge int, secure bool) *http.Cookie {
 	return &http.Cookie{
 		Name:     OAuthFlowCookieName(PendingSignupCookieName, secure),
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   maxAge,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+	}
+}
+
+func SetPasswordResetCookie(w http.ResponseWriter, resetUUID string, secure bool) {
+	http.SetCookie(w, newPasswordResetCookie(resetUUID, int(domain.PasswordResetTTL.Seconds()), secure))
+}
+
+func DeletePasswordResetCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, newPasswordResetCookie("", -1, secure))
+}
+
+func newPasswordResetCookie(value string, maxAge int, secure bool) *http.Cookie {
+	return &http.Cookie{
+		Name:     OAuthFlowCookieName(PasswordResetCookieName, secure),
 		Value:    value,
 		Path:     "/",
 		HttpOnly: true,

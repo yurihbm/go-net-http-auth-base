@@ -259,6 +259,64 @@ func TestUsersPostgresRepository_UpdateEmail(t *testing.T) {
 	})
 }
 
+func TestUsersPostgresRepository_UpdatePassword(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	createdUser := seedUser(t, repo)
+
+	t.Run("success without a version check", func(t *testing.T) {
+		updated, err := repo.UpdatePassword(context.Background(), createdUser.UUID, "new_hash", nil)
+
+		require.NoError(t, err)
+		assert.Equal(t, "new_hash", updated.PasswordHash)
+		found, err := repo.FindByUUID(context.Background(), createdUser.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, "new_hash", found.PasswordHash)
+	})
+
+	t.Run("success when the email version matches", func(t *testing.T) {
+		version := createdUser.EmailVersion
+
+		updated, err := repo.UpdatePassword(context.Background(), createdUser.UUID, "versioned_hash", &version)
+
+		require.NoError(t, err)
+		assert.Equal(t, "versioned_hash", updated.PasswordHash)
+	})
+
+	t.Run("error - stale email version keeps the password", func(t *testing.T) {
+		stale := createdUser.EmailVersion + 1
+
+		updated, err := repo.UpdatePassword(context.Background(), createdUser.UUID, "stale_hash", &stale)
+
+		assert.Nil(t, updated)
+		assert.ErrorIs(t, err, domain.ErrPasswordResetInvalidCode)
+		found, err := repo.FindByUUID(context.Background(), createdUser.UUID)
+		require.NoError(t, err)
+		assert.Equal(t, "versioned_hash", found.PasswordHash)
+	})
+
+	t.Run("error - user not found", func(t *testing.T) {
+		updated, err := repo.UpdatePassword(context.Background(), uuid.Must(uuid.NewV7()).String(), "hash", nil)
+
+		assert.Nil(t, updated)
+		var notFoundErr *domain.NotFoundError
+		assert.True(t, errors.As(err, &notFoundErr))
+	})
+
+	t.Run("error - invalid uuid", func(t *testing.T) {
+		updated, err := repo.UpdatePassword(context.Background(), "invalid", "hash", nil)
+
+		assert.Nil(t, updated)
+		var validationErr *domain.ValidationError
+		assert.True(t, errors.As(err, &validationErr))
+	})
+
+	t.Run("error - canceled context", func(t *testing.T) {
+		_, err := repo.UpdatePassword(canceledContext(), createdUser.UUID, "hash", nil)
+
+		assertInternalError(t, err)
+	})
+}
+
 func TestUsersPostgresRepository_UpdateRole(t *testing.T) {
 	repo := setupUsersRepoTest(t)
 	createdUser := seedUser(t, repo)

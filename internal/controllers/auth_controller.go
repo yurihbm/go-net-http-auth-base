@@ -45,6 +45,7 @@ type AuthController struct {
 	authService          domain.AuthService
 	stepUpService        domain.StepUpService
 	pendingSignupService domain.PendingSignupService
+	passwordService      domain.PasswordService
 	auditService         domain.AuditService
 	authMiddleware       middlewares.HandlerMiddleware
 	isSecureCookie       bool
@@ -57,6 +58,7 @@ func NewAuthController(
 	authService domain.AuthService,
 	stepUpService domain.StepUpService,
 	pendingSignupService domain.PendingSignupService,
+	passwordService domain.PasswordService,
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	isSecureCookie bool,
@@ -66,6 +68,7 @@ func NewAuthController(
 		authService,
 		stepUpService,
 		pendingSignupService,
+		passwordService,
 		auditService,
 		authMiddleware,
 		isSecureCookie,
@@ -82,6 +85,8 @@ func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /auth/step-up/verify", c.authMiddleware.Use(c.VerifyStepUp))
 	router.HandleFunc("POST /auth/signup/verify", c.VerifySignup)
 	router.HandleFunc("POST /auth/signup/resend", c.ResendSignup)
+	router.HandleFunc("POST /auth/password/forgot", c.ForgotPassword)
+	router.HandleFunc("POST /auth/password/reset", c.ResetPassword)
 	router.HandleFunc("POST /auth/oauth/revert-link", c.RevertOAuthLink)
 	router.HandleFunc("GET /auth/{provider}/login", c.LoginWithOAuthProvider)
 	router.HandleFunc("GET /auth/{provider}/callback", c.OAuthProviderCallback)
@@ -366,6 +371,92 @@ func (c *AuthController) ResendSignup(w http.ResponseWriter, r *http.Request) {
 
 	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
 		Message: "auth.signup.codeResent",
+	})
+}
+
+// @Summary		Request a password reset
+// @Description	Public. Always answers 202 and sets the HttpOnly `password_reset` cookie (`__Host-password_reset` outside development, valid for 10 minutes), whether or not the address belongs to an account. If it does, emails a 6-digit code; the code only works in the browser that holds the cookie. One email per address every 60 seconds and 5 per hour, also for unknown addresses. OAuth-only accounts may use it to set a first password.
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.ForgotPasswordDTO	true	"Account email"
+// @Success		202		{object}	api.ResponseBody[any]		"Request accepted (auth.passwordReset.requested)"
+// @Failure		400		{object}	api.ResponseBody[any]		"Validation error"
+// @Failure		429		{object}	api.ResponseBody[any]		"Too many emails to this address (auth.email.sendLimit)"
+// @Failure		500		{object}	api.ResponseBody[any]		"Internal server error, or the email could not be sent (auth.passwordReset.sendFailed)"
+// @Router			/auth/password/forgot [post]
+func (c *AuthController) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.ForgotPasswordDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	resetUUID, err := c.passwordService.RequestReset(r.Context(), dto.Email)
+	auditResult(r, c.auditService, domain.CreateAuditLogDTO{
+		Action:       domain.AuditActionPasswordResetRequest,
+		ResourceType: domain.AuditResourceUser,
+	}, err)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	api.SetPasswordResetCookie(w, resetUUID, c.isSecureCookie)
+	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
+		Message: "auth.passwordReset.requested",
+	})
+}
+
+// @Summary		Reset the password
+// @Description	Public. Sets a new password with the 6-digit code emailed by POST /auth/password/forgot. Requires the `password_reset` cookie set by that call, so the code only works in the browser that requested it. A code allows 5 attempts and expires after 10 minutes. On success signs out every device, clears the `password_reset` and auth cookies and emails the owner a notice; it does not log in.
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Param			body	body		domain.ResetPasswordDTO	true	"Code and new password"
+// @Success		200		{object}	api.ResponseBody[any]	"Password reset (auth.passwordReset.success)"
+// @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]	"Wrong code, or no valid reset: missing cookie, unknown, expired, out of attempts, or the email changed meanwhile (auth.passwordReset.invalidCode)"
+// @Failure		429		{object}	api.ResponseBody[any]	"Too many wrong codes for this address in 24 hours (auth.email.codeLocked)"
+// @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/auth/password/reset [post]
+func (c *AuthController) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(api.OAuthFlowCookieName(api.PasswordResetCookieName, c.isSecureCookie))
+	if err != nil || cookie.Value == "" {
+		api.HandleError(r.Context(), w, domain.ErrPasswordResetInvalidCode)
+		return
+	}
+
+	dto, err := api.DecodeAndValidate[domain.ResetPasswordDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	user, err := c.passwordService.ResetPassword(r.Context(), cookie.Value, dto)
+	if err != nil {
+		reason := err.Error()
+		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+			Action:        domain.AuditActionPasswordReset,
+			ResourceType:  domain.AuditResourceUser,
+			Status:        domain.AuditStatusFailure,
+			FailureReason: &reason,
+		})
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	auditLog(r, c.auditService, domain.CreateAuditLogDTO{
+		Action:       domain.AuditActionPasswordReset,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: user.UUID,
+		Status:       domain.AuditStatusSuccess,
+	})
+
+	api.DeletePasswordResetCookie(w, c.isSecureCookie)
+	api.DeleteAuthCookies(w)
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
+		Message: "auth.passwordReset.success",
 	})
 }
 

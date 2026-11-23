@@ -21,6 +21,7 @@ type Dependencies struct {
 	StepUpService      domain.StepUpService
 
 	PendingSignupService domain.PendingSignupService
+	PasswordService      domain.PasswordService
 
 	EmailProvider domain.EmailProvider
 
@@ -95,6 +96,15 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		emailVerificationService,
 		[]byte(cfg.JWTSecret),
 	)
+	passwordService := services.NewPasswordService(
+		repositories.NewPasswordResetsPostgresRepository(db),
+		usersRepository,
+		sessionsRepository,
+		emailSendLimits,
+		transactor,
+		emailVerificationService,
+		[]byte(cfg.JWTSecret),
+	)
 	authService := services.NewAuthService(
 		usersService,
 		pendingSignupService,
@@ -128,6 +138,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		AuditService:         auditService,
 		StepUpService:        stepUpService,
 		PendingSignupService: pendingSignupService,
+		PasswordService:      passwordService,
 		EmailProvider:        emailProvider,
 		AuthMiddleware:       middlewares.NewAuthMiddleware(authService),
 		StepUpMiddleware:     middlewares.NewStepUpMiddleware(stepUpService),

@@ -90,6 +90,7 @@ type UsersRepository interface {
 	Update(context.Context, User) (*User, error)
 	UpdateEmail(ctx context.Context, uuid string, email string, expectedVersion int, changedAt *time.Time) (*User, error)
 	UpdateRole(ctx context.Context, uuid string, role UserRole) (*User, error)
+	UpdatePassword(ctx context.Context, uuid string, passwordHash string, expectedEmailVersion *int) (*User, error)
 	ReserveStepUpGuess(ctx context.Context, uuid string, window time.Duration) error
 	RefundStepUpGuess(ctx context.Context, uuid string) error
 	IsEmailReserved(ctx context.Context, email string) (bool, error)

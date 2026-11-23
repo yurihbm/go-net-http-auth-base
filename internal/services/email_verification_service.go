@@ -94,6 +94,21 @@ func (s *emailVerificationService) SendSignupCode(ctx context.Context, email str
 		"Never share this code with anyone. If you did not try to create an account, ignore this email."))
 }
 
+func (s *emailVerificationService) SendPasswordResetCode(ctx context.Context, email string, code string) error {
+	return s.emailProvider.Send(ctx, codeEmail(email, "Reset your password", "password reset code", code,
+		"Enter it in the browser where you requested the reset to choose a new password.", domain.PasswordResetTTL,
+		"Never share this code with anyone. If you did not request a password reset, ignore this email."))
+}
+
+func (s *emailVerificationService) SendPasswordChangedNotice(ctx context.Context, email string) error {
+	return s.emailProvider.Send(ctx, domain.EmailMessage{
+		To:      email,
+		Subject: "Your password was changed",
+		Text:    "The password of your account was changed. If this wasn't you, reset your password right away to take back your account.",
+		HTML:    "<p>The password of your account was changed. If this wasn't you, reset your password right away to take back your account.</p>",
+	})
+}
+
 func codeEmail(to string, subject string, label string, code string, instructions string, ttl time.Duration, warning string) domain.EmailMessage {
 	body := fmt.Sprintf("It expires in %d minutes.", int(ttl.Minutes()))
 	if instructions != "" {

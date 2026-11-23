@@ -10,6 +10,7 @@ func AuthFactory(deps *Dependencies, cfg *config.Config) controllers.Controller 
 		deps.AuthService,
 		deps.StepUpService,
 		deps.PendingSignupService,
+		deps.PasswordService,
 		deps.AuditService,
 		deps.AuthMiddleware,
 		!cfg.IsDevelopment(),

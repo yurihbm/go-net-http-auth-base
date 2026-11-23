@@ -150,6 +150,35 @@ func (r *UsersPostgresRepository) UpdateRole(ctx context.Context, uuidStr string
 	return &user, nil
 }
 
+func (r *UsersPostgresRepository) UpdatePassword(ctx context.Context, uuidStr string, passwordHash string, expectedEmailVersion *int) (*domain.User, error) {
+	uuid, err := parseUsersUUID(uuidStr)
+	if err != nil {
+		return nil, err
+	}
+
+	params := postgres.UpdateUserPasswordParams{
+		Uuid:         *uuid,
+		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+	}
+	if expectedEmailVersion != nil {
+		params.ExpectedEmailVersion = pgtype.Int4{Int32: int32(*expectedEmailVersion), Valid: true}
+	}
+
+	updatedUser, err := r.q.UpdateUserPassword(ctx, params)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			if expectedEmailVersion != nil {
+				return nil, domain.ErrPasswordResetInvalidCode
+			}
+			return nil, domain.NewNotFoundError("users.notFound")
+		}
+		return nil, domain.NewInternalServerError("users.internalServerError", err)
+	}
+
+	user := toDomainUser(updatedUser)
+	return &user, nil
+}
+
 func (r *UsersPostgresRepository) ReserveStepUpGuess(ctx context.Context, uuidStr string, window time.Duration) error {
 	uuid, err := parseUsersUUID(uuidStr)
 	if err != nil {

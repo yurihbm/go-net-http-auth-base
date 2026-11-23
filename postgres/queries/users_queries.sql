@@ -54,6 +54,18 @@ WHERE
 RETURNING
     *;
 
+-- name: UpdateUserPassword :one
+UPDATE
+    users
+SET
+    password_hash = $2
+WHERE
+    uuid = $1
+    AND (sqlc.narg(expected_email_version)::int IS NULL
+        OR email_version = sqlc.narg(expected_email_version)::int)
+RETURNING
+    *;
+
 -- name: UpdateUserRole :one
 UPDATE
     users
