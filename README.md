@@ -45,7 +45,7 @@ go-net-http-auth-base/
 
 ## 🛠️ Tech Stack
 
-- **Language**: Go 1.26
+- **Language**: Go 1.27
 - **Database**: PostgreSQL 18
 - **HTTP Router**: Standard library `net/http`
 - **Database Driver**: `pgx/v5`
@@ -64,7 +64,7 @@ go-net-http-auth-base/
 
 ### Prerequisites
 
-- Go 1.26 or higher
+- Go 1.27 or higher
 - Docker and Docker Compose
 - Make
 
