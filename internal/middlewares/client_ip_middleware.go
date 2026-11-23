@@ -8,6 +8,8 @@ import (
 	"go-net-http-auth-base/internal/shared"
 )
 
+const maxForwardedHops = 32
+
 type ClientIPMiddleware struct {
 	trusted []netip.Prefix
 }
@@ -29,24 +31,41 @@ func (m *ClientIPMiddleware) Use(next http.Handler) http.Handler {
 func (m *ClientIPMiddleware) resolve(r *http.Request) string {
 	remote := shared.RemoteHost(r.RemoteAddr)
 	remoteAddr, err := netip.ParseAddr(remote)
-	if err != nil || !m.isTrusted(remoteAddr.Unmap()) {
+	if err != nil {
 		return remote
+	}
+	remoteAddr = remoteAddr.Unmap()
+	client := remoteAddr.String()
+	if !m.isTrusted(remoteAddr) {
+		return client
 	}
 
 	// Walk X-Forwarded-For right to left: each trusted proxy appends the
 	// address it received from, so entries left of the first untrusted one
 	// are client-controlled. An invalid entry ends the walk at the last
-	// trusted hop seen.
-	client := remoteAddr.Unmap().String()
-	var hops []string
-	for _, value := range r.Header.Values("X-Forwarded-For") {
-		for hop := range strings.SplitSeq(value, ",") {
-			hops = append(hops, strings.TrimSpace(hop))
+	// trusted hop seen. The walk peels entries off the end without
+	// collecting them and stops after maxForwardedHops, so a huge
+	// client-supplied header costs nothing.
+	values := r.Header.Values("X-Forwarded-For")
+	current := ""
+	for hops := 0; hops < maxForwardedHops; hops++ {
+		for current == "" && len(values) > 0 {
+			current = values[len(values)-1]
+			values = values[:len(values)-1]
 		}
-	}
+		if current == "" {
+			return client
+		}
 
-	for i := len(hops) - 1; i >= 0; i-- {
-		addr, err := netip.ParseAddr(hops[i])
+		entry := current
+		if i := strings.LastIndexByte(current, ','); i >= 0 {
+			entry = current[i+1:]
+			current = current[:i]
+		} else {
+			current = ""
+		}
+
+		addr, err := netip.ParseAddr(strings.TrimSpace(entry))
 		if err != nil {
 			return client
 		}

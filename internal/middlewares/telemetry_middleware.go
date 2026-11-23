@@ -55,6 +55,9 @@ func routeHook(next http.Handler) http.Handler {
 			if data.RequestUUID != "" {
 				span.SetAttributes(attribute.String("app.request.uuid", data.RequestUUID))
 			}
+			if data.ClientIP != "" {
+				span.SetAttributes(semconv.ClientAddress(data.ClientIP))
+			}
 			if data.Error != nil {
 				span.RecordError(data.Error)
 			}

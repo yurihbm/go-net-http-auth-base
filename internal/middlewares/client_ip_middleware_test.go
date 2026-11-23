@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"go-net-http-auth-base/internal/middlewares"
@@ -46,6 +47,7 @@ func TestClientIPMiddleware_Use(t *testing.T) {
 		{"invalid rightmost entry falls back to the remote", proxies, "10.0.0.1:4000", []string{"198.51.100.7, garbage"}, "10.0.0.1"},
 		{"invalid entry stops the walk at the last trusted hop", proxies, "10.0.0.1:4000", []string{"198.51.100.7, garbage, 10.0.0.2"}, "10.0.0.2"},
 		{"only invalid entries fall back to the remote", proxies, "10.0.0.1:4000", []string{"garbage"}, "10.0.0.1"},
+		{"untrusted ipv4-mapped remote is unmapped", proxies, "[::ffff:203.0.113.9]:4000", nil, "203.0.113.9"},
 		{"remote without port", proxies, "10.0.0.1", []string{"198.51.100.7"}, "198.51.100.7"},
 		{"untrusted remote without port", proxies, "203.0.113.9", []string{"1.1.1.1"}, "203.0.113.9"},
 	}
@@ -69,6 +71,30 @@ func TestClientIPMiddleware_Use(t *testing.T) {
 			assert.Equal(t, tc.want, data.ClientIP)
 		})
 	}
+
+	t.Run("bounds the walk over a huge X-Forwarded-For", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "10.0.0.1:4000"
+		req.Header.Set("X-Forwarded-For", "198.51.100.7"+strings.Repeat(", 10.0.0.2", 100000))
+		data := &shared.RequestContextData{}
+		req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, data))
+
+		middlewares.NewClientIPMiddleware(proxies).Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(httptest.NewRecorder(), req)
+
+		assert.Equal(t, "10.0.0.2", data.ClientIP)
+	})
+
+	t.Run("finds the client within the hop cap", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "10.0.0.1:4000"
+		req.Header.Set("X-Forwarded-For", "198.51.100.7"+strings.Repeat(", 10.0.0.2", 31))
+		data := &shared.RequestContextData{}
+		req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, data))
+
+		middlewares.NewClientIPMiddleware(proxies).Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(httptest.NewRecorder(), req)
+
+		assert.Equal(t, "198.51.100.7", data.ClientIP)
+	})
 
 	t.Run("does nothing without request context data", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
