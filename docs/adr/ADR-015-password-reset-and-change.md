@@ -78,3 +78,16 @@ Rejected alternatives:
     change: 20 wrong codes lock every code flow of the address for 24 hours, so
     an anonymous attacker who holds a reset cookie can lock a victim out of
     resetting for that long.
+  - Enumeration goes beyond timing. An unknown address never has a row, so it
+    never reaches the per-address guess counter. For a registered address, an
+    attacker can exhaust `EmailMaxCodeFailures` (5 requests per hour times 5
+    wrong codes per cookie is 25, above 20) and observe
+    `429 auth.email.codeLocked`, which an unknown address never returns. The
+    same steps lock the owner out of every code flow for 24 hours (ADR-010).
+    Accepted because `POST /users` already reveals registered emails with 409.
+  - `auth.passwordReset.sendFailed` is a 500 only for registered addresses, so
+    a provider outage reveals registration. Accepted: hiding it would leave
+    users waiting for an email that never arrives.
+  - Several reset codes of one user can be live at once, because
+    `RequestReset` does not delete earlier rows. Each is bound to its own
+    cookie, and the per-address counter caps the total guesses.
