@@ -4,6 +4,7 @@ paths:
   - "internal/services/users_service*.go"
   - "internal/services/step_up_service*.go"
   - "internal/services/pending_signup_service*.go"
+  - "internal/services/password_service*.go"
   - "internal/services/email_verification_service*.go"
   - "internal/services/token_service*.go"
   - "internal/services/otp*.go"
@@ -14,6 +15,7 @@ paths:
   - "internal/repositories/sessions_repository*.go"
   - "internal/repositories/session_challenges_repository*.go"
   - "internal/repositories/pending_signups_repository*.go"
+  - "internal/repositories/password_resets_repository*.go"
   - "internal/repositories/email_send_limits_repository*.go"
   - "internal/repositories/*_transaction_test.go"
   - "internal/middlewares/auth_middleware*.go"
@@ -23,6 +25,7 @@ paths:
   - "internal/domain/users.go"
   - "internal/domain/sessions.go"
   - "internal/domain/signup.go"
+  - "internal/domain/password.go"
   - "internal/domain/step_up.go"
   - "internal/domain/email.go"
   - "internal/domain/email_change.go"
@@ -38,7 +41,7 @@ paths:
 
 # Auth and Email Flows
 
-The full behaviour of sign-up, OAuth login, refresh sessions, logout, step-up and email change (routes, status codes, error keys, TTLs, limits, transactions) is in `docs/AUTH.md`. Read the matching section before changing any of these flows, and update it in the same change. Error keys go in `docs/ERRORS.md`, audit actions in `docs/AUDIT.md`. A change to the security model needs an ADR (see ADR-005, ADR-008, ADR-009, ADR-012).
+The full behaviour of sign-up, OAuth login, refresh sessions, logout, step-up, email change, password reset and change (routes, status codes, error keys, TTLs, limits, transactions) is in `docs/AUTH.md`. Read the matching section before changing any of these flows, and update it in the same change. Error keys go in `docs/ERRORS.md`, audit actions in `docs/AUDIT.md`. A change to the security model needs an ADR (see ADR-005, ADR-008, ADR-009, ADR-012).
 
 Invariants to keep:
 
@@ -48,6 +51,7 @@ Invariants to keep:
 - Emails always go through `normalizeEmail` in services. A previous email stays reserved (`users.email.conflict`) during the 72h `domain.EmailChangeLock`.
 - Sessions: one `user_sessions` row per device; refresh rotates `jti` by compare-and-set, and a reused or stale token deletes only that session. `expires_at` is never extended. Confirming or reverting an email change deletes every session and clears the auth cookies.
 - A Case 2 OAuth link (provider-verified email matching an existing account) emails the owner an undo link after the transaction committed and the session started (`SendOAuthLinkedNotice`, failure only logged). Case 1, Case 3 and `CompleteSignup` never notify, because the code already proved the mailbox. The undo (`POST /auth/oauth/revert-link`) deletes that link and every session of the user in one `WithinTx` and clears the auth cookies (ADR-012).
+- Password reset (ADR-015): `POST /auth/password/forgot` answers the same `202` and sets the `password_reset` cookie for known and unknown addresses (an unknown one gets a UUID with no row and no email, and the send limit applies to both). Reset counts the guess outside the transaction, bcrypt stays outside it, and one `WithinTx` consumes the row, updates the password with compare-and-set on `users.email_version`, deletes every session and the user's pending resets. A reset never logs in. Change (behind step-up) keeps only the current session. Both send `SendPasswordChangedNotice` after the commit (failure only logged).
 - `AuthMiddleware` stays stateless; only routes behind `StepUpMiddleware` (`authMiddleware.Use(stepUpMiddleware.Use(handler))`) read the session row.
 - Depend on the narrowest token interface: middlewares use `domain.TokenVerifier`; `domain.TokenGenerator` is not part of `AuthService`.
 - Multi-step flows (`OAuthLogin`, `CompleteSignup`, ...) are one service method; controllers only decode, call it and handle cookies, redirects and the audit log.

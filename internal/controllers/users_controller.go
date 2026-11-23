@@ -13,6 +13,7 @@ type UsersController struct {
 	userService          domain.UsersService
 	emailChangeService   domain.EmailChangeService
 	pendingSignupService domain.PendingSignupService
+	passwordService      domain.PasswordService
 	auditService         domain.AuditService
 	authMiddleware       middlewares.HandlerMiddleware
 	stepUpMiddleware     middlewares.HandlerMiddleware
@@ -25,6 +26,7 @@ func NewUsersController(
 	service domain.UsersService,
 	emailChangeService domain.EmailChangeService,
 	pendingSignupService domain.PendingSignupService,
+	passwordService domain.PasswordService,
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	stepUpMiddleware middlewares.HandlerMiddleware,
@@ -34,6 +36,7 @@ func NewUsersController(
 		userService:          service,
 		emailChangeService:   emailChangeService,
 		pendingSignupService: pendingSignupService,
+		passwordService:      passwordService,
 		auditService:         auditService,
 		authMiddleware:       authMiddleware,
 		stepUpMiddleware:     stepUpMiddleware,
@@ -47,6 +50,7 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
 	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.RequestEmailChange)))
 	router.HandleFunc("POST /users/me/email/confirm", c.authMiddleware.Use(c.ConfirmEmailChange))
+	router.HandleFunc("POST /users/me/password", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.ChangePassword)))
 	router.HandleFunc("GET /users/{uuid}", c.authMiddleware.Use(c.GetUserByUUID))
 	router.HandleFunc("PUT /users/{uuid}", c.authMiddleware.Use(c.UpdateUser))
 	router.HandleFunc("DELETE /users/{uuid}", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.DeleteUser)))
@@ -180,6 +184,42 @@ func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Requ
 		Data:    *user,
 		Message: "user.emailChange.success",
 	})
+}
+
+// @Summary		Change the password
+// @Description	Sets a new password without asking for the current one and signs out every other device; the current session stays signed in. Emails the owner a notice. Also sets a first password for accounts that only use OAuth. Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify).
+// @Tags			users
+// @Accept			json
+// @Produce		json
+// @Param			body	body	domain.ChangePasswordDTO	true	"New password"
+// @Success		204		"Password changed"
+// @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
+// @Failure		401		{object}	api.ResponseBody[any]	"Unauthorized"
+// @Failure		403		{object}	api.ResponseBody[any]	"Step-up required (auth.stepUp.required)"
+// @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
+// @Router			/users/me/password [post]
+func (c *UsersController) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	dto, err := api.DecodeAndValidate[domain.ChangePasswordDTO](r)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	actor := actorFromRequest(r)
+	_, sessionUUID := sessionFromRequest(r)
+	err = c.passwordService.ChangePassword(r.Context(), actor, sessionUUID, dto)
+	auditResult(r, c.auditService, domain.CreateAuditLogDTO{
+		ActorUUID:    actorUUID(r),
+		Action:       domain.AuditActionPasswordChange,
+		ResourceType: domain.AuditResourceUser,
+		ResourceUUID: actor.UUID,
+	}, err)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // @Summary		Revert an email change

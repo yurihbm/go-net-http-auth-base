@@ -32,6 +32,8 @@ type EmailVerificationService interface {
 	SendOAuthSignupCode(ctx context.Context, email string, code string, provider OAuthProviderName) error
 	SendEmailChangeCode(ctx context.Context, newEmail string, code string) error
 	SendStepUpCode(ctx context.Context, email string, code string) error
+	SendPasswordResetCode(ctx context.Context, email string, code string) error
+	SendPasswordChangedNotice(ctx context.Context, email string) error
 	SendEmailChangedNotice(ctx context.Context, revert EmailChangeRevert) error
 	VerifyEmailChangeRevertToken(ctx context.Context, token string) (*EmailChangeRevert, error)
 	SendOAuthLinkedNotice(ctx context.Context, to string, revert OAuthLinkRevert) error

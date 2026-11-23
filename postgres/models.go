@@ -219,6 +219,17 @@ type EmailSendLimit struct {
 	FailuresWindowStart pgtype.Timestamptz
 }
 
+type PasswordReset struct {
+	Uuid         pgtype.UUID
+	UserUuid     pgtype.UUID
+	Email        string
+	EmailVersion int32
+	CodeHash     string
+	Attempts     int32
+	ExpiresAt    pgtype.Timestamptz
+	CreatedAt    pgtype.Timestamptz
+}
+
 type PendingSignup struct {
 	Uuid           pgtype.UUID
 	Kind           PendingSignupKind

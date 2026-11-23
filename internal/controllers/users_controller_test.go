@@ -29,7 +29,7 @@ func newTestEmailChangeController() (*controllers.UsersController, *mocks.EmailC
 	emailChangeMock := new(mocks.EmailChangeServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), true)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), true)
 
 	return controller, emailChangeMock, auditMock, middlewareMock
 }
@@ -39,7 +39,7 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
 	stepUpMiddlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, true)
+	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, true)
 
 	return controller, serviceMock, auditMock, middlewareMock, stepUpMiddlewareMock
 }
@@ -47,9 +47,17 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, *mocks.PendingSignupServiceMock, *mocks.AuditServiceMock) {
 	pendingMock := new(mocks.PendingSignupServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), isSecure)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), isSecure)
 
 	return controller, pendingMock, auditMock
+}
+
+func newTestPasswordUsersController() (*controllers.UsersController, *mocks.PasswordServiceMock, *mocks.AuditServiceMock) {
+	passwordMock := new(mocks.PasswordServiceMock)
+	auditMock := new(mocks.AuditServiceMock)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), true)
+
+	return controller, passwordMock, auditMock
 }
 
 var actor = domain.Actor{UUID: "caller-uuid", Role: domain.RoleUser}
@@ -70,11 +78,11 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes with auth middleware", func(t *testing.T) {
 		router := http.NewServeMux()
 		controller, _, _, authMiddleware := newTestUsersController()
-		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(6)
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(7)
 
 		controller.RegisterRoutes(router)
 
-		authMiddleware.AssertNumberOfCalls(t, "Use", 6)
+		authMiddleware.AssertNumberOfCalls(t, "Use", 7)
 		for _, path := range []string{"/users", "/users/revert-email-change"} {
 			_, pattern := router.Handler(httptest.NewRequest("POST", path, nil))
 			assert.Equal(t, "POST "+path, pattern)
@@ -85,12 +93,12 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 		}
 	})
 
-	t.Run("should protect only email change and deletion with step-up", func(t *testing.T) {
+	t.Run("should protect only email change, password change and deletion with step-up", func(t *testing.T) {
 		router := http.NewServeMux()
 		_, serviceMock, _, authMiddleware, _ := newTestUsersControllerWithStepUp()
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
 		serviceMock.On("GetByUUID", mock.Anything, mock.Anything).Return(nil, errors.New("stop")).Maybe()
-		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, true)
+		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, true)
 
 		controller.RegisterRoutes(router)
 
@@ -103,6 +111,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			{"GET", "/users/me", false},
 			{"POST", "/users/me/email", true},
 			{"POST", "/users/me/email/confirm", false},
+			{"POST", "/users/me/password", true},
 			{"GET", "/users/some-uuid", false},
 			{"PUT", "/users/some-uuid", false},
 			{"DELETE", "/users/some-uuid", true},
@@ -732,5 +741,58 @@ func TestUsersController_RevertEmailChange(t *testing.T) {
 		controller.RevertEmailChange(w, req)
 
 		assert.Equal(t, http.StatusConflict, w.Code)
+	})
+}
+
+func TestUsersController_ChangePassword(t *testing.T) {
+	dto := domain.ChangePasswordDTO{NewPassword: "new-password-1"}
+
+	t.Run("success", func(t *testing.T) {
+		controller, passwordMock, auditMock := newTestPasswordUsersController()
+		passwordMock.On("ChangePassword", actor, actorSessionUUID, dto).Return(nil).Once()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionPasswordChange &&
+				d.ResourceType == domain.AuditResourceUser &&
+				d.ResourceUUID == actor.UUID &&
+				d.ActorUUID != nil && *d.ActorUUID == actor.UUID &&
+				d.Status == domain.AuditStatusSuccess
+		})).Return(nil).Once()
+
+		w, req := getActorControllerArgs("POST", "/users/me/password", dto)
+
+		controller.ChangePassword(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		passwordMock.AssertExpectations(t)
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("error - password too short", func(t *testing.T) {
+		controller, passwordMock, auditMock := newTestPasswordUsersController()
+
+		w, req := getActorControllerArgs("POST", "/users/me/password", domain.ChangePasswordDTO{NewPassword: "short"})
+
+		controller.ChangePassword(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		passwordMock.AssertNotCalled(t, "ChangePassword", mock.Anything, mock.Anything, mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("error - service failure is audited", func(t *testing.T) {
+		controller, passwordMock, auditMock := newTestPasswordUsersController()
+		passwordMock.On("ChangePassword", actor, actorSessionUUID, dto).Return(domain.NewInternalServerError("users.password.hashingFailed", errors.New("boom"))).Once()
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.Action == domain.AuditActionPasswordChange &&
+				d.Status == domain.AuditStatusFailure &&
+				d.FailureReason != nil
+		})).Return(nil).Once()
+
+		w, req := getActorControllerArgs("POST", "/users/me/password", dto)
+
+		controller.ChangePassword(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		auditMock.AssertExpectations(t)
 	})
 }

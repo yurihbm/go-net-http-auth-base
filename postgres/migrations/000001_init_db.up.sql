@@ -126,6 +126,21 @@ CREATE TABLE pending_signups (
 
 CREATE INDEX idx_pending_signups_expires_at ON pending_signups (expires_at);
 
+CREATE TABLE password_resets (
+    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
+    email text NOT NULL,
+    email_version int NOT NULL,
+    code_hash text NOT NULL,
+    attempts int NOT NULL DEFAULT 0,
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL
+);
+
+CREATE INDEX idx_password_resets_expires_at ON password_resets (expires_at);
+
+CREATE INDEX idx_password_resets_user ON password_resets (user_uuid);
+
 CREATE TABLE email_send_limits (
     email text NOT NULL PRIMARY KEY,
     window_start timestamptz DEFAULT now() NOT NULL,

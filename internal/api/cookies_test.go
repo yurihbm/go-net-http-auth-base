@@ -51,6 +51,34 @@ func TestDeletePendingSignupCookie(t *testing.T) {
 	assert.Less(t, cookie.MaxAge, 0)
 }
 
+func TestSetPasswordResetCookie(t *testing.T) {
+	for secure, name := range map[bool]string{true: "__Host-password_reset", false: "password_reset"} {
+		w := httptest.NewRecorder()
+
+		api.SetPasswordResetCookie(w, "reset-uuid", secure)
+
+		cookie := responseCookie(t, w, name)
+		assert.Equal(t, "reset-uuid", cookie.Value)
+		assert.Equal(t, "/", cookie.Path)
+		assert.True(t, cookie.HttpOnly)
+		assert.Equal(t, http.SameSiteStrictMode, cookie.SameSite)
+		assert.Equal(t, int(domain.PasswordResetTTL.Seconds()), cookie.MaxAge)
+		assert.Equal(t, secure, cookie.Secure)
+	}
+}
+
+func TestDeletePasswordResetCookie(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	api.DeletePasswordResetCookie(w, true)
+
+	cookie := responseCookie(t, w, "__Host-password_reset")
+	assert.Empty(t, cookie.Value)
+	assert.Equal(t, "/", cookie.Path)
+	assert.True(t, cookie.Secure)
+	assert.Less(t, cookie.MaxAge, 0)
+}
+
 func TestSetAuthCookies(t *testing.T) {
 	w := httptest.NewRecorder()
 

@@ -46,7 +46,7 @@ type response struct {
 
 func truncateTables(t *testing.T, ctx context.Context, db *pgxpool.Pool) {
 	t.Helper()
-	tables := []string{"audit_logs", "email_send_limits", "pending_signups", "session_challenges", "user_sessions", "user_oauth_providers", "users"}
+	tables := []string{"audit_logs", "email_send_limits", "password_resets", "pending_signups", "session_challenges", "user_sessions", "user_oauth_providers", "users"}
 	for _, table := range tables {
 		_, err := db.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table))
 		require.NoError(t, err, "truncate %s", table)

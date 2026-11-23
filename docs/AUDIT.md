@@ -92,6 +92,9 @@ The domain package defines type-safe constants for common values:
 - `AuditActionOAuthLogin` (`OAUTH_LOGIN`): OAuth authentication (`GET /auth/{provider}/callback`)
 - `AuditActionLogout` (`LOGOUT`): User session termination (`POST /auth/logout`)
 - `AuditActionLogoutOthers` (`LOGOUT_OTHERS`): Termination of the other sessions (`POST /auth/logout-others`)
+- `AuditActionPasswordResetRequest` (`PASSWORD_RESET_REQUEST`): Password reset requested (`POST /auth/password/forgot`); no actor, and the resource UUID is empty because the answer must not reveal whether the address has an account
+- `AuditActionPasswordReset` (`PASSWORD_RESET`): Password set with the emailed code (`POST /auth/password/reset`); on success the resource is the user and there is no actor, because the request is unauthenticated
+- `AuditActionPasswordChange` (`PASSWORD_CHANGE`): Password changed by the signed-in user (`POST /users/me/password`); the actor and the resource are the user
 - `AuditActionStepUpRequest` (`STEP_UP_REQUEST`): Step-up code request (`POST /auth/step-up`)
 - `AuditActionStepUpVerify` (`STEP_UP_VERIFY`): Step-up code verification (`POST /auth/step-up/verify`)
 

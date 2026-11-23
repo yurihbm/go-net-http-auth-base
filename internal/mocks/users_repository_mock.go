@@ -82,3 +82,11 @@ func (m *UsersRepositoryMock) RefundStepUpGuess(ctx context.Context, uuid string
 	args := m.Called(uuid)
 	return args.Error(0)
 }
+
+func (m *UsersRepositoryMock) UpdatePassword(ctx context.Context, uuid string, passwordHash string, expectedEmailVersion *int) (*domain.User, error) {
+	args := m.Called(uuid, passwordHash, expectedEmailVersion)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}

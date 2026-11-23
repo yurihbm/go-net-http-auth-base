@@ -59,3 +59,13 @@ func (m *EmailVerificationServiceMock) VerifyOAuthLinkRevertToken(ctx context.Co
 	}
 	return nil, args.Error(1)
 }
+
+func (m *EmailVerificationServiceMock) SendPasswordResetCode(ctx context.Context, email string, code string) error {
+	args := m.Called(email, code)
+	return args.Error(0)
+}
+
+func (m *EmailVerificationServiceMock) SendPasswordChangedNotice(ctx context.Context, email string) error {
+	args := m.Called(email)
+	return args.Error(0)
+}

@@ -72,6 +72,8 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `users.emailChange.codeGenerationFailed` | `InternalServerError` | `EmailChangeService.RequestEmailChange`: the random source failed |
 | `users.emailChange.internalServerError` | `InternalServerError` | Unexpected `SessionChallengeRepository` (email change) failures |
 | `users.emailChange.locked`           | `ConflictError`        | `EmailChangeService.RequestEmailChange`/`ConfirmEmailChange`, `UsersService.Delete`: the email changed less than 72h ago (`Delete` only blocks a user deleting their own account) |
+| `users.password.unauthorized`        | `UnauthorizedError`    | `PasswordService.ChangePassword`: the actor has no user UUID |
+| `users.password.hashingFailed`       | `InternalServerError`  | `PasswordService`: bcrypt could not hash the new password (reset or change) |
 | `users.emailChange.unauthorized`     | `UnauthorizedError`    | `EmailChangeService.RequestEmailChange`/`ConfirmEmailChange`: the actor has no user UUID |
 | `users.emailChange.unchanged`        | `ValidationError`      | `EmailChangeService.RequestEmailChange`: the new email equals the current one |
 
@@ -79,6 +81,10 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 
 | Key                                  | Type                   | Where                                                                  |
 | :----------------------------------- | :--------------------- | :--------------------------------------------------------------------- |
+| `auth.passwordReset.invalidCode`     | `UnauthorizedError`    | `PasswordResetRepository`, `UsersRepository.UpdatePassword`, `PasswordService.ResetPassword`: no `password_reset` cookie, unknown or malformed UUID, expired or exhausted reset, wrong code, already used, or the email changed since the request; all look the same on purpose |
+| `auth.passwordReset.sendFailed`      | `InternalServerError`  | `PasswordService.RequestReset`: the code email could not be sent (the reset row is deleted) |
+| `auth.passwordReset.codeGenerationFailed` | `InternalServerError` | `PasswordService.RequestReset`: the random source failed |
+| `auth.passwordReset.internalServerError` | `InternalServerError` | Unexpected `PasswordResetRepository` failures |
 | `auth.signup.noPending`              | `UnauthorizedError`    | `PendingSignupRepository`: no `pending_signup` cookie, unknown or malformed UUID, expired sign-up, code expired or attempts exhausted, or already consumed |
 | `auth.signup.invalidCode`            | `UnauthorizedError`    | `PendingSignupService.Attempt`: the code does not match (counted per address) |
 | `auth.signup.sendFailed`             | `InternalServerError`  | `PendingSignupService`: the code email could not be sent (on start the pending sign-up is deleted) |
@@ -136,6 +142,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `user.internalServerError` | `InternalServerError` | `UsersRepository.Delete`: unexpected failure |
 | `sessions.invalidUUID` | `ValidationError` | `SessionsRepository`, `SessionChallengeRepository`: the session UUID is malformed |
 | `auth.signup.invalidUUID` | `ValidationError` | `PendingSignupRepository`: the pending sign-up UUID is malformed |
+| `auth.passwordReset.invalidUUID` | `ValidationError` | `PasswordResetRepository.Create`: the reset UUID is malformed |
 | `auditLogs.invalidActorUUID` | `ValidationError` | `AuditRepository`: the actor UUID filter is malformed |
 | `auditLogs.invalidCursor` | `ValidationError` | `AuditRepository`: the pagination cursor is malformed |
 | `auditLogs.internalServerError` | `InternalServerError` | Unexpected `AuditRepository` failures |

@@ -62,3 +62,12 @@ func (p *capturingEmailProvider) linkToken(t *testing.T, to string) string {
 	require.NotEmpty(t, token)
 	return token
 }
+
+func (p *capturingEmailProvider) none(t *testing.T, to string) {
+	t.Helper()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, ok := p.messages[to]
+	require.False(t, ok, "unexpected email sent to %s", to)
+}

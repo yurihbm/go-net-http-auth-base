@@ -87,6 +87,13 @@ func (s *ExpiredRecordsSweeper) sweep(ctx context.Context, q *postgres.Queries, 
 		return err
 	}
 
+	passwordResets, err := sweepInBatches(batchSize, func() (int64, error) {
+		return q.DeleteExpiredPasswordResetsBatch(ctx, batchSize)
+	})
+	if err != nil {
+		return err
+	}
+
 	emailSendLimits, err := sweepInBatches(batchSize, func() (int64, error) {
 		return q.DeleteStaleEmailSendLimitsBatch(ctx, postgres.DeleteStaleEmailSendLimitsBatchParams{
 			SendWindow:    postgres.ToInterval(domain.EmailSendWindow),
@@ -102,6 +109,7 @@ func (s *ExpiredRecordsSweeper) sweep(ctx context.Context, q *postgres.Queries, 
 		"sessions", sessions,
 		"session_challenges", challenges,
 		"pending_signups", pendingSignups,
+		"password_resets", passwordResets,
 		"email_send_limits", emailSendLimits,
 	)
 	return nil
