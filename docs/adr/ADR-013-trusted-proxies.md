@@ -28,8 +28,12 @@ rate limiter and falsifies the audit trail.
 - **Edge cases.** If every entry is trusted, the leftmost one is used. An entry
   that is not a valid IP ends the walk at the last trusted hop seen (the
   `RemoteAddr` host when the rightmost entry is invalid): nothing left of
-  garbage is believed. IPv4-mapped IPv6 addresses are unmapped before matching
+  garbage is believed. The walk stops after 32 hops and uses the address
+  reached so far, so a header stuffed with entries (Traefik forwards the
+  client's) cannot cost more than a bounded walk; real chains are far shorter. IPv4-mapped IPv6 addresses are unmapped before matching
   and storing.
+- **Telemetry.** The span's `client.address` is set to `ClientIP`, overriding the
+  value `otelhttp` derives from the leftmost `X-Forwarded-For` entry.
 - **Consumers.** The rate limiter key, the `ip` attribute of the request log and
   the audit log IP (`api.GetClientMetadata`) read `ClientIP` and fall back to the
   `RemoteAddr` host when it is absent. The log `ip` no longer includes the port.
