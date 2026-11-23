@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
+	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -118,7 +120,17 @@ func TestDecodeAndValidate(t *testing.T) {
 }
 
 func TestGetClientMetadata(t *testing.T) {
-	t.Run("ignores X-Forwarded-For and X-Real-IP sent by the client", func(t *testing.T) {
+	t.Run("prefers the client ip resolved into the request context data", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "10.0.0.1:54321"
+		req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{ClientIP: "203.0.113.5"}))
+
+		ip, _ := api.GetClientMetadata(req)
+
+		assert.Equal(t, "203.0.113.5", ip)
+	})
+
+	t.Run("ignores X-Forwarded-For and X-Real-IP when no client ip was resolved", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.RemoteAddr = "10.0.0.1:54321"
 		req.Header.Set("X-Forwarded-For", "203.0.113.5, 192.168.1.1")

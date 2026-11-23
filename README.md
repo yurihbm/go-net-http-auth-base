@@ -221,6 +221,7 @@ All variables are read and validated once at startup in `config/config.go`; the 
 | `OAUTH_CALLBACK_ALLOW_LIST`                                              | - (**required** in production) | Comma-separated `redirect_uri` values accepted after OAuth (exact match)                            |
 | `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`                           | -                              | Comma-separated CORS allow lists (exact match)                                                      |
 | `RATE_LIMIT_REQUESTS_PER_SECOND`, `RATE_LIMIT_BURST`                     | `20`, `50`                     | Per-IP token bucket                                                                                 |
+| `TRUSTED_PROXIES`                                                        | -                              | Comma-separated CIDRs or IPs of reverse proxies whose `X-Forwarded-For` is trusted ([ADR-013](docs/adr/ADR-013-trusted-proxies.md)) |
 | `RESEND_API_KEY`, `EMAIL_FROM`                                           | - (**required** outside development) | Resend credentials and sender; without a key, emails are only logged                          |
 | `EMAIL_CHANGE_REVERT_URL`                                                | - (**required** outside development) | Frontend URL that receives the "it wasn't me" revert token                                     |
 | `EMAIL_OAUTH_LINK_REVERT_URL`                                             | - (**required** outside development) | Frontend URL that receives the OAuth link undo token                                           |
@@ -394,7 +395,7 @@ Logs carry `trace_id`/`span_id`, so a trace in Tempo links to its logs in Loki (
 - Server-side, per-device sessions with refresh token rotation and reuse detection; logout ends the current session
 - OAuth with PKCE, a state nonce bound to the browser, an exact `redirect_uri` allow list, and account creation/linking only through emails proven by the provider or by a one-time code
 - Self-or-admin authorization on user endpoints, admin-only audit logs and Swagger UI
-- Exact-match CORS and per-IP rate limiting
+- Exact-match CORS and per-IP rate limiting; `X-Forwarded-For` is only trusted from the proxies listed in `TRUSTED_PROXIES` ([ADR-013](docs/adr/ADR-013-trusted-proxies.md))
 - Audit log of security-relevant actions ([docs/AUDIT.md](docs/AUDIT.md))
 - Prepared statements via sqlc to prevent SQL injection
 

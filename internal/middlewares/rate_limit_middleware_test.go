@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/middlewares"
+	"go-net-http-auth-base/internal/shared"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -87,6 +88,23 @@ func TestRateLimitMiddleware(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, serveFrom(handler, "10.0.0.1:1111"))
 		assert.Equal(t, http.StatusOK, serveFrom(handler, "10.0.0.2:1111"))
+	})
+
+	t.Run("different client ips behind the same remote addr have independent buckets", func(t *testing.T) {
+		handler := newRateLimitedHandler(t, 1)
+
+		serveAs := func(clientIP string) int {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = "10.0.0.9:1111"
+			req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{ClientIP: clientIP}))
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			return w.Code
+		}
+
+		assert.Equal(t, http.StatusOK, serveAs("203.0.113.1"))
+		assert.Equal(t, http.StatusOK, serveAs("203.0.113.2"))
+		assert.Equal(t, http.StatusTooManyRequests, serveAs("203.0.113.1"))
 	})
 
 	t.Run("remote addr without port still works", func(t *testing.T) {

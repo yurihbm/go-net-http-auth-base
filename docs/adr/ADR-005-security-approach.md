@@ -1,6 +1,6 @@
 # ADR-005: Security Approach
 
-- **Status:** Accepted; the Microsoft linking statement is superseded by ADR-009
+- **Status:** Accepted; the Microsoft linking statement is superseded by ADR-009 and the rate limiter proxy statement by ADR-013
 - **Date:** 2026-11-14
 
 ## Context
