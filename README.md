@@ -251,18 +251,22 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 To build and run the application in a production-ready Docker container, you have two options:
 
-#### Option 1: Using Docker Compose (Recommended)
+#### Option 1: Docker Compose with Traefik (Recommended)
 
-This method automatically sets up the application and a PostgreSQL database.
+This method sets up the application, a PostgreSQL database and [Traefik](https://traefik.io) as reverse proxy and TLS terminator with automatic Let's Encrypt certificates ([ADR-014](docs/adr/ADR-014-traefik-reverse-proxy.md)). TLS is required in production because the auth cookies are `Secure`/`__Host-`.
 
-1. **Create the .env file**
+1. **Point DNS and open ports**: create an A/AAAA record for your domain pointing to the VPS and allow inbound ports 80 and 443 (80 redirects to 443 and serves as fallback for Let's Encrypt).
+
+2. **Create the .env file**
 
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
-2. **Run with Docker Compose**
+   Besides the usual variables, set `API_ENV=production`, `API_DOMAIN` (the domain routed to the API, e.g. `api.example.com`), `ACME_EMAIL` (Let's Encrypt contact), `API_URL=https://<API_DOMAIN>`, `OAUTH_CALLBACK_ALLOW_LIST` and `CORS_ALLOWED_ORIGINS` with `https://` URLs, and `TRUSTED_PROXIES=172.30.0.0/24`. That is the `edge` network subnet in the compose file; if you change one, change the other.
+
+3. **Run with Docker Compose**
 
    ```bash
    docker compose --env-file .env -f docker/docker-compose.prod.yaml up -d --build
@@ -270,7 +274,15 @@ This method automatically sets up the application and a PostgreSQL database.
 
    The `docker/docker-compose.prod.yaml` file runs an ephemeral service called `migrate` that performs the database migration. When running the migration on a CI/CD pipeline, remove this service.
 
-#### Option 2: Manual Build & Run
+4. **Create the first admin** (after signing up through the API):
+
+   ```bash
+   docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./main promote-admin <email>
+   ```
+
+Only Traefik publishes ports (80 and 443). The database sits on an `internal` network with no external access, and the API is reachable only through Traefik, which reads the Docker socket read-only to discover routes by label.
+
+#### Option 2: Manual Build & Run (no TLS)
 
 1. **Build the image**
 
