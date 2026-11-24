@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -58,6 +60,13 @@ func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, f
 // @description	Authenticated endpoints need the `access_token` cookie set by `POST /auth/login`. Swagger 2.0 cannot describe cookie auth, so endpoints are not marked as secured here; "Try it out" works because the browser sends the cookie.
 // @BasePath		/
 func main() {
+	if err := run(); err != nil {
+		slog.Error("Application failed", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	err := godotenv.Load()
 
 	// Single os.Getenv call before config.Load, so config errors can be logged properly.
@@ -65,8 +74,7 @@ func main() {
 
 	cfg, cfgErr := config.Load()
 	if cfgErr != nil {
-		slog.Error("Failed to load configuration", "error", cfgErr)
-		os.Exit(1)
+		return fmt.Errorf("load configuration: %w", cfgErr)
 	}
 
 	if err != nil && !cfg.IsProduction() {
@@ -82,8 +90,7 @@ func main() {
 
 	tel, err := telemetry.New(ctx, cfg.Telemetry, cfg.Env)
 	if err != nil {
-		slog.Error("Failed to initialize telemetry", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("initialize telemetry: %w", err)
 	}
 
 	var dbTracers []pgx.QueryTracer
@@ -95,29 +102,25 @@ func main() {
 
 		dbConfig, err := pgx.ParseConfig(cfg.Database.URL)
 		if err != nil {
-			slog.Error("Failed to parse database URL", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("parse database URL: %w", err)
 		}
 		otelQueryTracer, err := postgres.NewOTelQueryTracer(tel.TracerProvider, tel.MeterProvider, dbConfig.Database)
 		if err != nil {
-			slog.Error("Failed to create database telemetry tracer", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("create database telemetry tracer: %w", err)
 		}
 		dbTracers = append(dbTracers, otelQueryTracer)
 	}
 
 	pool, err := postgres.NewConnectionPool(ctx, cfg.Database, dbTracers...)
 	if err != nil {
-		slog.Error("Failed to connect to database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("connect to database: %w", err)
 	}
 	defer pool.Close()
 
 	if tel.Enabled {
 		poolMetrics, err := postgres.RegisterPoolMetrics(pool, tel.MeterProvider)
 		if err != nil {
-			slog.Error("Failed to register database pool metrics", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("register database pool metrics: %w", err)
 		}
 		defer func() {
 			if err := poolMetrics.Unregister(); err != nil {
@@ -129,8 +132,7 @@ func main() {
 	// Initialize and run Partition Manager
 	partitionManager := infra.NewAuditLogsPartitionManager(pool)
 	if err := partitionManager.RunMaintenance(ctx); err != nil {
-		slog.Error("Failed to initialize audit log partitions", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("initialize audit log partitions: %w", err)
 	}
 
 	recordsSweeper := infra.NewExpiredRecordsSweeper(pool)
@@ -171,8 +173,7 @@ func main() {
 
 	deps, err := factories.NewDependencies(pool, cfg)
 	if err != nil {
-		slog.Error("Failed to initialize application dependencies", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("initialize application dependencies: %w", err)
 	}
 
 	handler := factories.NewHandler(ctx, deps, cfg, tel)
@@ -188,43 +189,36 @@ func main() {
 		IdleTimeout:       serverIdleTimeout,
 	}
 
+	serverErr := make(chan error, 1)
 	go func() {
 		slog.Info("Server listening on port :" + port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("Server failed", "error", err)
-			os.Exit(1)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
 		}
 	}()
 
-	// Block until a shutdown signal is received via ctx.
-	<-ctx.Done()
+	var runErr error
+	select {
+	case <-ctx.Done():
+	case err := <-serverErr:
+		runErr = fmt.Errorf("server failed: %w", err)
+		stopBackgroundTasks()
+	}
 
 	slog.Info("Shutting down server...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Drain HTTP and wait for background goroutines concurrently,
-	// both bounded by the same 10-second shutdown window.
-	var shutdownWg sync.WaitGroup
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		slog.Error("Server forced to shutdown", "error", err)
+	}
 
-	shutdownWg.Add(1)
-	go func() {
-		defer shutdownWg.Done()
-		wg.Wait()
-	}()
+	if err := waitGroupWithContext(shutdownCtx, &wg); err != nil {
+		slog.Warn("Background tasks did not stop before the shutdown deadline", "error", err)
+	}
 
-	shutdownWg.Add(1)
-	go func() {
-		defer shutdownWg.Done()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			slog.Error("Server forced to shutdown", "error", err)
-		}
-	}()
-
-	shutdownWg.Wait()
-
-	slog.Info("Server exited gracefully")
+	slog.Info("Server exited")
 
 	telemetryCtx, cancelTelemetry := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelTelemetry()
@@ -232,4 +226,6 @@ func main() {
 	if err := tel.Shutdown(telemetryCtx); err != nil {
 		slog.Error("Failed to shutdown telemetry", "error", err)
 	}
+
+	return runErr
 }

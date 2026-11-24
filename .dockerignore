@@ -1,0 +1,14 @@
+.git
+.gitignore
+.github/
+.claude/
+.tools/
+.archify/
+.env*
+bin/
+tmp/
+coverage.out
+docker/
+docs/adr/
+**/*.md
+*_test.go

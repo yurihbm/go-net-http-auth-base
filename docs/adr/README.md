@@ -19,10 +19,11 @@ Status, Context, Decision and Consequences.
 | [ADR-011](ADR-011-email-send-retries.md) | Email Send Retries and Idempotency Key | Accepted |
 | [ADR-012](ADR-012-notify-and-undo-oauth-links.md) | Notify and Undo OAuth Provider Links | Accepted |
 | [ADR-013](ADR-013-trusted-proxies.md) | Trusted Proxies and Client IP Resolution | Accepted |
-| [ADR-014](ADR-014-traefik-reverse-proxy.md) | Traefik Reverse Proxy and TLS in Production | Accepted |
+| [ADR-014](ADR-014-traefik-reverse-proxy.md) | Traefik Reverse Proxy and TLS in Production | Partially superseded by ADR-018 |
 | [ADR-015](ADR-015-password-reset-and-change.md) | Password Reset and Change | Accepted |
 | [ADR-016](ADR-016-cross-layer-test-suites.md) | Cross-Layer Test Suites | Accepted |
 | [ADR-017](ADR-017-http-edge-hardening.md) | HTTP Edge Hardening | Accepted |
+| [ADR-018](ADR-018-traefik-file-provider.md) | Traefik File Provider Instead of the Docker Socket | Accepted |
 
 ## Writing a new ADR
 

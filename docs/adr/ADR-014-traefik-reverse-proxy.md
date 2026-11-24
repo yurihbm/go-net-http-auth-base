@@ -1,6 +1,6 @@
 # ADR-014: Traefik Reverse Proxy and TLS in Production
 
-- **Status:** Accepted
+- **Status:** Partially superseded by ADR-018 (label-based routing and the Docker socket)
 - **Date:** 2026-11-23
 
 ## Context

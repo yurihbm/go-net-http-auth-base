@@ -127,7 +127,7 @@ go-net-http-auth-base/
 ```bash
 make promote-admin email=you@example.com
 # production
-docker compose -f docker/docker-compose.prod.yaml exec api ./promote-admin you@example.com
+docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./promote-admin you@example.com
 ```
 
 The command only promotes existing users, never creates them, and is idempotent: running it again for an admin is a no-op.
@@ -221,12 +221,12 @@ All variables are read and validated once at startup in `config/config.go`; the 
 
 ### Docker for Development
 
-You may use the `docker/docker-compose.dev.yaml` file for development (it does not run the API itself; use `air`). It provides a local Postgres Database (localhost:5432), the pgAdmin application (localhost:5050) and the Grafana LGTM stack (Grafana at http://localhost:3000, default `admin`/`admin`; OTLP gRPC on 4317 and OTLP HTTP on 4318). You should provide a valid .env file.
+You may use the `docker/docker-compose.dev.yaml` file for development (it does not run the API itself; use `air`). It provides a local Postgres Database (localhost:5432), the pgAdmin application (localhost:5050) and the Grafana LGTM stack (Grafana at http://localhost:3000, default `admin`/`admin`; OTLP gRPC on 4317 and OTLP HTTP on 4318). Every port is bound to `127.0.0.1` only. You should provide a valid .env file and always pass it with `--env-file .env`: the compose files read it through `${VAR}` interpolation, so each container receives only the variables it needs (`POSTGRES_*` for the database, `DATABASE_URL` for `migrate`, `PGADMIN_DEFAULT_EMAIL`/`PGADMIN_DEFAULT_PASSWORD` for pgAdmin); only the API gets the whole file.
 
 ```bash
 docker compose --env-file .env -f docker/docker-compose.dev.yaml up -d --build  # Start services
-docker compose -f docker/docker-compose.dev.yaml down                           # Stop services
-docker compose -f docker/docker-compose.dev.yaml logs                           # View logs
+docker compose --env-file .env -f docker/docker-compose.dev.yaml down                  # Stop services
+docker compose --env-file .env -f docker/docker-compose.dev.yaml logs                  # View logs
 ```
 
 To send traces and metrics to the LGTM stack, set these variables in your `.env`:
@@ -269,7 +269,7 @@ This method sets up the application, a PostgreSQL database and [Traefik](https:/
    docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./promote-admin <email>
    ```
 
-Only Traefik publishes ports (80 and 443). The database sits on an `internal` network with no external access, and the API is reachable only through Traefik, which reads the Docker socket read-only to discover routes by label.
+Only Traefik publishes ports (80 and 443). The database sits on an `internal` network with no external access, and the API is reachable only through Traefik, which routes by the versioned file `docker/traefik/dynamic.yaml` (file provider; the Docker socket is not mounted, [ADR-018](docs/adr/ADR-018-traefik-file-provider.md)). The domain and port come from `API_DOMAIN` and `API_PORT`. To add another service to the same Traefik, add a router and a service to that file. Always pass `--env-file .env` to `docker compose`, also for `down`, `logs` and `exec`.
 
 #### Option 2: Manual Build & Run (no TLS)
 

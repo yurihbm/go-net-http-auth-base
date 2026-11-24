@@ -12,8 +12,9 @@ COPY . .
 
 # CGO_ENABLED=0: Disable CGO for static binary
 # -ldflags="-s -w": Strip debug information to reduce binary size
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o api ./cmd/api
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o promote-admin ./cmd/promote-admin
+# -trimpath: Remove local filesystem paths from the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o promote-admin ./cmd/promote-admin
 
 FROM alpine:3.24
 
