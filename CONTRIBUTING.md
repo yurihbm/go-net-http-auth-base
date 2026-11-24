@@ -69,7 +69,7 @@ The project implements a **Clean Architecture** inspired pattern, structured int
 
 - **Dependency Inversion**: High-level modules (Controllers) depend on abstractions (Interfaces defined in `internal/domain`), not concrete implementations.
 - **Domain-Centric**: The `internal/domain` package defines the core entities and interfaces, serving as the contract between layers.
-- **Dependency Injection**: `factories.NewDependencies` builds the shared repositories, services and middlewares once, and `cmd/main.go` passes them to thin per-controller factories, ensuring loose coupling and testability.
+- **Dependency Injection**: `factories.NewDependencies` builds the shared repositories, services and middlewares once, and `cmd/api/main.go` passes them to thin per-controller factories, ensuring loose coupling and testability.
 
 The reasoning behind these choices is recorded in the [Architecture Decision Records](docs/adr/README.md). [AGENTS.md](AGENTS.md) and the path-scoped rules in [`.claude/rules/`](.claude/rules/) describe the conventions in detail, and [docs/AUTH.md](docs/AUTH.md) the authentication and email flows (written for AI agents, but useful for humans too).
 

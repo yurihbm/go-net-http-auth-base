@@ -264,7 +264,7 @@ type AuditLogsPartitionManager struct {
 
 ### Initialization
 
-On application startup (`cmd/main.go`):
+On application startup (`cmd/api/main.go`):
 
 ```go
 partitionManager := infra.NewAuditLogsPartitionManager(pool)
@@ -278,7 +278,7 @@ This ensures the current and next month's partitions exist immediately.
 
 ### Maintenance Schedule
 
-A background goroutine (`runEvery` in `cmd/main.go`) runs maintenance every 24 hours and stops when the shutdown signal cancels `ctx`; graceful shutdown waits for it:
+A background goroutine (`runEvery` in `cmd/api/main.go`) runs maintenance every 24 hours and stops when the shutdown signal cancels `ctx`; graceful shutdown waits for it:
 
 ```go
 runEvery(

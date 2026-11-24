@@ -127,7 +127,7 @@ go-net-http-auth-base/
 ```bash
 make promote-admin email=you@example.com
 # production
-docker compose -f docker/docker-compose.prod.yaml exec api ./main promote-admin you@example.com
+docker compose -f docker/docker-compose.prod.yaml exec api ./promote-admin you@example.com
 ```
 
 The command only promotes existing users, never creates them, and is idempotent: running it again for an admin is a no-op.
@@ -265,7 +265,7 @@ This method sets up the application, a PostgreSQL database and [Traefik](https:/
 4. **Create the first admin** (after signing up through the API):
 
    ```bash
-   docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./main promote-admin <email>
+   docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./promote-admin <email>
    ```
 
 Only Traefik publishes ports (80 and 443). The database sits on an `internal` network with no external access, and the API is reachable only through Traefik, which reads the Docker socket read-only to discover routes by label.
@@ -416,7 +416,7 @@ Checklist after creating a repository from this template:
 
    Replace `{NEW_BASE_MODULE_NAME}` with the name of the new project.
 2. Set `PROJECT_NAME` in `.env` (the compose files fall back to `auth-base`).
-3. Change the Swagger `@title` in `cmd/main.go` and run `make swagger-gen`.
+3. Change the Swagger `@title` in `cmd/api/main.go` and run `make swagger-gen`.
 4. Update the copyright holder in `LICENSE`.
 5. Add a `CODEOWNERS` file in `.github/`.
 6. Replace the placeholder contact in `SECURITY.md`.

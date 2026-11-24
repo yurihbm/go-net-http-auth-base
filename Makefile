@@ -80,7 +80,8 @@ GOOS ?= linux
 GOARCH ?= amd64
 build:
 	@echo "Building application binary..."
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o bin/app ./cmd/main.go
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o bin/app ./cmd/api
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o bin/promote-admin ./cmd/promote-admin
 
 # Create a new database migration
 migrate-create:
@@ -97,7 +98,7 @@ promote-admin:
 		echo "Error: email variable is required. Usage: make promote-admin email=user@example.com"; \
 		exit 1; \
 	fi
-	go run ./cmd/main.go promote-admin $(email)
+	go run ./cmd/promote-admin $(email)
 
 # Run database migrations
 migrate-up:
@@ -117,4 +118,4 @@ sqlc-gen:
 # Generate the Swagger spec from the handler annotations
 swagger-gen:
 	@echo "Generating Swagger docs..."
-	swag init -g cmd/main.go -o docs/swagger --parseInternal --parseDependency
+	swag init -g cmd/api/main.go -o docs/swagger --parseInternal --parseDependency

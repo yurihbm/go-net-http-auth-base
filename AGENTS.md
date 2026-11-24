@@ -8,7 +8,8 @@ Go with standard `net/http` (Go 1.22+ method patterns), PostgreSQL, `golang-migr
 
 ## Layout
 
-- `cmd/main.go`: entry point; builds config, telemetry, the pool and `factories.NewHandler`, then serves.
+- `cmd/api/`: the server; builds config, telemetry, the pool and `factories.NewHandler`, then serves.
+- `cmd/promote-admin/`: one-shot CLI (`promote-admin <email>`) that promotes an existing user to admin.
 - `config/`: loads and validates every environment variable (`config.Load`) and builds the OAuth client configs.
 - `internal/api/`: JSON decoding/validation, response format, error mapping, cookies.
 - `internal/controllers/`: HTTP handlers, calling one service method each.
@@ -17,7 +18,7 @@ Go with standard `net/http` (Go 1.22+ method patterns), PostgreSQL, `golang-migr
 - `internal/providers/`: adapters for external services (OAuth providers, email).
 - `internal/middlewares/`: auth, step-up, role, CORS, rate limit, logger, telemetry, request UUID, request context data.
 - `internal/domain/`: entities, DTOs, errors and every service/repository interface.
-- `internal/factories/`: composition root. `dependencies.go` (`NewDependencies`) builds the shared graph once; thin per-controller factories wire it into controllers; `handler.go` (`NewHandler`) builds the mux, registers every controller and applies the global middleware chain (used by `cmd/main.go` and the E2E suite, so tests run the production wiring).
+- `internal/factories/`: composition root. `dependencies.go` (`NewDependencies`) builds the shared graph once; thin per-controller factories wire it into controllers; `handler.go` (`NewHandler`) builds the mux, registers every controller and applies the global middleware chain (used by `cmd/api` and the E2E suite, so tests run the production wiring).
 - `internal/mocks/`: testify mocks of the domain interfaces.
 - `internal/tests/`: cross-layer test suites (test files only): `e2e/` (HTTP flows over `factories.NewHandler`) and `integration/` (service flows composed with real repositories).
 - `internal/infra/`: background tasks (`AuditLogsPartitionManager`, `ExpiredRecordsSweeper`).
@@ -70,7 +71,7 @@ make show-cover            # coverage as reported by CI
 - **IDs**: always UUIDv7. Tables use a `uuid uuid DEFAULT uuidv7()` primary key; IDs generated in Go (persisted rows, request UUIDs) use `uuid.NewV7()`.
 - **Errors**: dot-separated keys (e.g., `"users.email.conflict"`) for i18n, documented in `docs/ERRORS.md`. Return errors as-is unless wrapping adds real context.
 - **Pointers**: services and repositories take DTOs and entities by value and return pointers (`*domain.User`), so a `nil` result pairs with an error.
-- **Comments**: code is self-documenting. Comments only for swag annotations on handlers (and the general API info above `main` in `cmd/main.go`) and for explaining complex business logic. No decorative godoc.
+- **Comments**: code is self-documenting. Comments only for swag annotations on handlers (and the general API info above `main` in `cmd/api/main.go`) and for explaining complex business logic. No decorative godoc.
 - **Telemetry Imports**: `go.opentelemetry.io/otel*` may only be imported in `internal/telemetry`, `internal/middlewares`, `internal/logger`, `internal/factories`, `postgres` and `cmd`; never in `services`, `controllers`, `domain` or `repositories`.
 - **Logging**: use `slog.*Context(ctx, ...)` in request paths so logs carry the trace.
 - **Formatting**: standard Go formatting (`gofmt`), `golangci-lint` in CI.

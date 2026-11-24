@@ -12,7 +12,8 @@ COPY . .
 
 # CGO_ENABLED=0: Disable CGO for static binary
 # -ldflags="-s -w": Strip debug information to reduce binary size
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o promote-admin ./cmd/promote-admin
 
 FROM alpine:3.24
 
@@ -23,9 +24,9 @@ RUN adduser -D -u 1000 appuser
 
 WORKDIR /app
 
-COPY --from=builder /app/main .
+COPY --from=builder /app/api /app/promote-admin ./
 
-RUN chown appuser:appuser main
+RUN chown appuser:appuser api promote-admin
 
 # Switch to non-root user
 USER 1000
@@ -37,4 +38,4 @@ EXPOSE ${API_PORT}
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${API_PORT}/health || exit 1
 
-ENTRYPOINT ["./main"]
+ENTRYPOINT ["./api"]
