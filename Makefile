@@ -71,7 +71,7 @@ show-cover: test-cover
 # Run the E2E suite against an ephemeral PostgreSQL container (requires Docker)
 test-e2e:
 	@echo "Running E2E tests..."
-	go test -count=1 -race ./internal/e2e/...
+	go test -count=1 -race ./internal/tests/e2e/...
 
 setup: install-tools tidy
 
