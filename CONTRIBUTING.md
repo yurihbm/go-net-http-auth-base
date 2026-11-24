@@ -133,7 +133,7 @@ Examples:
 
 - **Coverage**: We aim for **80%+ test coverage**.
 - **Unit Tests**: Write unit tests for all new services and controllers.
-- **Integration Tests**: Repository tests run against a real PostgreSQL started by testcontainers (`postgres.NewTestPool`), so a running Docker daemon is required. Each transactional flow needs a test that forces a failure and asserts nothing was persisted.
+- **Integration Tests**: Repository tests run against a real PostgreSQL started by testcontainers (`postgres.NewTestPool`), so a running Docker daemon is required. Each transactional flow needs a test in `internal/tests/integration` that forces a failure and asserts nothing was persisted; HTTP end-to-end flows live in `internal/tests/e2e` (ADR-016).
 - **Naming**: One `Test<Type>_<Method>` per method, with scenarios as `t.Run` subtests.
 - **Running Tests**:
   ```bash

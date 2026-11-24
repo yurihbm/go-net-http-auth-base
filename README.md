@@ -31,6 +31,7 @@ go-net-http-auth-base/
 │   ├── middlewares/    # HTTP middlewares
 │   ├── mocks/          # testify mocks of the domain interfaces
 │   ├── infra/          # Audit log partition manager
+│   ├── tests/          # Cross-layer suites: e2e (HTTP) and integration (service + repositories)
 │   ├── logger/         # slog setup
 │   ├── telemetry/      # OpenTelemetry SDK bootstrap
 │   ├── shared/         # Request context data
@@ -173,7 +174,8 @@ go test ./...                    # Run all tests (integration tests need Docker)
 go test -short ./...             # Skip the integration tests
 go test ./... -v                 # Run with verbose output
 go test ./... -cover             # Run with coverage report
-make test-cover                  # Coverage without generated and wiring packages (writes coverage.out)
+make test-e2e                    # Only the HTTP end-to-end suite (needs Docker)
+make test-cover                  # Coverage (all suites count) without generated and wiring packages (writes coverage.out)
 make show-cover                  # test-cover plus the per-function report CI posts on PRs
 ```
 

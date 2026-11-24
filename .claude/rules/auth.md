@@ -17,7 +17,6 @@ paths:
   - "internal/repositories/pending_signups_repository*.go"
   - "internal/repositories/password_resets_repository*.go"
   - "internal/repositories/email_send_limits_repository*.go"
-  - "internal/repositories/*_transaction_test.go"
   - "internal/middlewares/auth_middleware*.go"
   - "internal/middlewares/step_up_middleware*.go"
   - "internal/middlewares/role_middleware*.go"
@@ -34,7 +33,7 @@ paths:
   - "internal/providers/*email_provider*.go"
   - "internal/infra/expired_records_sweeper*.go"
   - "internal/api/cookies*.go"
-  - "internal/e2e/**"
+  - "internal/tests/**"
   - "postgres/queries/**"
   - "postgres/migrations/**"
 ---
