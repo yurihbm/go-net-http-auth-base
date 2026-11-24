@@ -16,7 +16,7 @@ import (
 const tokenSecret = "test-secret-key"
 
 func TestTokenService_RoundTrip(t *testing.T) {
-	service := services.NewTokenService(tokenSecret)
+	service := services.NewTokenService(tokenSecret, testClock)
 
 	token, err := service.GenerateToken(context.Background(), domain.GenerateTokenDTO{
 		Subject:   "user-uuid",
@@ -37,11 +37,11 @@ func TestTokenService_RoundTrip(t *testing.T) {
 	assert.Equal(t, domain.TokenAudienceAccess, data.Audience)
 	assert.Equal(t, domain.RoleAdmin, data.Role)
 	assert.Equal(t, map[string]any{"key": "value"}, data.Payload)
-	assert.InDelta(t, time.Now().Add(domain.TokenExpirationAccess).Unix(), data.Expiration, 5)
+	assert.Equal(t, testNow.Add(domain.TokenExpirationAccess).Unix(), data.Expiration)
 }
 
 func TestTokenService_Expiration(t *testing.T) {
-	service := services.NewTokenService(tokenSecret)
+	service := services.NewTokenService(tokenSecret, testClock)
 	cases := map[domain.TokenAudience]time.Duration{
 		domain.TokenAudienceAccess:            domain.TokenExpirationAccess,
 		domain.TokenAudienceRefresh:           domain.TokenExpirationRefresh,
@@ -65,13 +65,13 @@ func TestTokenService_Expiration(t *testing.T) {
 			})
 
 			require.NoError(t, err)
-			assert.InDelta(t, time.Now().Add(ttl).Unix(), data.Expiration, 5)
+			assert.Equal(t, testNow.Add(ttl).Unix(), data.Expiration)
 		})
 	}
 }
 
 func TestTokenService_VerifyToken(t *testing.T) {
-	service := services.NewTokenService(tokenSecret)
+	service := services.NewTokenService(tokenSecret, testClock)
 	ctx := context.Background()
 
 	t.Run("success - access token carries the session id", func(t *testing.T) {
@@ -105,6 +105,31 @@ func TestTokenService_VerifyToken(t *testing.T) {
 		assert.Equal(t, "refresh-jti", data.ID)
 	})
 
+	t.Run("success - valid one second before expiration", func(t *testing.T) {
+		now := testNow
+		clocked := services.NewTokenService(tokenSecret, func() time.Time { return now })
+		token, err := clocked.GenerateToken(ctx, domain.GenerateTokenDTO{Subject: "user-uuid", Audience: domain.TokenAudienceExchange})
+		require.NoError(t, err)
+		now = testNow.Add(domain.TokenExpirationExchange - time.Second)
+
+		_, err = clocked.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceExchange})
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("error - expired at the expiration instant", func(t *testing.T) {
+		now := testNow
+		clocked := services.NewTokenService(tokenSecret, func() time.Time { return now })
+		token, err := clocked.GenerateToken(ctx, domain.GenerateTokenDTO{Subject: "user-uuid", Audience: domain.TokenAudienceExchange})
+		require.NoError(t, err)
+		now = testNow.Add(domain.TokenExpirationExchange)
+
+		data, err := clocked.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceExchange})
+
+		assert.Equal(t, services.ErrInvalidToken, err)
+		assert.Nil(t, data)
+	})
+
 	sign := func(t *testing.T, claims jwt.MapClaims, secret string) string {
 		t.Helper()
 		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
@@ -116,23 +141,23 @@ func TestTokenService_VerifyToken(t *testing.T) {
 		"expired": sign(t, jwt.MapClaims{
 			"sub": "user-uuid",
 			"aud": domain.TokenAudienceAccess,
-			"exp": time.Now().Add(-time.Minute).Unix(),
+			"exp": testNow.Add(-time.Minute).Unix(),
 		}, tokenSecret),
 		"wrong audience": sign(t, jwt.MapClaims{
 			"sub": "user-uuid",
 			"aud": domain.TokenAudienceRefresh,
-			"exp": time.Now().Add(time.Minute).Unix(),
+			"exp": testNow.Add(time.Minute).Unix(),
 		}, tokenSecret),
 		"bad signature": sign(t, jwt.MapClaims{
 			"sub": "user-uuid",
 			"aud": domain.TokenAudienceAccess,
-			"exp": time.Now().Add(time.Minute).Unix(),
+			"exp": testNow.Add(time.Minute).Unix(),
 		}, "different-secret-key"),
 		"unsupported hmac method": func() string {
 			token, err := jwt.NewWithClaims(jwt.SigningMethodHS512, jwt.MapClaims{
 				"sub": "user-uuid",
 				"aud": domain.TokenAudienceAccess,
-				"exp": time.Now().Add(time.Minute).Unix(),
+				"exp": testNow.Add(time.Minute).Unix(),
 				"sid": "session-uuid",
 			}).SignedString([]byte(tokenSecret))
 			require.NoError(t, err)
@@ -160,7 +185,7 @@ func TestTokenService_VerifyToken(t *testing.T) {
 				claims := jwt.MapClaims{
 					"sub": "user-uuid",
 					"aud": audience,
-					"exp": time.Now().Add(time.Minute).Unix(),
+					"exp": testNow.Add(time.Minute).Unix(),
 					"jti": "refresh-jti",
 				}
 				if sid != nil {

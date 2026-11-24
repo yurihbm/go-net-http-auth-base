@@ -51,16 +51,17 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 		}
 
 		service := services.NewAuthService(
-			services.NewUserService(usersRepo, repositories.NewPostgresTransactor(testDB)),
+			services.NewUserService(usersRepo, repositories.NewPostgresTransactor(testDB), time.Now),
 			nil,
 			repositories.NewAuthPostgresRepository(db),
 			serviceSessionsRepo,
 			new(mocks.OAuthProviderRegistryMock),
 			repositories.NewPostgresTransactor(testDB),
-			services.NewTokenService("test-secret-key"),
+			services.NewTokenService("test-secret-key", time.Now),
 			nil,
 			30*24*time.Hour,
 			10,
+			time.Now,
 		)
 
 		return service, sessionsRepo, expired
@@ -140,16 +141,17 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		registry.On("Get", provider).Return(providerMock, nil)
 
 		service := services.NewAuthService(
-			services.NewUserService(usersRepo, repositories.NewPostgresTransactor(testDB)),
+			services.NewUserService(usersRepo, repositories.NewPostgresTransactor(testDB), time.Now),
 			nil,
 			serviceAuthRepo,
 			repositories.NewSessionsPostgresRepository(db),
 			registry,
 			repositories.NewPostgresTransactor(testDB),
-			services.NewTokenService("test-secret-key"),
+			services.NewTokenService("test-secret-key", time.Now),
 			emails,
 			30*24*time.Hour,
 			10,
+			time.Now,
 		)
 
 		state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
@@ -287,18 +289,20 @@ func completeSignupCredentialsTests(t *testing.T) {
 			transactor,
 			emails,
 			[]byte("test-secret-key"),
+			time.Now,
 		)
 		service := services.NewAuthService(
-			services.NewUserService(usersRepo, transactor),
+			services.NewUserService(usersRepo, transactor, time.Now),
 			pendingSignups,
 			repositories.NewAuthPostgresRepository(db),
 			sessionsRepo,
 			new(mocks.OAuthProviderRegistryMock),
 			transactor,
-			services.NewTokenService("test-secret-key"),
+			services.NewTokenService("test-secret-key", time.Now),
 			nil,
 			30*24*time.Hour,
 			10,
+			time.Now,
 		)
 
 		pendingUUID, err := pendingSignups.StartCredentials(ctx, domain.CreateUserDTO{Name: "Signup User", Email: email, Password: "password123"})
@@ -420,18 +424,20 @@ func completeSignupOAuthTests(t *testing.T) {
 			transactor,
 			emails,
 			[]byte("test-secret-key"),
+			time.Now,
 		)
 		service := services.NewAuthService(
-			services.NewUserService(usersRepo, transactor),
+			services.NewUserService(usersRepo, transactor, time.Now),
 			pendingSignups,
 			serviceAuthRepo,
 			repositories.NewSessionsPostgresRepository(db),
 			new(mocks.OAuthProviderRegistryMock),
 			transactor,
-			services.NewTokenService("test-secret-key"),
+			services.NewTokenService("test-secret-key", time.Now),
 			nil,
 			30*24*time.Hour,
 			10,
+			time.Now,
 		)
 
 		pendingUUID, err := pendingSignups.StartOAuth(ctx, domain.StartOAuthSignupDTO{Name: "OAuth User", Email: email, Provider: provider, ProviderUserID: providerUserID})

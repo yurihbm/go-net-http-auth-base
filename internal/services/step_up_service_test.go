@@ -40,7 +40,7 @@ func newTestStepUpService() (domain.StepUpService, stepUpMocks) {
 		users:      new(mocks.UsersRepositoryMock),
 		emails:     new(mocks.EmailVerificationServiceMock),
 	}
-	service := services.NewStepUpService(m.challenges, m.sessions, m.users, newTransactorMock(), m.emails, stepUpKey)
+	service := services.NewStepUpService(m.challenges, m.sessions, m.users, newTransactorMock(), m.emails, stepUpKey, testClock)
 	return service, m
 }
 
@@ -51,7 +51,7 @@ func stepUpHash(sessionUUID string, code string) string {
 }
 
 func activeSession() *domain.UserSession {
-	return &domain.UserSession{UUID: stepUpSessionUUID, UserUUID: stepUpUserUUID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	return &domain.UserSession{UUID: stepUpSessionUUID, UserUUID: stepUpUserUUID, ExpiresAt: testNow.Add(time.Hour).Unix()}
 }
 
 func TestStepUpService_RequestCode(t *testing.T) {
@@ -77,7 +77,7 @@ func TestStepUpService_RequestCode(t *testing.T) {
 		assert.Equal(t, stepUpUserUUID, stored.UserUUID)
 		assert.Equal(t, stepUpSessionUUID, stored.SessionUUID)
 		assert.Equal(t, domain.SessionChallengeStepUp, stored.Purpose)
-		assert.WithinDuration(t, time.Now().Add(domain.StepUpCodeTTL), time.Unix(stored.ExpiresAt, 0), 5*time.Second)
+		assert.Equal(t, testNow.Add(domain.StepUpCodeTTL).Unix(), stored.ExpiresAt)
 		assert.Equal(t, stepUpHash(stepUpSessionUUID, code), stored.CodeHash)
 		m.challenges.AssertExpectations(t)
 		m.emails.AssertExpectations(t)
@@ -97,8 +97,21 @@ func TestStepUpService_RequestCode(t *testing.T) {
 	t.Run("error - session expired", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		expired := activeSession()
-		expired.ExpiresAt = time.Now().Add(-time.Minute).Unix()
+		expired.ExpiresAt = testNow.Add(-time.Minute).Unix()
 		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(expired, nil).Once()
+
+		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
+
+		var unauthorized *domain.UnauthorizedError
+		assert.ErrorAs(t, err, &unauthorized)
+		m.challenges.AssertNotCalled(t, "Upsert", mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - session expires at the current instant", func(t *testing.T) {
+		service, m := newTestStepUpService()
+		expiring := activeSession()
+		expiring.ExpiresAt = testNow.Unix()
+		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(expiring, nil).Once()
 
 		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
 
@@ -124,7 +137,7 @@ func TestStepUpService_RequestCode(t *testing.T) {
 			UUID:                      stepUpUserUUID,
 			Email:                     stepUpEmail,
 			StepUpFailures:            domain.StepUpMaxUserFailures,
-			StepUpFailuresWindowStart: time.Now().Add(-time.Hour).Unix(),
+			StepUpFailuresWindowStart: testNow.Add(-time.Hour).Unix(),
 		}
 		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
 		m.users.On("FindByUUID", stepUpUserUUID).Return(locked, nil).Once()
@@ -197,7 +210,7 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 		until, err := service.VerifyCode(context.Background(), stepUpUserUUID, stepUpSessionUUID, code)
 
 		require.NoError(t, err)
-		assert.WithinDuration(t, time.Now().Add(domain.StepUpElevationWindow), time.Unix(until, 0), 5*time.Second)
+		assert.Equal(t, testNow.Add(domain.StepUpElevationWindow).Unix(), until)
 		m.users.AssertExpectations(t)
 		m.challenges.AssertExpectations(t)
 		m.sessions.AssertExpectations(t)
@@ -342,19 +355,41 @@ func TestStepUpService_IsElevated(t *testing.T) {
 	}{
 		{"success - elevated", func() *domain.UserSession {
 			s := activeSession()
-			s.StepUpUntil = time.Now().Add(time.Minute).Unix()
+			s.StepUpUntil = testNow.Add(time.Minute).Unix()
 			return s
 		}(), nil, true},
+		{"success - elevated until one second before the window end", func() *domain.UserSession {
+			s := activeSession()
+			s.StepUpUntil = testNow.Add(time.Second).Unix()
+			return s
+		}(), nil, true},
+		{"not elevated - window ends at the current instant", func() *domain.UserSession {
+			s := activeSession()
+			s.StepUpUntil = testNow.Unix()
+			return s
+		}(), nil, false},
+		{"success - session expires one second from now", func() *domain.UserSession {
+			s := activeSession()
+			s.ExpiresAt = testNow.Add(time.Second).Unix()
+			s.StepUpUntil = testNow.Add(time.Minute).Unix()
+			return s
+		}(), nil, true},
+		{"not elevated - session expires at the current instant", func() *domain.UserSession {
+			s := activeSession()
+			s.ExpiresAt = testNow.Unix()
+			s.StepUpUntil = testNow.Add(time.Minute).Unix()
+			return s
+		}(), nil, false},
 		{"not elevated - never verified", activeSession(), nil, false},
 		{"not elevated - window elapsed", func() *domain.UserSession {
 			s := activeSession()
-			s.StepUpUntil = time.Now().Add(-time.Minute).Unix()
+			s.StepUpUntil = testNow.Add(-time.Minute).Unix()
 			return s
 		}(), nil, false},
 		{"not elevated - session expired", func() *domain.UserSession {
 			s := activeSession()
-			s.ExpiresAt = time.Now().Add(-time.Minute).Unix()
-			s.StepUpUntil = time.Now().Add(time.Minute).Unix()
+			s.ExpiresAt = testNow.Add(-time.Minute).Unix()
+			s.StepUpUntil = testNow.Add(time.Minute).Unix()
 			return s
 		}(), nil, false},
 		{"not elevated - session missing", nil, domain.NewNotFoundError("sessions.notFound"), false},

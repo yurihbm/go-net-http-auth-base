@@ -24,13 +24,13 @@ var (
 
 func TestNewUserService(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, newTransactorMock())
+	service := services.NewUserService(repo, newTransactorMock(), testClock)
 	assert.NotNil(t, service)
 }
 
 func TestUsersService_GetByUUID(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, newTransactorMock())
+	service := services.NewUserService(repo, newTransactorMock(), testClock)
 
 	t.Run("self is allowed", func(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User"}
@@ -56,7 +56,7 @@ func TestUsersService_GetByUUID(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 
 		result, err := service.GetByUUID(context.Background(), otherActor, "some-uuid")
 
@@ -79,7 +79,7 @@ func TestUsersService_GetByUUID(t *testing.T) {
 
 func TestUsersService_GetByEmail(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, newTransactorMock())
+	service := services.NewUserService(repo, newTransactorMock(), testClock)
 
 	t.Run("success", func(t *testing.T) {
 		user := &domain.User{UUID: "some-uuid", Name: "Test User", Email: "test@example.com"}
@@ -108,7 +108,7 @@ func TestUsersService_PromoteToAdmin(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		user := &domain.User{UUID: "some-uuid", Email: "test@example.com", Role: domain.RoleUser}
 		promoted := &domain.User{UUID: "some-uuid", Email: "test@example.com", Role: domain.RoleAdmin}
 		repo.On("FindByEmail", "test@example.com").Return(user, nil).Once()
@@ -124,7 +124,7 @@ func TestUsersService_PromoteToAdmin(t *testing.T) {
 
 	t.Run("success - already admin", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		admin := &domain.User{UUID: "some-uuid", Email: "test@example.com", Role: domain.RoleAdmin}
 		repo.On("FindByEmail", "test@example.com").Return(admin, nil).Once()
 
@@ -138,7 +138,7 @@ func TestUsersService_PromoteToAdmin(t *testing.T) {
 
 	t.Run("error - user not found", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		repo.On("FindByEmail", "ghost@example.com").Return(nil, notFoundErr).Once()
 
 		result, changed, err := service.PromoteToAdmin(context.Background(), "ghost@example.com")
@@ -151,7 +151,7 @@ func TestUsersService_PromoteToAdmin(t *testing.T) {
 
 	t.Run("error - update fails", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		user := &domain.User{UUID: "some-uuid", Email: "test@example.com", Role: domain.RoleUser}
 		updateErr := errors.New("update failed")
 		repo.On("FindByEmail", "test@example.com").Return(user, nil).Once()
@@ -183,7 +183,7 @@ func TestUsersService_Create(t *testing.T) {
 	t.Run("success stores the given hash without sending email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		sender := new(mocks.EmailVerificationServiceMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		repo.On("IsEmailReserved", "test@example.com").Return(false, nil).Once()
 		repo.On("Create", domain.User{
 			Name:         "Test User",
@@ -203,7 +203,7 @@ func TestUsersService_Create(t *testing.T) {
 	t.Run("success oauth (no password)", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		sender := new(mocks.EmailVerificationServiceMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		dto := domain.CreateOAuthUserDTO{
 			Name:  "Test User",
 			Email: "test@example.com",
@@ -237,7 +237,7 @@ func TestUsersService_Create(t *testing.T) {
 
 	t.Run("repository create error", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.AnythingOfType("domain.User")).Return(nil, errors.New("db error")).Once()
 
@@ -251,7 +251,7 @@ func TestUsersService_Create(t *testing.T) {
 
 	t.Run("error - email reserved during another user's change lock", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid", Email: "taken@example.com"}, nil).Once()
 		repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
 
@@ -266,7 +266,7 @@ func TestUsersService_Create(t *testing.T) {
 
 	t.Run("error - reservation lookup fails", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		lookupErr := errors.New("db error")
 		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
 		repo.On("IsEmailReserved", "taken@example.com").Return(false, lookupErr).Once()
@@ -279,7 +279,7 @@ func TestUsersService_Create(t *testing.T) {
 
 func TestUsersService_Update(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, newTransactorMock())
+	service := services.NewUserService(repo, newTransactorMock(), testClock)
 	uuid := "some-uuid"
 	originalUser := &domain.User{
 		UUID:  uuid,
@@ -345,7 +345,7 @@ func TestUsersService_Update(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		name := "New Name"
 		dto := domain.UserUpdateDTO{Name: &name}
 
@@ -361,7 +361,7 @@ func TestUsersService_Update(t *testing.T) {
 
 func TestUsersService_Delete(t *testing.T) {
 	repo := new(mocks.UsersRepositoryMock)
-	service := services.NewUserService(repo, newTransactorMock())
+	service := services.NewUserService(repo, newTransactorMock(), testClock)
 	uuid := "some-uuid"
 
 	t.Run("success", func(t *testing.T) {
@@ -396,8 +396,8 @@ func TestUsersService_Delete(t *testing.T) {
 
 	t.Run("error - self deletion is blocked during the email change lock", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
-		repo.On("FindByUUID", uuid).Return(&domain.User{UUID: uuid, EmailChangedAt: time.Now().Add(-time.Hour).Unix()}, nil).Once()
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
+		repo.On("FindByUUID", uuid).Return(&domain.User{UUID: uuid, EmailChangedAt: testNow.Add(-time.Hour).Unix()}, nil).Once()
 
 		err := service.Delete(context.Background(), selfActor, uuid)
 
@@ -407,9 +407,33 @@ func TestUsersService_Delete(t *testing.T) {
 		repo.AssertNotCalled(t, "Delete", uuid)
 	})
 
+	t.Run("error - self deletion is blocked one second before the email change lock ends", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
+		repo.On("FindByUUID", uuid).Return(&domain.User{UUID: uuid, EmailChangedAt: testNow.Add(-domain.EmailChangeLock + time.Second).Unix()}, nil).Once()
+
+		err := service.Delete(context.Background(), selfActor, uuid)
+
+		var conflictErr *domain.ConflictError
+		require.ErrorAs(t, err, &conflictErr)
+		repo.AssertNotCalled(t, "Delete", uuid)
+	})
+
+	t.Run("success - self deletion is allowed when the email change lock ends", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
+		repo.On("FindByUUID", uuid).Return(&domain.User{UUID: uuid, EmailChangedAt: testNow.Add(-domain.EmailChangeLock).Unix()}, nil).Once()
+		repo.On("Delete", uuid).Return(nil).Once()
+
+		err := service.Delete(context.Background(), selfActor, uuid)
+
+		assert.NoError(t, err)
+		repo.AssertExpectations(t)
+	})
+
 	t.Run("admin deleting another locked user is allowed", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		repo.On("Delete", uuid).Return(nil).Once()
 
 		err := service.Delete(context.Background(), adminActor, uuid)
@@ -420,7 +444,7 @@ func TestUsersService_Delete(t *testing.T) {
 
 	t.Run("error - lookup fails", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		lookupErr := errors.New("db error")
 		repo.On("FindByUUID", uuid).Return(nil, lookupErr).Once()
 
@@ -432,7 +456,7 @@ func TestUsersService_Delete(t *testing.T) {
 
 	t.Run("other user is forbidden", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 
 		err := service.Delete(context.Background(), otherActor, uuid)
 
@@ -457,7 +481,7 @@ func TestUsersService_CreateOAuth(t *testing.T) {
 	for _, tc := range nameCases {
 		t.Run("success - "+tc.name, func(t *testing.T) {
 			repo := new(mocks.UsersRepositoryMock)
-			service := services.NewUserService(repo, newTransactorMock())
+			service := services.NewUserService(repo, newTransactorMock(), testClock)
 			repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 			repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
 				return u.Name == tc.want
@@ -472,7 +496,7 @@ func TestUsersService_CreateOAuth(t *testing.T) {
 
 	t.Run("error - email reserved during another user's change lock", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
 		repo.On("Create", mock.Anything).Return(&domain.User{UUID: "squatter-uuid"}, nil).Once()
 		repo.On("IsEmailReserved", "taken@example.com").Return(true, nil).Once()
 

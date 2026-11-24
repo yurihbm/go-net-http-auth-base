@@ -24,6 +24,7 @@ Status, Context, Decision and Consequences.
 | [ADR-016](ADR-016-cross-layer-test-suites.md) | Cross-Layer Test Suites | Accepted |
 | [ADR-017](ADR-017-http-edge-hardening.md) | HTTP Edge Hardening | Accepted |
 | [ADR-018](ADR-018-traefik-file-provider.md) | Traefik File Provider Instead of the Docker Socket | Accepted |
+| [ADR-019](ADR-019-injected-clock-in-services.md) | Injected Clock in Services | Accepted |
 
 ## Writing a new ADR
 

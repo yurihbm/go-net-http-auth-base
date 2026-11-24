@@ -62,6 +62,7 @@ func TestStepUpService_VerifyCode(t *testing.T) {
 			repositories.NewPostgresTransactor(testDB),
 			new(mocks.EmailVerificationServiceMock),
 			key,
+			time.Now,
 		)
 
 		return service, stepUpRepo, sessionsRepo, session

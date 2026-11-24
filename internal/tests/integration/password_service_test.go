@@ -60,6 +60,7 @@ func TestPasswordService_ResetPassword(t *testing.T) {
 			repositories.NewPostgresTransactor(testDB),
 			emails,
 			[]byte("test-secret-key"),
+			time.Now,
 		)
 
 		user, err := usersRepo.Create(ctx, domain.User{Name: "Reset User", Email: email, PasswordHash: "old-hash", Role: domain.RoleUser})
@@ -189,6 +190,7 @@ func TestPasswordService_ChangePassword(t *testing.T) {
 			repositories.NewPostgresTransactor(testDB),
 			emails,
 			[]byte("test-secret-key"),
+			time.Now,
 		)
 
 		user, err := usersRepo.Create(ctx, domain.User{Name: "Change User", Email: email, PasswordHash: "old-hash", Role: domain.RoleUser})

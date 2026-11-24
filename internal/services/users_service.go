@@ -12,10 +12,11 @@ var errForbiddenUserAccess = domain.NewForbiddenError("users.forbidden")
 type usersService struct {
 	repo       domain.UsersRepository
 	transactor domain.Transactor
+	now        func() time.Time
 }
 
-func NewUserService(repo domain.UsersRepository, transactor domain.Transactor) domain.UsersService {
-	return &usersService{repo: repo, transactor: transactor}
+func NewUserService(repo domain.UsersRepository, transactor domain.Transactor, now func() time.Time) domain.UsersService {
+	return &usersService{repo: repo, transactor: transactor, now: now}
 }
 
 func (s *usersService) GetByUUID(ctx context.Context, actor domain.Actor, uuid string) (*domain.User, error) {
@@ -114,8 +115,8 @@ func ensureEmailNotReserved(ctx context.Context, repo domain.UsersRepository, em
 	return nil
 }
 
-func isEmailChangeLocked(user *domain.User) bool {
-	return user.EmailChangedAt != 0 && time.Now().Before(time.Unix(user.EmailChangedAt, 0).Add(domain.EmailChangeLock))
+func isEmailChangeLocked(user *domain.User, now time.Time) bool {
+	return user.EmailChangedAt != 0 && now.Before(time.Unix(user.EmailChangedAt, 0).Add(domain.EmailChangeLock))
 }
 
 func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid string) error {
@@ -128,7 +129,7 @@ func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid stri
 		if err != nil {
 			return err
 		}
-		if isEmailChangeLocked(user) {
+		if isEmailChangeLocked(user, s.now()) {
 			return domain.NewConflictError("users.emailChange.locked")
 		}
 	}

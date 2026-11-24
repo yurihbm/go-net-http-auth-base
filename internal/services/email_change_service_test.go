@@ -43,7 +43,7 @@ func newEmailChangeFixture() emailChangeFixture {
 		transactor:        newTransactorMock(),
 		emailVerification: new(mocks.EmailVerificationServiceMock),
 	}
-	f.service = services.NewEmailChangeService(f.repo, f.emailVerification, f.sessions, f.authRepo, f.challenges, f.limiter, f.transactor, emailChangeKey)
+	f.service = services.NewEmailChangeService(f.repo, f.emailVerification, f.sessions, f.authRepo, f.challenges, f.limiter, f.transactor, emailChangeKey, testClock)
 	return f
 }
 
@@ -65,7 +65,7 @@ func TestEmailChangeService_RequestEmailChange(t *testing.T) {
 				c.NewEmail == "new@example.com" &&
 				c.EmailVersion == 2 &&
 				c.CodeHash != "" &&
-				time.Until(time.Unix(c.ExpiresAt, 0)) > domain.EmailChangeCodeTTL-time.Minute
+				c.ExpiresAt == testNow.Add(domain.EmailChangeCodeTTL).Unix()
 		}), domain.EmailChangeCooldown).Return(nil).Once().Run(func(args mock.Arguments) {
 			challenge := args.Get(0).(domain.SessionChallenge)
 			f.emailVerification.On("SendEmailChangeCode", "new@example.com", mock.MatchedBy(func(sent string) bool {
@@ -98,7 +98,7 @@ func TestEmailChangeService_RequestEmailChange(t *testing.T) {
 	t.Run("error - locked after a recent change", func(t *testing.T) {
 		f := newEmailChangeFixture()
 		locked := *user
-		locked.EmailChangedAt = time.Now().Add(-time.Hour).Unix()
+		locked.EmailChangedAt = testNow.Add(-time.Hour).Unix()
 		f.repo.On("FindByUUID", selfActor.UUID).Return(&locked, nil).Once()
 
 		err := f.service.RequestEmailChange(context.Background(), selfActor, sessionUUID, "new@example.com")
@@ -251,7 +251,7 @@ func TestEmailChangeService_ConfirmEmailChange(t *testing.T) {
 		EmailVersion: 3,
 		CodeHash:     services.HashOTP(emailChangeKey, "email-change:"+sessionUUID, code),
 	}
-	changedAt := time.Now().Unix()
+	changedAt := testNow.Unix()
 	updated := &domain.User{UUID: "user-uuid", Email: "new@example.com", EmailVersion: 4, EmailChangedAt: changedAt}
 	notice := domain.EmailChangeRevert{UserUUID: "user-uuid", OldEmail: "old@example.com", NewEmail: "new@example.com", Version: 4, ChangedAt: changedAt}
 
@@ -267,7 +267,7 @@ func TestEmailChangeService_ConfirmEmailChange(t *testing.T) {
 	expectUpdate := func(f emailChangeFixture) {
 		f.repo.On("FindByUUID", "user-uuid").Return(user, nil).Once()
 		f.repo.On("UpdateEmail", "user-uuid", "new@example.com", 3, mock.MatchedBy(func(at *time.Time) bool {
-			return at != nil && time.Since(*at) < time.Minute
+			return at != nil && at.Equal(testNow)
 		})).Return(updated, nil).Once()
 		f.repo.On("IsEmailReserved", "new@example.com").Return(false, nil).Once()
 	}
@@ -294,7 +294,7 @@ func TestEmailChangeService_ConfirmEmailChange(t *testing.T) {
 	t.Run("success - an expired lock does not block", func(t *testing.T) {
 		f := newEmailChangeFixture()
 		locked := *user
-		locked.EmailChangedAt = time.Now().Add(-domain.EmailChangeLock - time.Hour).Unix()
+		locked.EmailChangedAt = testNow.Add(-domain.EmailChangeLock - time.Hour).Unix()
 		expectAttempt(f)
 		f.repo.On("FindByUUID", "user-uuid").Return(&locked, nil).Once()
 		f.repo.On("IsEmailReserved", "new@example.com").Return(false, nil).Once()
@@ -456,7 +456,7 @@ func TestEmailChangeService_ConfirmEmailChange(t *testing.T) {
 	t.Run("error - locked after a recent change", func(t *testing.T) {
 		f := newEmailChangeFixture()
 		locked := *user
-		locked.EmailChangedAt = time.Now().Add(-time.Hour).Unix()
+		locked.EmailChangedAt = testNow.Add(-time.Hour).Unix()
 		expectAttempt(f)
 		f.repo.On("FindByUUID", "user-uuid").Return(&locked, nil).Once()
 
@@ -529,7 +529,7 @@ func TestEmailChangeService_ConfirmEmailChange(t *testing.T) {
 }
 
 func TestEmailChangeService_RevertEmailChange(t *testing.T) {
-	changedAt := time.Now().Add(-time.Hour).Unix()
+	changedAt := testNow.Add(-time.Hour).Unix()
 	revert := &domain.EmailChangeRevert{UserUUID: "user-uuid", OldEmail: "old@example.com", NewEmail: "new@example.com", Version: 4, ChangedAt: changedAt}
 	user := &domain.User{UUID: "user-uuid", Email: "new@example.com", EmailVersion: 4, EmailChangedAt: changedAt}
 	restored := &domain.User{UUID: "user-uuid", Email: "old@example.com", EmailVersion: 5}

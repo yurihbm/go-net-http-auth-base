@@ -18,6 +18,7 @@ type pendingSignupService struct {
 	transactor domain.Transactor
 	emails     domain.EmailVerificationService
 	hmacKey    []byte
+	now        func() time.Time
 }
 
 func NewPendingSignupService(
@@ -27,6 +28,7 @@ func NewPendingSignupService(
 	transactor domain.Transactor,
 	emails domain.EmailVerificationService,
 	hmacKey []byte,
+	now func() time.Time,
 ) domain.PendingSignupService {
 	return &pendingSignupService{
 		pending:    pending,
@@ -35,6 +37,7 @@ func NewPendingSignupService(
 		transactor: transactor,
 		emails:     emails,
 		hmacKey:    hmacKey,
+		now:        now,
 	}
 }
 
@@ -133,7 +136,7 @@ func (s *pendingSignupService) start(ctx context.Context, pending domain.Pending
 		return "", domain.NewInternalServerError("auth.signup.codeGenerationFailed", err)
 	}
 
-	now := time.Now()
+	now := s.now()
 	pending.UUID = pendingUUID.String()
 	pending.CodeHash = s.hashCode(pending.UUID, code)
 	pending.CodeExpiresAt = now.Add(domain.SignupCodeTTL).Unix()

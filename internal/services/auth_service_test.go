@@ -53,7 +53,7 @@ func TestNewAuthService(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 	assert.NotNil(t, service)
 }
 
@@ -61,13 +61,13 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 	newSessionService := func() (domain.AuthService, *mocks.UsersServiceMock, *mocks.SessionsRepositoryMock, *mocks.TransactorMock) {
 		usersService := new(mocks.UsersServiceMock)
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
 		transactor := newTransactorMock()
-		service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), transactor, services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), transactor, services.NewTokenService("test-secret-key", testClock), nil, testSessionMaxAge, testMaxSessions, testClock)
 		return service, usersService, sessionsRepo, transactor
 	}
 
@@ -103,7 +103,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 		assert.Equal(t, "session-uuid", refresh.SessionID)
 		assert.NotEmpty(t, session.CurrentJTI)
 		assert.Equal(t, session.CurrentJTI, refresh.ID)
-		assert.InDelta(t, time.Now().Add(testSessionMaxAge).Unix(), session.ExpiresAt, 5)
+		assert.Equal(t, testNow.Add(testSessionMaxAge).Unix(), session.ExpiresAt)
 		usersService.AssertExpectations(t)
 		sessionsRepo.AssertExpectations(t)
 		transactor.AssertNumberOfCalls(t, "WithinTx", 1)
@@ -235,7 +235,7 @@ func TestAuthService_VerifyToken(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 	t.Run("success", func(t *testing.T) {
 		userUUID := "user-uuid-123"
@@ -421,7 +421,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 	newService := func() (domain.AuthService, *mocks.UsersServiceMock, *mocks.SessionsRepositoryMock) {
 		usersService := new(mocks.UsersServiceMock)
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
-		service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		return service, usersService, sessionsRepo
 	}
 	refresh := func(service domain.AuthService, token string) (domain.AuthTokens, error) {
@@ -462,7 +462,7 @@ func TestAuthService_RefreshToken(t *testing.T) {
 			usersService := new(mocks.UsersServiceMock)
 			sessionsRepo := new(mocks.SessionsRepositoryMock)
 			tokens := new(mocks.TokenServiceMock)
-			service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), tokens, nil, testSessionMaxAge, testMaxSessions)
+			service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), tokens, nil, testSessionMaxAge, testMaxSessions, time.Now)
 			tokens.On("VerifyToken", mock.Anything).Return(&domain.VerifiedTokenData{Subject: userUUID, SessionID: sessionUUID, ID: currentJTI}, nil).Once()
 			sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(activeSession(), nil).Once()
 			sessionsRepo.On("RotateJTI", userUUID, sessionUUID, currentJTI, mock.AnythingOfType("string")).Return(nil).Once()
@@ -518,6 +518,42 @@ func TestAuthService_RefreshToken(t *testing.T) {
 		assert.Empty(t, tokens)
 		sessionsRepo.AssertExpectations(t)
 		sessionsRepo.AssertNotCalled(t, "RotateJTI", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("error - session expiring at the current instant is deleted", func(t *testing.T) {
+		usersService := new(mocks.UsersServiceMock)
+		sessionsRepo := new(mocks.SessionsRepositoryMock)
+		tokens := new(mocks.TokenServiceMock)
+		service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), tokens, nil, testSessionMaxAge, testMaxSessions, testClock)
+		tokens.On("VerifyToken", mock.Anything).Return(&domain.VerifiedTokenData{Subject: userUUID, SessionID: sessionUUID, ID: currentJTI}, nil).Once()
+		expiring := activeSession()
+		expiring.ExpiresAt = testNow.Unix()
+		sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(expiring, nil).Once()
+		sessionsRepo.On("Delete", userUUID, sessionUUID).Return(nil).Once()
+
+		result, err := refresh(service, "refresh-token")
+
+		assert.ErrorIs(t, err, services.ErrInvalidToken)
+		assert.Empty(t, result)
+		sessionsRepo.AssertExpectations(t)
+	})
+
+	t.Run("success - session expiring one second from now is still rotated", func(t *testing.T) {
+		usersService := new(mocks.UsersServiceMock)
+		sessionsRepo := new(mocks.SessionsRepositoryMock)
+		tokens := new(mocks.TokenServiceMock)
+		service := services.NewAuthService(usersService, nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), tokens, nil, testSessionMaxAge, testMaxSessions, testClock)
+		tokens.On("VerifyToken", mock.Anything).Return(&domain.VerifiedTokenData{Subject: userUUID, SessionID: sessionUUID, ID: currentJTI}, nil).Once()
+		expiring := activeSession()
+		expiring.ExpiresAt = testNow.Add(time.Second).Unix()
+		sessionsRepo.On("FindByUUID", userUUID, sessionUUID).Return(expiring, nil).Once()
+		rotateErr := errors.New("rotate failed")
+		sessionsRepo.On("RotateJTI", userUUID, sessionUUID, currentJTI, mock.AnythingOfType("string")).Return(rotateErr).Once()
+
+		_, err := refresh(service, "refresh-token")
+
+		assert.ErrorIs(t, err, rotateErr)
+		sessionsRepo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
 	})
 
 	t.Run("error - reused jti deletes the session", func(t *testing.T) {
@@ -655,7 +691,7 @@ func TestAuthService_Logout(t *testing.T) {
 
 	newService := func() (domain.AuthService, *mocks.SessionsRepositoryMock) {
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
-		service := services.NewAuthService(new(mocks.UsersServiceMock), nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(new(mocks.UsersServiceMock), nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		return service, sessionsRepo
 	}
 
@@ -689,7 +725,7 @@ func TestAuthService_LogoutOthers(t *testing.T) {
 
 	newService := func() (domain.AuthService, *mocks.SessionsRepositoryMock) {
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
-		service := services.NewAuthService(new(mocks.UsersServiceMock), nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(new(mocks.UsersServiceMock), nil, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		return service, sessionsRepo
 	}
 	activeSession := &domain.UserSession{UUID: sessionUUID, UserUUID: userUUID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
@@ -753,7 +789,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 	t.Run("success with access token audience", func(t *testing.T) {
 		dto := domain.GenerateTokenDTO{
@@ -845,7 +881,7 @@ func TestAuthService_AddUserOAuthProvider(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 	t.Run("success", func(t *testing.T) {
 		provider := domain.UserOAuthProvider{
@@ -898,7 +934,7 @@ func TestAuthService_GetUserOAuthProvider(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 	t.Run("success", func(t *testing.T) {
 		provider := domain.UserOAuthProvider{
@@ -945,7 +981,7 @@ func TestAuthService_RemoveUserOAuthProvider(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 	t.Run("success", func(t *testing.T) {
 		dto := domain.RemoveUserOAuthProviderDTO{
@@ -980,7 +1016,7 @@ func TestAuthService_GetUserOAuthProvidersByUserUUID(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 	t.Run("success", func(t *testing.T) {
 		providers := []domain.UserOAuthProvider{
@@ -1034,7 +1070,7 @@ func TestAuthService_StartOAuthLogin(t *testing.T) {
 
 	newService := func() (domain.AuthService, *mocks.OAuthProviderRegistryMock) {
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(new(mocks.UsersServiceMock), nil, new(mocks.AuthRepositoryMock), new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(new(mocks.UsersServiceMock), nil, new(mocks.AuthRepositoryMock), new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		return service, oauthProviderRegistry
 	}
 
@@ -1113,7 +1149,7 @@ func TestAuthService_GetOAuthProviderUserInfo(t *testing.T) {
 	usersService := new(mocks.UsersServiceMock)
 	authRepo := new(mocks.AuthRepositoryMock)
 	oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+	service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 	t.Run("success", func(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
@@ -1199,7 +1235,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
 		transactor := newTransactorMock()
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, sessionsRepo, oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, sessionsRepo, oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -1238,7 +1274,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
 		emails := new(mocks.EmailVerificationServiceMock)
-		service := services.NewAuthService(usersService, nil, authRepo, sessionsRepo, oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), emails, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, sessionsRepo, oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), emails, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -1274,7 +1310,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
 		transactor := newTransactorMock()
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, sessionsRepo, oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, sessionsRepo, oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		newUserUUID := "new-user-uuid"
@@ -1310,7 +1346,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
 		transactor := newTransactorMock()
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		email := "new@example.com"
@@ -1338,7 +1374,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
 		transactor := newTransactorMock()
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, transactor, services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		newUserUUID := "new-user-uuid"
@@ -1372,7 +1408,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -1396,7 +1432,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userUUID := "user-uuid"
@@ -1423,7 +1459,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{
 			Provider:     provider,
@@ -1456,7 +1492,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 				usersService := new(mocks.UsersServiceMock)
 				authRepo := new(mocks.AuthRepositoryMock)
 				oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-				service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+				service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 				payload := map[string]string{"redirect_uri": redirectURI}
 				if tc.stateNonce != "" {
@@ -1490,7 +1526,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 		state := newState(t, service, string(domain.OAuthProviderGitHub))
 		result, err := service.OAuthLogin(context.Background(), domain.OAuthLoginDTO{
@@ -1512,7 +1548,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 		state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 			Subject:  string(provider),
@@ -1536,7 +1572,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 				usersService := new(mocks.UsersServiceMock)
 				authRepo := new(mocks.AuthRepositoryMock)
 				oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-				service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+				service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 
 				state, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), domain.GenerateTokenDTO{
 					Subject:  string(provider),
@@ -1559,7 +1595,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
@@ -1576,7 +1612,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userInfo := &domain.OAuthProviderUserInfo{ID: "", Name: "Test User", Email: "test@example.com"}
@@ -1598,7 +1634,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		userInfo := &domain.OAuthProviderUserInfo{ID: providerUserID, Name: "Test User", Email: "test@example.com"}
@@ -1619,7 +1655,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		usersService := new(mocks.UsersServiceMock)
 		authRepo := new(mocks.AuthRepositoryMock)
 		oauthProviderRegistry := new(mocks.OAuthProviderRegistryMock)
-		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, nil, authRepo, new(mocks.SessionsRepositoryMock), oauthProviderRegistry, newTransactorMock(), services.NewTokenService(jwtSecret, time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		providerMock := new(mocks.OAuthProviderMock)
 
 		email := "test@example.com"
@@ -1649,7 +1685,7 @@ func TestAuthService_VerifyOAuthState(t *testing.T) {
 	)
 
 	newService := func() domain.AuthService {
-		return services.NewAuthService(new(mocks.UsersServiceMock), nil, new(mocks.AuthRepositoryMock), new(mocks.SessionsRepositoryMock), new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+		return services.NewAuthService(new(mocks.UsersServiceMock), nil, new(mocks.AuthRepositoryMock), new(mocks.SessionsRepositoryMock), new(mocks.OAuthProviderRegistryMock), newTransactorMock(), services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 	}
 
 	newState := func(t *testing.T, service domain.AuthService, subject string, payload map[string]string) string {
@@ -1736,7 +1772,7 @@ func TestAuthService_CompleteSignup(t *testing.T) {
 		pendingSignups := new(mocks.PendingSignupServiceMock)
 		sessionsRepo := new(mocks.SessionsRepositoryMock)
 		transactor := newTransactorMock()
-		service := services.NewAuthService(usersService, pendingSignups, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), transactor, services.NewTokenService("test-secret-key"), nil, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, pendingSignups, new(mocks.AuthRepositoryMock), sessionsRepo, new(mocks.OAuthProviderRegistryMock), transactor, services.NewTokenService("test-secret-key", time.Now), nil, testSessionMaxAge, testMaxSessions, time.Now)
 		return service, usersService, pendingSignups, sessionsRepo, transactor
 	}
 
@@ -1846,7 +1882,7 @@ func TestAuthService_CompleteSignup(t *testing.T) {
 				transactor:     newTransactorMock(),
 				emails:         new(mocks.EmailVerificationServiceMock),
 			}
-			f.service = services.NewAuthService(f.usersService, f.pendingSignups, f.authRepo, f.sessionsRepo, new(mocks.OAuthProviderRegistryMock), f.transactor, services.NewTokenService("test-secret-key"), f.emails, testSessionMaxAge, testMaxSessions)
+			f.service = services.NewAuthService(f.usersService, f.pendingSignups, f.authRepo, f.sessionsRepo, new(mocks.OAuthProviderRegistryMock), f.transactor, services.NewTokenService("test-secret-key", time.Now), f.emails, testSessionMaxAge, testMaxSessions, time.Now)
 			f.pendingSignups.On("Attempt", pendingUUID, code).Return(nil).Once()
 			return f
 		}
@@ -1993,7 +2029,7 @@ func TestAuthService_RevertOAuthLink(t *testing.T) {
 			sessionsRepo: new(mocks.SessionsRepositoryMock),
 			transactor:   newTransactorMock(),
 		}
-		f.service = services.NewAuthService(new(mocks.UsersServiceMock), nil, f.authRepo, f.sessionsRepo, new(mocks.OAuthProviderRegistryMock), f.transactor, services.NewTokenService("test-secret-key"), f.emails, testSessionMaxAge, testMaxSessions)
+		f.service = services.NewAuthService(new(mocks.UsersServiceMock), nil, f.authRepo, f.sessionsRepo, new(mocks.OAuthProviderRegistryMock), f.transactor, services.NewTokenService("test-secret-key", time.Now), f.emails, testSessionMaxAge, testMaxSessions, time.Now)
 		return f
 	}
 

@@ -66,7 +66,7 @@ make show-cover            # coverage as reported by CI
 ### Code
 
 - **Layers**: controllers decode, validate and call services; services hold business rules; repositories only persist. Program to the interfaces in `internal/domain`, so everything can be mocked.
-- **Dependency Injection**: every dependency comes through a constructor, never created inside the dependent struct. Shared instances are built once in `internal/factories/dependencies.go`, not per factory.
+- **Dependency Injection**: every dependency comes through a constructor, never created inside the dependent struct. Shared instances are built once in `internal/factories/dependencies.go`, not per factory. Services get the clock as `now func() time.Time` and never call `time.Now()` (ADR-019).
 - **Transactions**: in `WithinTx(ctx, func(ctx context.Context) error { ... })` always name the closure parameter `ctx` so it shadows the outer one; the outer context silently runs queries outside the transaction.
 - **IDs**: always UUIDv7. Tables use a `uuid uuid DEFAULT uuidv7()` primary key; IDs generated in Go (persisted rows, request UUIDs) use `uuid.NewV7()`.
 - **Errors**: dot-separated keys (e.g., `"users.email.conflict"`) for i18n, documented in `docs/ERRORS.md`. Return errors as-is unless wrapping adds real context.

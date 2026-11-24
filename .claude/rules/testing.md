@@ -63,6 +63,7 @@ func TestUsersController_CreateUser(t *testing.T) {
 - **Password Testing**: Use `bcrypt.CompareHashAndPassword()` to verify password hashing.
 - **Mock Verification**: Use `.Run()` callbacks to inspect arguments passed to mocks.
 - **Matcher Functions**: Use `mock.MatchedBy()` for complex argument matching.
+- **Fixed Clock**: build services with `testClock` (`testNow`, in `internal/services/clock_test.go`) and assert timestamps with exact equality, never `WithinDuration`/`InDelta`; add boundary subtests (at the instant, one second before). Integration and E2E tests pass `time.Now`.
 - **Test Coverage**: Test all business logic branches (authorization, validation errors, repository errors, side-effect failures).
 
 **Example**:

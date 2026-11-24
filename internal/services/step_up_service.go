@@ -19,6 +19,7 @@ type stepUpService struct {
 	transactor domain.Transactor
 	emails     domain.EmailVerificationService
 	hmacKey    []byte
+	now        func() time.Time
 }
 
 func NewStepUpService(
@@ -28,6 +29,7 @@ func NewStepUpService(
 	transactor domain.Transactor,
 	emails domain.EmailVerificationService,
 	hmacKey []byte,
+	now func() time.Time,
 ) domain.StepUpService {
 	return &stepUpService{
 		challenges: challenges,
@@ -36,6 +38,7 @@ func NewStepUpService(
 		transactor: transactor,
 		emails:     emails,
 		hmacKey:    hmacKey,
+		now:        now,
 	}
 }
 
@@ -44,7 +47,7 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 	if err != nil {
 		return err
 	}
-	if time.Now().Unix() >= session.ExpiresAt {
+	if s.now().Unix() >= session.ExpiresAt {
 		return ErrInvalidToken
 	}
 
@@ -52,7 +55,7 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 	if err != nil {
 		return err
 	}
-	if isStepUpLocked(user) {
+	if isStepUpLocked(user, s.now()) {
 		return domain.ErrStepUpUserLocked
 	}
 
@@ -66,7 +69,7 @@ func (s *stepUpService) RequestCode(ctx context.Context, userUUID string, sessio
 		SessionUUID: sessionUUID,
 		Purpose:     domain.SessionChallengeStepUp,
 		CodeHash:    s.hashCode(sessionUUID, code),
-		ExpiresAt:   time.Now().Add(domain.StepUpCodeTTL).Unix(),
+		ExpiresAt:   s.now().Add(domain.StepUpCodeTTL).Unix(),
 	}, domain.StepUpCooldown)
 	if err != nil {
 		return err
@@ -94,7 +97,7 @@ func (s *stepUpService) VerifyCode(ctx context.Context, userUUID string, session
 	}
 	s.refundGuess(ctx, userUUID)
 
-	until := time.Now().Add(domain.StepUpElevationWindow)
+	until := s.now().Add(domain.StepUpElevationWindow)
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
 		if err := s.challenges.Delete(ctx, sessionUUID, domain.SessionChallengeStepUp); err != nil {
 			return err
@@ -117,7 +120,7 @@ func (s *stepUpService) IsElevated(ctx context.Context, userUUID string, session
 		return false, err
 	}
 
-	now := time.Now().Unix()
+	now := s.now().Unix()
 	return now < session.ExpiresAt && now < session.StepUpUntil, nil
 }
 
@@ -146,7 +149,7 @@ func (s *stepUpService) hashCode(sessionUUID string, code string) string {
 	return hashOTP(s.hmacKey, "step-up:"+sessionUUID, code)
 }
 
-func isStepUpLocked(user *domain.User) bool {
+func isStepUpLocked(user *domain.User, now time.Time) bool {
 	windowEnd := time.Unix(user.StepUpFailuresWindowStart, 0).Add(domain.StepUpUserFailureWindow)
-	return user.StepUpFailures >= domain.StepUpMaxUserFailures && time.Now().Before(windowEnd)
+	return user.StepUpFailures >= domain.StepUpMaxUserFailures && now.Before(windowEnd)
 }
