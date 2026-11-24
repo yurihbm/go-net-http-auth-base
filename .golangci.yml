@@ -29,3 +29,8 @@ linters:
         linters:
           - gosec
         text: G124
+      # developer CLI that runs on the user's own checkout with their own arguments
+      - path: tools/
+        linters:
+          - gosec
+          - noctx

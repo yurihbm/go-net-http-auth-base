@@ -24,6 +24,7 @@ ARCHIFY_DIR = .tools/archify
 	build \
 	migrate-create \
 	promote-admin \
+	rename \
 	migrate-up \
 	migrate-down \
 	sqlc-gen \
@@ -91,6 +92,14 @@ migrate-create:
 	fi
 	@echo ">> Creating a new database migration: $(name)"
 	migrate create -ext sql -dir postgres/migrations -seq $(name)
+
+# Rebrand the template (module path, project name and title)
+rename:
+	@if [ -z "$(module)" ] || [ -z "$(name)" ] || [ -z "$(title)" ]; then \
+		echo "Error: module, name and title are required. Usage: make rename module=github.com/acme/foo name=foo title=\"Foo API\""; \
+		exit 1; \
+	fi
+	go run ./tools/rename -module "$(module)" -name "$(name)" -title "$(title)"
 
 # Promote an existing user to admin
 promote-admin:

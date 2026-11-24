@@ -405,18 +405,25 @@ The threat model and the accepted residual risks (for example, access tokens sta
 
 Checklist after creating a repository from this template:
 
-1. **Rename the module path.**
+1. **Rename the project.**
 
    ```bash
-   # On Linux:
-   find . -type f -not -path './.git/*' -exec sed -i 's/go-net-http-auth-base/{NEW_BASE_MODULE_NAME}/g' {} +
-   # On Mac:
-   find . -type f -not -path './.git/*' -exec sed -i '' 's/go-net-http-auth-base/{NEW_BASE_MODULE_NAME}/g' {} +
+   make rename module=github.com/acme/foo name=foo title="Foo API"
    ```
 
-   Replace `{NEW_BASE_MODULE_NAME}` with the name of the new project.
-2. Set `PROJECT_NAME` in `.env` (the compose files fall back to `auth-base`).
-3. Change the Swagger `@title` in `cmd/api/main.go` and run `make swagger-gen`.
+   `module` is the Go module path, `name` a lowercase slug and `title` the human-readable name. The command rewrites the repository text files (it skips `.git/`, `.env*`, `go.sum`, binaries and `docs/swagger/`, which is regenerated at the end with `make swagger-gen`, so `swag` must be installed):
+
+   | Occurrence | Becomes |
+   | --- | --- |
+   | `module` line in `go.mod` and Go import paths (including the scaffolder templates) | `module` |
+   | `go-net-http-auth-base` as a name: default `OTEL_SERVICE_NAME`, `User-Agent`, Grafana dashboards and provisioning, the dev compose mount, Docker examples | `name` |
+   | `${PROJECT_NAME:-auth-base}` in the compose files | `${PROJECT_NAME:-<name>}` |
+   | `Go net/http Auth Base` (README and CONTRIBUTING headings) and the Swagger `@title` (`... API`) | `title` |
+   | `yurihbm/go-net-http-auth-base` (badges, clone URL) | `<owner>/<repo>` when `module` starts with `github.com/<owner>/<repo>`; otherwise left in place and listed as a manual step |
+
+   The command fails when `module` is already the current one, so a repeated run with the same arguments changes nothing. Only the module path is read from `go.mod`; the other strings are matched literally, so after a rename a later one only updates the module path and Go imports.
+2. Set `PROJECT_NAME` in `.env`.
+3. Review the diff and commit it.
 4. Update the copyright holder in `LICENSE`.
 5. Add a `CODEOWNERS` file in `.github/`.
 6. Replace the placeholder contact in `SECURITY.md`.
