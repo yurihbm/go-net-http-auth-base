@@ -52,7 +52,6 @@ func (m *RateLimitMiddleware) Use(next http.Handler) http.Handler {
 	})
 }
 
-// allow consumes a token for the client, sets the rate limit headers and writes the 429 response when the bucket is empty.
 func (m *RateLimitMiddleware) allow(w http.ResponseWriter, r *http.Request) bool {
 	limiter := m.getVisitor(rateLimitKey(shared.ClientIP(r)))
 	allowed := limiter.AllowN(m.now(), 1)

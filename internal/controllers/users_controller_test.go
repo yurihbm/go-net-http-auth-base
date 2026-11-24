@@ -123,6 +123,28 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			assert.Equal(t, route.stepUp, w.Header().Get(stepUpMarkerHeader) != "", route.method+" "+route.path)
 		}
 	})
+
+	t.Run("success - credential routes are wrapped by the limiter", func(t *testing.T) {
+		router := http.NewServeMux()
+		authMiddleware := rejectingMiddleware{http.StatusUnauthorized}
+		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, limiterMarker{}, true)
+		controller.RegisterRoutes(router)
+
+		for route, limited := range map[string]bool{
+			"POST /users":                     true,
+			"POST /users/revert-email-change": true,
+			"GET /users/me":                   false,
+			"POST /users/me/email/confirm":    false,
+			"PUT /users/some-uuid":            false,
+		} {
+			parts := strings.SplitN(route, " ", 2)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, httptest.NewRequest(parts[0], parts[1], nil))
+
+			assert.Equal(t, limited, w.Header().Get(limiterMarkerHeader) != "", route)
+		}
+	})
 }
 
 const stepUpMarkerHeader = "X-Step-Up-Applied"
@@ -795,27 +817,4 @@ func TestUsersController_ChangePassword(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		auditMock.AssertExpectations(t)
 	})
-}
-
-func TestUsersController_CredentialsLimiter(t *testing.T) {
-	router := http.NewServeMux()
-	authMiddleware := rejectingMiddleware{http.StatusUnauthorized}
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, limiterMarker{}, true)
-	controller.RegisterRoutes(router)
-
-	limited := map[string]bool{
-		"POST /users":                     true,
-		"POST /users/revert-email-change": true,
-		"GET /users/me":                   false,
-		"POST /users/me/email/confirm":    false,
-		"PUT /users/some-uuid":            false,
-	}
-	for route, want := range limited {
-		parts := strings.SplitN(route, " ", 2)
-		w := httptest.NewRecorder()
-
-		router.ServeHTTP(w, httptest.NewRequest(parts[0], parts[1], nil))
-
-		assert.Equal(t, want, w.Header().Get(limiterMarkerHeader) != "", route)
-	}
 }

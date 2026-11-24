@@ -11,7 +11,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
-const swaggerCSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'"
+const swaggerCSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'"
 
 //go:embed assets/swagger_login.html
 var swaggerLoginPage []byte

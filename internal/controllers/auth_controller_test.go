@@ -147,6 +147,35 @@ func TestAuthController_RegisterRoutes(t *testing.T) {
 			assert.NotEmpty(t, pattern)
 		}
 	})
+
+	t.Run("success - credential routes are wrapped by the limiter", func(t *testing.T) {
+		router := http.NewServeMux()
+		controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), rejectingMiddleware{http.StatusUnauthorized}, limiterMarker{}, true, []string{allowedRedirectURI})
+		controller.RegisterRoutes(router)
+
+		for route, limited := range map[string]bool{
+			"POST /auth/login":             true,
+			"POST /auth/step-up":           true,
+			"POST /auth/step-up/verify":    true,
+			"POST /auth/signup/verify":     true,
+			"POST /auth/signup/resend":     true,
+			"POST /auth/password/forgot":   true,
+			"POST /auth/password/reset":    true,
+			"POST /auth/oauth/revert-link": true,
+			"POST /auth/refresh":           false,
+			"POST /auth/logout":            false,
+			"POST /auth/logout-others":     false,
+			"GET /auth/unknown/login":      false,
+			"GET /auth/unknown/callback":   false,
+		} {
+			parts := strings.SplitN(route, " ", 2)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, httptest.NewRequest(parts[0], parts[1], nil))
+
+			assert.Equal(t, limited, w.Header().Get(limiterMarkerHeader) != "", route)
+		}
+	})
 }
 
 func TestAuthController_Login(t *testing.T) {
@@ -1410,32 +1439,4 @@ func TestAuthController_ResetPassword(t *testing.T) {
 
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	})
-}
-
-func TestAuthController_CredentialsLimiter(t *testing.T) {
-	router := http.NewServeMux()
-	authMiddleware := rejectingMiddleware{http.StatusUnauthorized}
-	controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, limiterMarker{}, true, []string{allowedRedirectURI})
-	controller.RegisterRoutes(router)
-
-	limited := map[string]bool{
-		"POST /auth/login":             true,
-		"POST /auth/step-up":           true,
-		"POST /auth/step-up/verify":    true,
-		"POST /auth/signup/verify":     true,
-		"POST /auth/signup/resend":     true,
-		"POST /auth/password/forgot":   true,
-		"POST /auth/password/reset":    true,
-		"POST /auth/oauth/revert-link": true,
-		"POST /auth/logout":            false,
-		"POST /auth/logout-others":     false,
-	}
-	for route, want := range limited {
-		parts := strings.SplitN(route, " ", 2)
-		w := httptest.NewRecorder()
-
-		router.ServeHTTP(w, httptest.NewRequest(parts[0], parts[1], nil))
-
-		assert.Equal(t, want, w.Header().Get(limiterMarkerHeader) != "", route)
-	}
 }

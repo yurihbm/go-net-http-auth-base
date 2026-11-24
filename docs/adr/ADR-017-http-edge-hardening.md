@@ -26,7 +26,7 @@ subscriber usually controls a whole /64 and can rotate through 2^64 addresses.
 - **Swagger UI exception.** The login gate (`GET /swagger/`) and the Swagger UI
   (`GET /swagger/...`) need same-origin assets and inline scripts and styles, so
   `DocsController` overrides the CSP with
-  `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'`.
+  `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'`.
   Both stay behind the auth and admin role middlewares (except the gate).
 - **Credential limiter.** A second, stricter per-IP token bucket
   (`RATE_LIMIT_CREDENTIALS_PER_MINUTE`, default 5, and
@@ -38,8 +38,10 @@ subscriber usually controls a whole /64 and can rotate through 2^64 addresses.
   `POST /users/revert-email-change`, `POST /auth/oauth/revert-link`,
   `POST /auth/step-up` and `POST /auth/step-up/verify`. It shares the limiter
   code of the global one (`CredentialsRateLimitMiddleware` is a
-  `HandlerMiddleware` over the same store), answers the same
-  `429 rateLimit.exceeded` and sets the same `X-RateLimit-*` headers. It is built
+  `HandlerMiddleware` reusing the same limiter implementation with its own
+  visitor map, so the buckets are independent), answers the same
+  `429 rateLimit.exceeded` and sets the same `X-RateLimit-*` headers (on credential routes the inner limiter's
+  headers overwrite the global ones). It is built
   once in `NewHandler` (it needs the context that stops its cleanup goroutine)
   and injected into the auth and users controllers.
   Refresh, logout and the OAuth login and callback are excluded: refresh is
@@ -69,7 +71,8 @@ subscriber usually controls a whole /64 and can rotate through 2^64 addresses.
   raised through the environment.
 - Limits stay per instance and in memory: running N instances multiplies the
   effective limit, as accepted in ADR-005.
-- The Swagger UI CSP allows inline scripts, so it must stay behind the admin
-  role.
+- The Swagger CSP allows inline scripts. The UI stays behind the admin role, and
+  the public login gate gets the same CSP, which is safe because it is a static
+  page with no reflected input.
 - E2E tests share the `127.0.0.1` bucket, so their config sets high credential
   limits.
