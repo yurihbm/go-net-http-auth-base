@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPasswordService_ResetPassword_Transaction(t *testing.T) {
+func TestPasswordReset_Transaction(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping repository tests in short mode.")
 	}
