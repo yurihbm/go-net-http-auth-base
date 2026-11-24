@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/mocks"
@@ -55,7 +54,7 @@ func testOAuthLoginResolveUser(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
 		registry.On("Get", provider).Return(providerMock, nil)
 		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).Return(userInfo, nil)
-		service := services.NewAuthService(usersService, pending, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key", time.Now), emails, testSessionMaxAge, testMaxSessions, time.Now)
+		service := services.NewAuthService(usersService, pending, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key", testClock), emails, testSessionMaxAge, testMaxSessions, testClock)
 		return fixture{service, usersService, authRepo, transactor, pending, emails, sessionsRepo}
 	}
 

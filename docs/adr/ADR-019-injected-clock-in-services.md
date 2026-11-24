@@ -39,5 +39,9 @@ could not be asserted. The rate limit middleware already takes a
   sleeping.
 - Every constructor of a service that reads the time gains a parameter; new
   services follow the same shape.
-- Go and SQL decide on different clocks; both read the same host in practice,
-  and the SQL comparisons are not testable with a fixed clock.
+- Go and SQL decide on different clocks. The application and the database may
+  run on different hosts, so the skew between them is bounded only by NTP. The
+  paths that mix both clocks are `ExpiresAt` and `EmailChangedAt`, set in Go and
+  compared to `now()` in SQL (`password_resets_queries.sql`,
+  `users_queries.sql`), and `StepUpFailuresWindowStart`, set by SQL and compared
+  in Go. The SQL comparisons are not testable with a fixed clock.

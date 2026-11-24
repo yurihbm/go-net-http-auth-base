@@ -148,11 +148,11 @@ func (s *emailChangeService) ConfirmEmailChange(ctx context.Context, actor domai
 		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
 	}
 
-	if isEmailChangeLocked(user, s.now()) {
+	now := s.now()
+	if isEmailChangeLocked(user, now) {
 		return nil, domain.NewConflictError("users.emailChange.locked")
 	}
 
-	now := s.now()
 	var updated *domain.User
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
 		var err error

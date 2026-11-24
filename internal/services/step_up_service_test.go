@@ -150,6 +150,44 @@ func TestStepUpService_RequestCode(t *testing.T) {
 		m.challenges.AssertNotCalled(t, "Upsert", mock.Anything, mock.Anything)
 	})
 
+	t.Run("error - user failure cap still applies one second before the window ends", func(t *testing.T) {
+		service, m := newTestStepUpService()
+		locked := &domain.User{
+			UUID:                      stepUpUserUUID,
+			Email:                     stepUpEmail,
+			StepUpFailures:            domain.StepUpMaxUserFailures,
+			StepUpFailuresWindowStart: testNow.Add(-domain.StepUpUserFailureWindow + time.Second).Unix(),
+		}
+		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(locked, nil).Once()
+
+		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
+
+		var tooMany *domain.TooManyRequestsError
+		require.ErrorAs(t, err, &tooMany)
+		assert.Equal(t, "auth.stepUp.userLocked", tooMany.Error())
+		m.challenges.AssertNotCalled(t, "Upsert", mock.Anything, mock.Anything)
+	})
+
+	t.Run("success - user failure window ends at the current instant", func(t *testing.T) {
+		service, m := newTestStepUpService()
+		unlocked := &domain.User{
+			UUID:                      stepUpUserUUID,
+			Email:                     stepUpEmail,
+			StepUpFailures:            domain.StepUpMaxUserFailures,
+			StepUpFailuresWindowStart: testNow.Add(-domain.StepUpUserFailureWindow).Unix(),
+		}
+		m.sessions.On("FindByUUID", stepUpUserUUID, stepUpSessionUUID).Return(activeSession(), nil).Once()
+		m.users.On("FindByUUID", stepUpUserUUID).Return(unlocked, nil).Once()
+		m.emails.On("SendStepUpCode", stepUpEmail, mock.Anything).Return(nil).Once()
+		m.challenges.On("Upsert", mock.Anything, domain.StepUpCooldown).Return(nil).Once()
+
+		err := service.RequestCode(context.Background(), stepUpUserUUID, stepUpSessionUUID)
+
+		assert.NoError(t, err)
+		m.challenges.AssertExpectations(t)
+	})
+
 	t.Run("error - cooldown does not send email", func(t *testing.T) {
 		service, m := newTestStepUpService()
 		cooldown := domain.NewTooManyRequestsError("auth.stepUp.cooldown")
