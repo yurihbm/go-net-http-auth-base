@@ -56,9 +56,10 @@ func (s *usersService) Create(ctx context.Context, dto domain.NewUserDTO) (*doma
 }
 
 func (s *usersService) CreateOAuth(ctx context.Context, dto domain.CreateOAuthUserDTO) (*domain.User, error) {
+	email := normalizeEmail(dto.Email)
 	user := domain.User{
-		Name:  dto.Name,
-		Email: normalizeEmail(dto.Email),
+		Name:  normalizeDisplayName(dto.Name, email),
+		Email: email,
 		Role:  domain.RoleUser,
 	}
 	return s.createUnreserved(ctx, user)

@@ -14,7 +14,12 @@ import (
 	"go-net-http-auth-base/internal/shared"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+type passwordDTO struct {
+	Password string `json:"password" validate:"required,min=8,max=64,maxbytes=72"`
+}
 
 type testDTO struct {
 	Name  string `json:"name"  validate:"required"`
@@ -42,6 +47,57 @@ func TestDecodeAndValidate(t *testing.T) {
 		var valErr *domain.ValidationError
 		assert.True(t, errors.As(err, &valErr))
 		assert.NotEmpty(t, valErr.Details()["body"])
+	})
+
+	t.Run("invalid JSON does not leak decoder internals", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte(`{"name":123,"email":"a@b.com"}`)))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "request body must be valid JSON", valErr.Details()["body"])
+	})
+
+	t.Run("unknown field message does not echo decoder text", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", bytes.NewReader([]byte(`{"name":"x","email":"x@x.com","unknown":"y"}`)))
+
+		_, err := api.DecodeAndValidate[testDTO](req)
+
+		var valErr *domain.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "request body contains an unknown field", valErr.Details()["body"])
+	})
+
+	t.Run("password accepts 64 ASCII characters", func(t *testing.T) {
+		body, _ := json.Marshal(passwordDTO{Password: strings.Repeat("a", 64)})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[passwordDTO](req)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("password rejects 65 characters", func(t *testing.T) {
+		body, _ := json.Marshal(passwordDTO{Password: strings.Repeat("a", 65)})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[passwordDTO](req)
+
+		var valErr *domain.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.NotEmpty(t, valErr.Details()["password"])
+	})
+
+	t.Run("password rejects 64 characters over 72 bytes", func(t *testing.T) {
+		body, _ := json.Marshal(passwordDTO{Password: strings.Repeat("😀", 30)})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[passwordDTO](req)
+
+		var valErr *domain.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.Equal(t, "must be at most 72 bytes long", valErr.Details()["password"])
 	})
 
 	t.Run("body over 1 MiB returns ValidationError with body key", func(t *testing.T) {

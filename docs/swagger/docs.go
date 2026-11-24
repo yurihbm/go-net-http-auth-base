@@ -1531,7 +1531,7 @@ const docTemplate = `{
             "properties": {
                 "new_password": {
                     "type": "string",
-                    "maxLength": 72,
+                    "maxLength": 64,
                     "minLength": 8
                 }
             }
@@ -1559,11 +1559,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 3
                 },
                 "password": {
                     "type": "string",
-                    "maxLength": 72,
+                    "maxLength": 64,
                     "minLength": 8
                 }
             }
@@ -1617,7 +1619,7 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string",
-                    "maxLength": 72,
+                    "maxLength": 64,
                     "minLength": 8
                 }
             }
@@ -1682,7 +1684,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 3
                 }
             }
         },

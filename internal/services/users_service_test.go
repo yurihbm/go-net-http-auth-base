@@ -3,6 +3,7 @@ package services_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -442,6 +443,33 @@ func TestUsersService_Delete(t *testing.T) {
 }
 
 func TestUsersService_CreateOAuth(t *testing.T) {
+	nameCases := []struct {
+		name, inName, email, want string
+	}{
+		{"keeps a valid name", "Ana Maria", "ana@example.com", "Ana Maria"},
+		{"trims spaces", "  Ana  ", "ana@example.com", "Ana"},
+		{"truncates to 100 characters", strings.Repeat("é", 120), "ana@example.com", strings.Repeat("é", 100)},
+		{"empty name falls back to the email local part", "", "ana.silva@example.com", "ana.silva"},
+		{"short name falls back to the email local part", " Al ", "Ana.Silva@Example.com", "ana.silva"},
+		{"short local part falls back to the full email", "", "al@example.com", "al@example.com"},
+		{"long local part is truncated to 100 characters", "", strings.Repeat("a", 120) + "@example.com", strings.Repeat("a", 100)},
+	}
+	for _, tc := range nameCases {
+		t.Run("success - "+tc.name, func(t *testing.T) {
+			repo := new(mocks.UsersRepositoryMock)
+			service := services.NewUserService(repo, newTransactorMock())
+			repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
+			repo.On("Create", mock.MatchedBy(func(u domain.User) bool {
+				return u.Name == tc.want
+			})).Return(&domain.User{UUID: "generated-uuid"}, nil).Once()
+
+			_, err := service.CreateOAuth(context.Background(), domain.CreateOAuthUserDTO{Name: tc.inName, Email: tc.email})
+
+			assert.NoError(t, err)
+			repo.AssertExpectations(t)
+		})
+	}
+
 	t.Run("error - email reserved during another user's change lock", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
 		service := services.NewUserService(repo, newTransactorMock())

@@ -128,6 +128,16 @@ func TestTokenService_VerifyToken(t *testing.T) {
 			"aud": domain.TokenAudienceAccess,
 			"exp": time.Now().Add(time.Minute).Unix(),
 		}, "different-secret-key"),
+		"unsupported hmac method": func() string {
+			token, err := jwt.NewWithClaims(jwt.SigningMethodHS512, jwt.MapClaims{
+				"sub": "user-uuid",
+				"aud": domain.TokenAudienceAccess,
+				"exp": time.Now().Add(time.Minute).Unix(),
+				"sid": "session-uuid",
+			}).SignedString([]byte(tokenSecret))
+			require.NoError(t, err)
+			return token
+		}(),
 		"garbage": "not-a-token",
 	}
 

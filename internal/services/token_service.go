@@ -23,7 +23,7 @@ func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDT
 			return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
 		}
 		return []byte(s.jwtSecret), nil
-	})
+	}, jwt.WithValidMethods([]string{"HS256"}))
 
 	if err != nil {
 		return nil, ErrInvalidToken

@@ -36,9 +36,9 @@ type User struct {
 }
 
 type CreateUserDTO struct {
-	Name     string `json:"name"     validate:"required"`
+	Name     string `json:"name"     validate:"required,min=3,max=100"`
 	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8,max=72"`
+	Password string `json:"password" validate:"required,min=8,max=64,maxbytes=72"`
 }
 
 type NewUserDTO struct {
@@ -53,7 +53,7 @@ type CreateOAuthUserDTO struct {
 }
 
 type UserUpdateDTO struct {
-	Name *string `json:"name,omitempty"`
+	Name *string `json:"name,omitempty" validate:"omitempty,min=3,max=100"`
 }
 
 type RequestEmailChangeDTO struct {

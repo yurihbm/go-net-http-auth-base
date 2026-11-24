@@ -61,6 +61,88 @@ func TestLoad(t *testing.T) {
 		assert.Nil(t, cfg)
 	})
 
+	productionEnv := func(t *testing.T) {
+		t.Helper()
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "production")
+		t.Setenv("API_URL", "https://api.example.com")
+		t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "https://app.example.com/cb")
+		t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com")
+		t.Setenv("RESEND_API_KEY", "re_key")
+		t.Setenv("EMAIL_FROM", "no-reply@example.com")
+		t.Setenv("EMAIL_CHANGE_REVERT_URL", "https://app.example.com/revert-email-change")
+		t.Setenv("EMAIL_OAUTH_LINK_REVERT_URL", "https://app.example.com/revert-oauth-link")
+	}
+
+	t.Run("success - accepts a valid production configuration", func(t *testing.T) {
+		productionEnv(t)
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.True(t, cfg.IsProduction())
+	})
+
+	t.Run("error - production rejects a wildcard in CORS_ALLOWED_ORIGINS", func(t *testing.T) {
+		productionEnv(t)
+		t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.com, *")
+
+		cfg, err := config.Load()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "CORS_ALLOWED_ORIGINS")
+		assert.Nil(t, cfg)
+	})
+
+	t.Run("success - development allows a wildcard in CORS_ALLOWED_ORIGINS", func(t *testing.T) {
+		t.Setenv("JWT_SECRET", validJWTSecret)
+		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+		t.Setenv("API_ENV", "development")
+		t.Setenv("CORS_ALLOWED_ORIGINS", "*")
+
+		cfg, err := config.Load()
+
+		require.NoError(t, err)
+		assert.Equal(t, []string{"*"}, cfg.CORS.AllowedOrigins)
+	})
+
+	httpsVars := []struct{ name, value string }{
+		{"API_URL", "https://api.example.com"},
+		{"EMAIL_CHANGE_REVERT_URL", "https://app.example.com/revert-email-change"},
+		{"EMAIL_OAUTH_LINK_REVERT_URL", "https://app.example.com/revert-oauth-link"},
+		{"OAUTH_CALLBACK_ALLOW_LIST", "https://app.example.com/cb, https://b.example.com/cb"},
+	}
+	for _, v := range httpsVars {
+		for _, bad := range []string{"http://app.example.com/x", "/relative/path", "https://", "ftp://app.example.com"} {
+			t.Run("error - production requires an absolute https URL in "+v.name+": "+bad, func(t *testing.T) {
+				productionEnv(t)
+				value := bad
+				if v.name == "OAUTH_CALLBACK_ALLOW_LIST" {
+					value = v.value + ", " + bad
+				}
+				t.Setenv(v.name, value)
+
+				cfg, err := config.Load()
+
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), v.name)
+				assert.Nil(t, cfg)
+			})
+		}
+	}
+
+	t.Run("error - production requires API_URL", func(t *testing.T) {
+		productionEnv(t)
+		t.Setenv("API_URL", "")
+
+		cfg, err := config.Load()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "API_URL")
+		assert.Nil(t, cfg)
+	})
+
 	t.Run("allows empty OAUTH_CALLBACK_ALLOW_LIST outside production", func(t *testing.T) {
 		t.Setenv("JWT_SECRET", validJWTSecret)
 		t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
@@ -111,7 +193,7 @@ func TestLoad(t *testing.T) {
 		t.Setenv("GITHUB_CLIENT_SECRET", "github-secret")
 		t.Setenv("MICROSOFT_CLIENT_ID", "microsoft-id")
 		t.Setenv("MICROSOFT_CLIENT_SECRET", "microsoft-secret")
-		t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "http://a.com/cb, http://b.com/cb")
+		t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "https://a.com/cb, https://b.com/cb")
 		t.Setenv("CORS_ALLOWED_ORIGINS", "http://a.com, http://b.com")
 		t.Setenv("CORS_ALLOWED_METHODS", "GET, POST")
 		t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "5.5")
@@ -136,7 +218,7 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "google-id", ClientSecret: "google-secret"}, cfg.OAuth.Google)
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "github-id", ClientSecret: "github-secret"}, cfg.OAuth.GitHub)
 		assert.Equal(t, config.OAuthProviderCredentials{ClientID: "microsoft-id", ClientSecret: "microsoft-secret"}, cfg.OAuth.Microsoft)
-		assert.Equal(t, []string{"http://a.com/cb", "http://b.com/cb"}, cfg.OAuth.CallbackAllowList)
+		assert.Equal(t, []string{"https://a.com/cb", "https://b.com/cb"}, cfg.OAuth.CallbackAllowList)
 		assert.Equal(t, []string{"http://a.com", "http://b.com"}, cfg.CORS.AllowedOrigins)
 		assert.Equal(t, []string{"GET", "POST"}, cfg.CORS.AllowedMethods)
 		assert.Equal(t, 5.5, cfg.RateLimit.RequestsPerSecond)
@@ -351,7 +433,7 @@ func TestLoad(t *testing.T) {
 			t.Setenv("JWT_SECRET", validJWTSecret)
 			t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
 			t.Setenv("API_ENV", "production")
-			t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "http://a.com/cb")
+			t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "https://a.com/cb")
 			for k, v := range emailVars {
 				t.Setenv(k, v)
 			}
