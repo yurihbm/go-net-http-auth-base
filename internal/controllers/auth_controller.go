@@ -48,6 +48,7 @@ type AuthController struct {
 	passwordService      domain.PasswordService
 	auditService         domain.AuditService
 	authMiddleware       middlewares.HandlerMiddleware
+	credentialsLimiter   middlewares.HandlerMiddleware
 	isSecureCookie       bool
 	callbackAllowList    []string
 }
@@ -61,6 +62,7 @@ func NewAuthController(
 	passwordService domain.PasswordService,
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
+	credentialsLimiter middlewares.HandlerMiddleware,
 	isSecureCookie bool,
 	callbackAllowList []string,
 ) *AuthController {
@@ -71,23 +73,24 @@ func NewAuthController(
 		passwordService,
 		auditService,
 		authMiddleware,
+		credentialsLimiter,
 		isSecureCookie,
 		callbackAllowList,
 	}
 }
 
 func (c *AuthController) RegisterRoutes(router *http.ServeMux) {
-	router.HandleFunc("POST /auth/login", c.Login)
+	router.HandleFunc("POST /auth/login", c.credentialsLimiter.Use(c.Login))
 	router.HandleFunc("POST "+api.RefreshTokenCookiePath, c.RefreshToken)
 	router.HandleFunc("POST /auth/logout", c.authMiddleware.Use(c.Logout))
 	router.HandleFunc("POST /auth/logout-others", c.authMiddleware.Use(c.LogoutOthers))
-	router.HandleFunc("POST /auth/step-up", c.authMiddleware.Use(c.RequestStepUp))
-	router.HandleFunc("POST /auth/step-up/verify", c.authMiddleware.Use(c.VerifyStepUp))
-	router.HandleFunc("POST /auth/signup/verify", c.VerifySignup)
-	router.HandleFunc("POST /auth/signup/resend", c.ResendSignup)
-	router.HandleFunc("POST /auth/password/forgot", c.ForgotPassword)
-	router.HandleFunc("POST /auth/password/reset", c.ResetPassword)
-	router.HandleFunc("POST /auth/oauth/revert-link", c.RevertOAuthLink)
+	router.HandleFunc("POST /auth/step-up", c.credentialsLimiter.Use(c.authMiddleware.Use(c.RequestStepUp)))
+	router.HandleFunc("POST /auth/step-up/verify", c.credentialsLimiter.Use(c.authMiddleware.Use(c.VerifyStepUp)))
+	router.HandleFunc("POST /auth/signup/verify", c.credentialsLimiter.Use(c.VerifySignup))
+	router.HandleFunc("POST /auth/signup/resend", c.credentialsLimiter.Use(c.ResendSignup))
+	router.HandleFunc("POST /auth/password/forgot", c.credentialsLimiter.Use(c.ForgotPassword))
+	router.HandleFunc("POST /auth/password/reset", c.credentialsLimiter.Use(c.ResetPassword))
+	router.HandleFunc("POST /auth/oauth/revert-link", c.credentialsLimiter.Use(c.RevertOAuthLink))
 	router.HandleFunc("GET /auth/{provider}/login", c.LoginWithOAuthProvider)
 	router.HandleFunc("GET /auth/{provider}/callback", c.OAuthProviderCallback)
 }

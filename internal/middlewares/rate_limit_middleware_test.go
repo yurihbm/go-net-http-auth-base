@@ -107,6 +107,35 @@ func TestRateLimitMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, serveAs("203.0.113.1"))
 	})
 
+	t.Run("ipv6 addresses in the same /64 share a bucket", func(t *testing.T) {
+		handler := newRateLimitedHandler(t, 1)
+
+		assert.Equal(t, http.StatusOK, serveFrom(handler, "[2001:db8:1:2::1]:1111"))
+		assert.Equal(t, http.StatusTooManyRequests, serveFrom(handler, "[2001:db8:1:2:ffff::9]:2222"))
+	})
+
+	t.Run("ipv6 addresses in different /64 prefixes have independent buckets", func(t *testing.T) {
+		handler := newRateLimitedHandler(t, 1)
+
+		assert.Equal(t, http.StatusOK, serveFrom(handler, "[2001:db8:1:2::1]:1111"))
+		assert.Equal(t, http.StatusOK, serveFrom(handler, "[2001:db8:1:3::1]:1111"))
+	})
+
+	t.Run("ipv4-mapped ipv6 shares the bucket of the ipv4 address", func(t *testing.T) {
+		handler := newRateLimitedHandler(t, 1)
+
+		assert.Equal(t, http.StatusOK, serveFrom(handler, "10.0.0.4:1111"))
+		assert.Equal(t, http.StatusTooManyRequests, serveFrom(handler, "[::ffff:10.0.0.4]:1111"))
+	})
+
+	t.Run("unparsable addresses fall back to the raw string", func(t *testing.T) {
+		handler := newRateLimitedHandler(t, 1)
+
+		assert.Equal(t, http.StatusOK, serveFrom(handler, "not-an-ip"))
+		assert.Equal(t, http.StatusTooManyRequests, serveFrom(handler, "not-an-ip"))
+		assert.Equal(t, http.StatusOK, serveFrom(handler, "other-key"))
+	})
+
 	t.Run("remote addr without port still works", func(t *testing.T) {
 		handler := newRateLimitedHandler(t, 1)
 

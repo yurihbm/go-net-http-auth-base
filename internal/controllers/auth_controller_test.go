@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
@@ -39,7 +40,7 @@ func newTestAuthControllerWithMiddleware(isSecure bool, allowList []string) (*co
 	auditMock := new(mocks.AuditServiceMock)
 	authMiddleware := new(mocks.AuthMiddlewareMock)
 
-	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, authMiddleware, isSecure, allowList)
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, authMiddleware, passthroughMiddleware{}, isSecure, allowList)
 	return controller, authServiceMock, auditMock, authMiddleware
 }
 
@@ -48,7 +49,7 @@ func newTestAuthControllerWithStepUp() (*controllers.AuthController, *mocks.Auth
 	stepUpMock := new(mocks.StepUpServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, stepUpMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), true, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(authServiceMock, stepUpMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, true, []string{allowedRedirectURI})
 	return controller, authServiceMock, stepUpMock, auditMock
 }
 
@@ -57,7 +58,7 @@ func newTestAuthControllerWithSignup(isSecure bool) (*controllers.AuthController
 	pendingMock := new(mocks.PendingSignupServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), isSecure, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, isSecure, []string{allowedRedirectURI})
 	return controller, authServiceMock, pendingMock, auditMock
 }
 
@@ -65,7 +66,7 @@ func newTestAuthControllerWithPassword(isSecure bool) (*controllers.AuthControll
 	passwordMock := new(mocks.PasswordServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), isSecure, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, isSecure, []string{allowedRedirectURI})
 	return controller, passwordMock, auditMock
 }
 
@@ -1409,4 +1410,32 @@ func TestAuthController_ResetPassword(t *testing.T) {
 
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
 	})
+}
+
+func TestAuthController_CredentialsLimiter(t *testing.T) {
+	router := http.NewServeMux()
+	authMiddleware := rejectingMiddleware{http.StatusUnauthorized}
+	controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, limiterMarker{}, true, []string{allowedRedirectURI})
+	controller.RegisterRoutes(router)
+
+	limited := map[string]bool{
+		"POST /auth/login":             true,
+		"POST /auth/step-up":           true,
+		"POST /auth/step-up/verify":    true,
+		"POST /auth/signup/verify":     true,
+		"POST /auth/signup/resend":     true,
+		"POST /auth/password/forgot":   true,
+		"POST /auth/password/reset":    true,
+		"POST /auth/oauth/revert-link": true,
+		"POST /auth/logout":            false,
+		"POST /auth/logout-others":     false,
+	}
+	for route, want := range limited {
+		parts := strings.SplitN(route, " ", 2)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, httptest.NewRequest(parts[0], parts[1], nil))
+
+		assert.Equal(t, want, w.Header().Get(limiterMarkerHeader) != "", route)
+	}
 }

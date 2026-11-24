@@ -45,14 +45,16 @@ func run(m *testing.M) int {
 	testDB = pool
 
 	for key, value := range map[string]string{
-		"API_ENV":                        "development",
-		"JWT_SECRET":                     "e2e-test-secret-with-at-least-32-characters",
-		"RATE_LIMIT_REQUESTS_PER_SECOND": "1000",
-		"RATE_LIMIT_BURST":               "1000",
-		"RESEND_API_KEY":                 "",
-		"EMAIL_FROM":                     "noreply@example.com",
-		"EMAIL_CHANGE_REVERT_URL":        "http://app.test/revert-email-change",
-		"EMAIL_OAUTH_LINK_REVERT_URL":    "http://app.test/revert-oauth-link",
+		"API_ENV":                           "development",
+		"JWT_SECRET":                        "e2e-test-secret-with-at-least-32-characters",
+		"RATE_LIMIT_REQUESTS_PER_SECOND":    "1000",
+		"RATE_LIMIT_BURST":                  "1000",
+		"RATE_LIMIT_CREDENTIALS_PER_MINUTE": "60000",
+		"RATE_LIMIT_CREDENTIALS_BURST":      "1000",
+		"RESEND_API_KEY":                    "",
+		"EMAIL_FROM":                        "noreply@example.com",
+		"EMAIL_CHANGE_REVERT_URL":           "http://app.test/revert-email-change",
+		"EMAIL_OAUTH_LINK_REVERT_URL":       "http://app.test/revert-oauth-link",
 	} {
 		if err := os.Setenv(key, value); err != nil {
 			log.Printf("Could not set %s: %v", key, err)

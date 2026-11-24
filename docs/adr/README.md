@@ -22,6 +22,7 @@ Status, Context, Decision and Consequences.
 | [ADR-014](ADR-014-traefik-reverse-proxy.md) | Traefik Reverse Proxy and TLS in Production | Accepted |
 | [ADR-015](ADR-015-password-reset-and-change.md) | Password Reset and Change | Accepted |
 | [ADR-016](ADR-016-cross-layer-test-suites.md) | Cross-Layer Test Suites | Accepted |
+| [ADR-017](ADR-017-http-edge-hardening.md) | HTTP Edge Hardening | Accepted |
 
 ## Writing a new ADR
 

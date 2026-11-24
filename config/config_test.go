@@ -80,6 +80,8 @@ func TestLoad(t *testing.T) {
 		t.Setenv("API_PORT", "")
 		t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "")
 		t.Setenv("RATE_LIMIT_BURST", "")
+		t.Setenv("RATE_LIMIT_CREDENTIALS_PER_MINUTE", "")
+		t.Setenv("RATE_LIMIT_CREDENTIALS_BURST", "")
 		t.Setenv("OAUTH_CALLBACK_ALLOW_LIST", "")
 		t.Setenv("CORS_ALLOWED_ORIGINS", "")
 		t.Setenv("CORS_ALLOWED_METHODS", "")
@@ -90,6 +92,8 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, "8080", cfg.Port)
 		assert.Equal(t, 20.0, cfg.RateLimit.RequestsPerSecond)
 		assert.Equal(t, 50, cfg.RateLimit.Burst)
+		assert.Equal(t, 5.0, cfg.RateLimit.CredentialsPerMinute)
+		assert.Equal(t, 10, cfg.RateLimit.CredentialsBurst)
 		assert.Equal(t, []string{}, cfg.OAuth.CallbackAllowList)
 		assert.Equal(t, []string{}, cfg.CORS.AllowedOrigins)
 		assert.Equal(t, []string{}, cfg.CORS.AllowedMethods)
@@ -112,6 +116,8 @@ func TestLoad(t *testing.T) {
 		t.Setenv("CORS_ALLOWED_METHODS", "GET, POST")
 		t.Setenv("RATE_LIMIT_REQUESTS_PER_SECOND", "5.5")
 		t.Setenv("RATE_LIMIT_BURST", "10")
+		t.Setenv("RATE_LIMIT_CREDENTIALS_PER_MINUTE", "2.5")
+		t.Setenv("RATE_LIMIT_CREDENTIALS_BURST", "3")
 		t.Setenv("DB_STATS_LOG_INTERVAL", "1m")
 		t.Setenv("RESEND_API_KEY", "re_key")
 		t.Setenv("EMAIL_FROM", "no-reply@example.com")
@@ -135,6 +141,8 @@ func TestLoad(t *testing.T) {
 		assert.Equal(t, []string{"GET", "POST"}, cfg.CORS.AllowedMethods)
 		assert.Equal(t, 5.5, cfg.RateLimit.RequestsPerSecond)
 		assert.Equal(t, 10, cfg.RateLimit.Burst)
+		assert.Equal(t, 2.5, cfg.RateLimit.CredentialsPerMinute)
+		assert.Equal(t, 3, cfg.RateLimit.CredentialsBurst)
 		assert.Equal(t, time.Minute, cfg.DBStatsLogInterval)
 		assert.Equal(t, config.EmailConfig{
 			ResendAPIKey:       "re_key",
@@ -247,6 +255,13 @@ func TestLoad(t *testing.T) {
 		{"RATE_LIMIT_REQUESTS_PER_SECOND", "-Inf"},
 		{"RATE_LIMIT_BURST", "abc"},
 		{"RATE_LIMIT_BURST", "0"},
+		{"RATE_LIMIT_CREDENTIALS_PER_MINUTE", "abc"},
+		{"RATE_LIMIT_CREDENTIALS_PER_MINUTE", "0"},
+		{"RATE_LIMIT_CREDENTIALS_PER_MINUTE", "-1"},
+		{"RATE_LIMIT_CREDENTIALS_PER_MINUTE", "NaN"},
+		{"RATE_LIMIT_CREDENTIALS_PER_MINUTE", "Inf"},
+		{"RATE_LIMIT_CREDENTIALS_BURST", "abc"},
+		{"RATE_LIMIT_CREDENTIALS_BURST", "0"},
 		{"DB_STATS_LOG_INTERVAL", "abc"},
 		{"DB_STATS_LOG_INTERVAL", "0s"},
 		{"DB_MAX_CONNS", "abc"},
