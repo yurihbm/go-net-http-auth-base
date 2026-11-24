@@ -155,6 +155,10 @@ Examples:
 9.  **Push to your fork** and submit a Pull Request.
 10. **Description**: Provide a clear description of your changes and link to any relevant issues.
 
+## 🪝 Git Hooks
+
+`make hooks` (opt-in) sets `core.hooksPath` to the versioned `.githooks/` directory. The `pre-commit` hook does nothing unless Go files are staged; then it runs `gofmt -l` on them, `go build ./...`, `golangci-lint run --new-from-rev=HEAD ./...` (skipped with a warning if not installed) and `go test -short` on the packages of the staged files. It checks the working tree, not only the staged content. Full tests, E2E, `govulncheck` and the Docker build run in CI.
+
 ## ⚙️ Development Setup
 
 Please refer to the [Getting Started](README.md#-getting-started) section in the `README.md` for detailed instructions on how to set up the project locally, run the database, and start the application.

@@ -92,6 +92,8 @@ go-net-http-auth-base/
 
    This installs the pinned versions of `air`, `sqlc`, `migrate` and `swag`, and runs `go mod tidy`.
 
+   Optionally run `make hooks` to enable the versioned pre-commit hook (see [CONTRIBUTING.md](CONTRIBUTING.md#-git-hooks)).
+
 4. **Configure environment**
 
    ```bash
@@ -141,6 +143,7 @@ air             # Run with live reload (development)
 make setup      # Install all required tools for development
 make build      # Build production binary (outputs to bin/app)
 make tidy       # Tidy go.mod and go.sum
+make hooks      # Enable the pre-commit hook (opt-in)
 ```
 
 ### Database
@@ -437,7 +440,8 @@ While this is a template, schema changes go into `postgres/migrations/000001_ini
 
 ### Recommended GitHub settings
 
-- Branch protection on `main`: require a pull request, require the status checks from the workflows in `.github/workflows` (`lint`, `test`, `sqlc-drift`, `govulncheck`, `docker-build`) and require signed commits.
+- Branch protection on `main`: require a pull request, require signed commits and require these status checks, named after the jobs in `.github/workflows`: `lint`, `test`, `sqlc-drift` and `govulncheck`.
+- Do not require `docker-build`. `docker.yml` is path-filtered (`docker/**`, `go.mod`, `go.sum`, `.dockerignore`), so it does not run on pull requests that leave those files alone, and a required check that never reports blocks the merge. The image is still built on every pull request that touches its inputs.
 - Allow merge commits only. Rebase and squash merges are re-created by GitHub and produce unsigned commits on `main`.
 - Enable Dependabot alerts and security updates, and private vulnerability reporting (see [SECURITY.md](SECURITY.md)).
 

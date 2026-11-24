@@ -21,6 +21,7 @@ ARCHIFY_DIR = .tools/archify
 	install-archify \
 	tidy \
 	setup \
+	hooks \
 	build \
 	migrate-create \
 	promote-admin \
@@ -75,6 +76,10 @@ test-e2e:
 	go test -count=1 -race ./internal/tests/e2e/...
 
 setup: install-tools tidy
+
+# Enable the versioned git hooks (opt-in, changes this clone's core.hooksPath)
+hooks:
+	git config core.hooksPath .githooks
 
 # Build application binary (override with make build GOOS=darwin GOARCH=arm64)
 GOOS ?= linux
