@@ -19,7 +19,7 @@ Go with standard `net/http` (Go 1.22+ method patterns), PostgreSQL, `golang-migr
 - `internal/domain/`: entities, DTOs, errors and every service/repository interface.
 - `internal/factories/`: composition root. `dependencies.go` (`NewDependencies`) builds the shared graph once; thin per-controller factories wire it into controllers; `handler.go` (`NewHandler`) builds the mux, registers every controller and applies the global middleware chain (used by `cmd/main.go` and the E2E suite, so tests run the production wiring).
 - `internal/mocks/`: testify mocks of the domain interfaces.
-- `internal/e2e/`: end-to-end tests (test files only).
+- `internal/tests/`: cross-layer test suites (test files only): `e2e/` (HTTP flows over `factories.NewHandler`) and `integration/` (service flows composed with real repositories).
 - `internal/infra/`: background tasks (`AuditLogsPartitionManager`, `ExpiredRecordsSweeper`).
 - `internal/logger/`, `internal/telemetry/`: `slog` setup and the OpenTelemetry SDK bootstrap.
 - `internal/shared/`: request context data (`RequestContextData`) shared by middlewares, `api` and controllers.
@@ -99,7 +99,7 @@ Local choices (naming, a new helper, a refactor that keeps behavior) do not need
 | Services | `.claude/rules/services.md` | `internal/services/**` |
 | Repositories, transactions, `sqlc`, schema | `.claude/rules/repositories.md` | `internal/repositories/**`, `postgres/**` |
 | Domain models, DTOs, enums | `.claude/rules/domain.md` | `internal/domain/**` |
-| Tests, mocks, E2E | `.claude/rules/testing.md` | `**/*_test.go`, `internal/mocks/**`, `internal/e2e/**` |
+| Tests, mocks, E2E | `.claude/rules/testing.md` | `**/*_test.go`, `internal/mocks/**`, `internal/tests/**` |
 | Telemetry, logging, dashboards | `.claude/rules/telemetry.md` | telemetry, middlewares, logger, tracers, Grafana, `cmd/**` |
 | Auth and email invariants | `.claude/rules/auth.md` | auth, users, sessions, step-up, sign-up and email files |
 | Sign-up, OAuth, sessions, step-up, email change | `docs/AUTH.md` | read on demand |

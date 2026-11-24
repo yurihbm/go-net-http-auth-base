@@ -1,6 +1,6 @@
 # ADR-006: End-to-End Testing Approach
 
-- **Status:** Accepted
+- **Status:** Accepted; the test location statement is superseded by ADR-016
 - **Date:** 2026-11-15
 
 ## Context

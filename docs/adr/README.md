@@ -11,7 +11,7 @@ Status, Context, Decision and Consequences.
 | [ADR-003](ADR-003-database-strategy.md)         | Database Strategy (PostgreSQL + sqlc) | Accepted |
 | [ADR-004](ADR-004-logging-observability.md)     | Logging & Observability               | Accepted |
 | [ADR-005](ADR-005-security-approach.md)         | Security Approach                     | Accepted; Microsoft linking statement superseded by ADR-009, rate limiter proxy statement by ADR-013, password change statement by ADR-015 |
-| [ADR-006](ADR-006-e2e-testing.md)               | End-to-End Testing Approach           | Accepted |
+| [ADR-006](ADR-006-e2e-testing.md)               | End-to-End Testing Approach           | Accepted; test location superseded by ADR-016 |
 | [ADR-007](ADR-007-email-change.md)              | Verified Email Change                 | Superseded by ADR-008 |
 | [ADR-008](ADR-008-step-up-and-email-change-hardening.md) | Step-Up and Email Change Hardening | Partially superseded by ADR-009 |
 | [ADR-009](ADR-009-otp-email-proof-and-verified-accounts.md) | One-Time Code Email Proof and Always-Verified Accounts | Accepted |
@@ -21,6 +21,7 @@ Status, Context, Decision and Consequences.
 | [ADR-013](ADR-013-trusted-proxies.md) | Trusted Proxies and Client IP Resolution | Accepted |
 | [ADR-014](ADR-014-traefik-reverse-proxy.md) | Traefik Reverse Proxy and TLS in Production | Accepted |
 | [ADR-015](ADR-015-password-reset-and-change.md) | Password Reset and Change | Accepted |
+| [ADR-016](ADR-016-cross-layer-test-suites.md) | Cross-Layer Test Suites | Accepted |
 
 ## Writing a new ADR
 
