@@ -68,6 +68,8 @@ go-net-http-auth-base/
 - Go 1.27 or higher
 - Docker and Docker Compose
 - Make
+- Node.js 18+ (`npx tsx` runs the scaffolder scripts in `.claude/skills/`)
+- `$(go env GOPATH)/bin` on your `PATH`, where `make setup` installs `air`, `migrate`, `sqlc` and `swag`
 
 ### Installation
 
@@ -78,16 +80,9 @@ go-net-http-auth-base/
    cd go-net-http-auth-base
    ```
 
-2. **Rename base module (optional)**
+2. **Rename the base module (optional)**
 
-   ```bash
-   # On Linux:
-   find . -type f -not -path './.git/*' -exec sed -i 's/go-net-http-auth-base/{NEW_BASE_MODULE_NAME}/g' {} +
-   # On Mac:
-   find . -type f -not -path './.git/*' -exec sed -i '' 's/go-net-http-auth-base/{NEW_BASE_MODULE_NAME}/g' {} +
-   ```
-
-   Replace `{NEW_BASE_MODULE_NAME}` with the desired name for the project.
+   See [Using this template](#-using-this-template).
 
 3. **Install development tools**
 
@@ -183,28 +178,7 @@ make show-cover                  # test-cover plus the per-function report CI po
 
 Every response uses the [standard format](#api-response-format). Authenticated endpoints read the `access_token` cookie set by login.
 
-| Method   | Path                          | Auth  | Description                                                         |
-| -------- | ----------------------------- | ----- | ------------------------------------------------------------------- |
-| `POST`   | `/users`                      | -     | Start a sign-up: emails a 6-digit code and sets the `pending_signup` cookie |
-| `POST`   | `/auth/signup/verify`         | -     | Create the account with the code (needs the `pending_signup` cookie); signs in |
-| `POST`   | `/auth/signup/resend`         | -     | Send a new sign-up code (needs the `pending_signup` cookie)         |
-| `GET`    | `/users/me`                   | User  | Current user                                                        |
-| `POST`   | `/users/me/email`             | User  | Request an email change (6-digit code sent to the new address)      |
-| `POST`   | `/users/me/email/confirm`     | User  | Confirm the email change with the code, in the same session; signs out every device |
-| `GET`    | `/users/{uuid}`               | User  | Get a user (self or admin)                                          |
-| `PUT`    | `/users/{uuid}`               | User  | Update a user's name (self or admin)                                |
-| `DELETE` | `/users/{uuid}`               | User  | Delete a user (self or admin)                                       |
-| `POST`   | `/auth/login`                 | -     | Email/password login; sets the `access_token` and `refresh_token` cookies |
-| `POST`   | `/auth/refresh`               | -     | Rotate the refresh token (reads the `refresh_token` cookie)        |
-| `POST`   | `/auth/logout`                | User  | End the current session                                             |
-| `GET`    | `/auth/{provider}/login`      | -     | Start OAuth (`google`, `github`, `microsoft`)                       |
-| `GET`    | `/auth/{provider}/callback`   | -     | OAuth callback                                                      |
-| `GET`    | `/audit-logs`                 | Admin | List audit logs (filters and cursor pagination)                     |
-| `GET`    | `/swagger/`                   | -     | Swagger UI login gate                                               |
-| `GET`    | `/swagger/index.html`         | Admin | Swagger UI and spec                                                 |
-| `GET`    | `/health`, `/ready`           | -     | Liveness, and readiness (checks the database)                       |
-
-The Swagger UI has the full request and response schemas.
+The routes, request and response schemas and auth requirements are documented in the Swagger UI at `/swagger/`, which is the source of truth. `/swagger/` serves a login page; the UI itself needs an admin session (sign in with an admin account, then it loads). The flows (sign-up, OAuth, sessions, step-up, email change) are explained in [docs/AUTH.md](docs/AUTH.md). `GET /health` and `GET /ready` are the liveness and readiness (database) probes.
 
 OAuth callback contract for the frontend: the callback always ends in a `302` to the `redirect_uri` of the login step.
 When the provider does not vouch for the email (GitHub unverified primary email, Microsoft), the user is not signed in:
@@ -426,6 +400,37 @@ Logs carry `trace_id`/`span_id`, so a trace in Tempo links to its logs in Loki (
 - Prepared statements via sqlc to prevent SQL injection
 
 The threat model and the accepted residual risks (for example, access tokens stay valid for up to 15 minutes after logout) are in [ADR-005](docs/adr/ADR-005-security-approach.md).
+
+## 🧩 Using this template
+
+Checklist after creating a repository from this template:
+
+1. **Rename the module path.**
+
+   ```bash
+   # On Linux:
+   find . -type f -not -path './.git/*' -exec sed -i 's/go-net-http-auth-base/{NEW_BASE_MODULE_NAME}/g' {} +
+   # On Mac:
+   find . -type f -not -path './.git/*' -exec sed -i '' 's/go-net-http-auth-base/{NEW_BASE_MODULE_NAME}/g' {} +
+   ```
+
+   Replace `{NEW_BASE_MODULE_NAME}` with the name of the new project.
+2. Set `PROJECT_NAME` in `.env` (the compose files fall back to `auth-base`).
+3. Change the Swagger `@title` in `cmd/main.go` and run `make swagger-gen`.
+4. Update the copyright holder in `LICENSE`.
+5. Add a `CODEOWNERS` file in `.github/`.
+6. Replace the placeholder contact in `SECURITY.md`.
+7. GitHub disables scheduled workflows after 60 days without repository activity; re-enable them in the Actions tab.
+
+### Leaving the template phase
+
+While this is a template, schema changes go into `postgres/migrations/000001_init_db.*`. Once the first real deployment exists, stop editing those files and use `make migrate-create` instead. Update the "Template Phase" statements in `CLAUDE.md` (`AGENTS.md` is a symlink to it), `CONTRIBUTING.md`, this README, `.claude/rules/repositories.md` and `.claude/skills/go-migration-scaffolder`. The decision is recorded in [ADR-003](docs/adr/ADR-003-database-strategy.md): write a new ADR that supersedes it instead of editing it.
+
+### Recommended GitHub settings
+
+- Branch protection on `main`: require a pull request, require the status checks from the workflows in `.github/workflows` (`lint`, `test`, `sqlc-drift`, `govulncheck`, `docker-build`) and require signed commits.
+- Allow merge commits only. Rebase and squash merges are re-created by GitHub and produce unsigned commits on `main`.
+- Enable Dependabot alerts and security updates, and private vulnerability reporting (see [SECURITY.md](SECURITY.md)).
 
 ## 🤝 Contributing
 

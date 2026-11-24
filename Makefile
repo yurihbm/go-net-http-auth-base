@@ -75,10 +75,12 @@ test-e2e:
 
 setup: install-tools tidy
 
-# Build application binary
+# Build application binary (override with make build GOOS=darwin GOARCH=arm64)
+GOOS ?= linux
+GOARCH ?= amd64
 build:
 	@echo "Building application binary..."
-	GOOS=linux GOARCH=amd64 go build -o bin/app ./cmd/main.go
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o bin/app ./cmd/main.go
 
 # Create a new database migration
 migrate-create:

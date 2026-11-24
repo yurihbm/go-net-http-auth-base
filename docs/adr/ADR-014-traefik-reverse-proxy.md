@@ -6,8 +6,9 @@
 ## Context
 
 The production compose published the API in plain HTTP. Outside development the
-auth cookies are `Secure`/`__Host-` (ADR-005), so browsers drop them over HTTP
-and logins do not stick. The deployment target is a single VPS that may host
+auth cookies are `Secure` (ADR-005; the OAuth, pending sign-up and password reset
+flow cookies are also `__Host-` prefixed), so browsers drop them over HTTP and
+logins do not stick. The deployment target is a single VPS that may host
 other services next to this API. ADR-013 needs a known proxy address to trust
 `X-Forwarded-For`.
 
