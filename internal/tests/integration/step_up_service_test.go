@@ -1,4 +1,4 @@
-package repositories_test
+package integration_test
 
 import (
 	"context"
@@ -18,18 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type failingStepUpSessionsRepository struct {
-	domain.SessionsRepository
-	err error
-}
-
-func (r failingStepUpSessionsRepository) SetStepUpUntil(context.Context, string, string, time.Time) error {
-	return r.err
-}
-
-func TestStepUp_Transaction(t *testing.T) {
+func TestStepUpService_VerifyCode(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping repository tests in short mode.")
+		t.Skip("Skipping integration tests in short mode.")
 	}
 
 	const code = "123456"
