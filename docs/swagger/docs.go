@@ -75,7 +75,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "format": "date-time",
-                        "description": "End date (RFC3339)",
+                        "description": "End date, exclusive (RFC3339)",
                         "name": "end_date",
                         "in": "query"
                     }

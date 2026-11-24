@@ -47,7 +47,7 @@ func (c *AuditController) RegisterRoutes(router *http.ServeMux) {
 // @Param			cursor			query		string								false	"Cursor from meta.next_cursor"
 // @Param			limit			query		int									false	"Page size"				minimum(1)	maximum(100)	default(20)
 // @Param			start_date		query		string								false	"Start date (RFC3339)"	format(date-time)
-// @Param			end_date		query		string								false	"End date (RFC3339)"	format(date-time)
+// @Param			end_date		query		string								false	"End date, exclusive (RFC3339)"	format(date-time)
 // @Success		200				{object}	api.ResponseBody[[]domain.AuditLog]	"Audit log page"
 // @Failure		400				{object}	api.ResponseBody[any]				"Validation error"
 // @Failure		401				{object}	api.ResponseBody[any]				"Unauthorized"

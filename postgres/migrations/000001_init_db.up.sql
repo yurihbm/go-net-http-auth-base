@@ -6,9 +6,9 @@ CREATE TYPE user_role AS ENUM (
 );
 
 CREATE TABLE users (
-    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    uuid uuid DEFAULT uuidv7() NOT NULL PRIMARY KEY,
     name text NOT NULL,
-    email text UNIQUE NOT NULL,
+    email text NOT NULL,
     password_hash text,
     role user_role NOT NULL DEFAULT 'user',
     email_version int NOT NULL DEFAULT 0,
@@ -45,7 +45,7 @@ CREATE TYPE oauth_provider AS ENUM (
 );
 
 CREATE TABLE user_oauth_providers (
-    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    uuid uuid DEFAULT uuidv7() NOT NULL PRIMARY KEY,
     user_uuid uuid REFERENCES users (uuid) ON DELETE CASCADE,
     provider oauth_provider NOT NULL,
     provider_user_id text NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE user_oauth_providers (
 CREATE INDEX idx_user_oauth_providers_user_created ON user_oauth_providers (user_uuid, created_at);
 
 CREATE TABLE user_sessions (
-    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    uuid uuid DEFAULT uuidv7() NOT NULL PRIMARY KEY,
     user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
     current_jti text NOT NULL,
     created_at timestamptz DEFAULT now() NOT NULL,
@@ -79,7 +79,7 @@ CREATE TYPE session_challenge_purpose AS ENUM (
 );
 
 CREATE TABLE session_challenges (
-    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    uuid uuid DEFAULT uuidv7() NOT NULL PRIMARY KEY,
     user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
     session_uuid uuid NOT NULL REFERENCES user_sessions (uuid) ON DELETE CASCADE,
     purpose session_challenge_purpose NOT NULL,
@@ -106,7 +106,7 @@ CREATE TYPE pending_signup_kind AS ENUM (
 );
 
 CREATE TABLE pending_signups (
-    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    uuid uuid DEFAULT uuidv7() NOT NULL PRIMARY KEY,
     kind pending_signup_kind NOT NULL,
     name text NOT NULL,
     email text NOT NULL,
@@ -127,7 +127,7 @@ CREATE TABLE pending_signups (
 CREATE INDEX idx_pending_signups_expires_at ON pending_signups (expires_at);
 
 CREATE TABLE password_resets (
-    uuid uuid DEFAULT uuidv7() NOT NULL UNIQUE PRIMARY KEY,
+    uuid uuid DEFAULT uuidv7() NOT NULL PRIMARY KEY,
     user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
     email text NOT NULL,
     email_version int NOT NULL,

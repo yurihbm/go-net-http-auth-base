@@ -97,7 +97,7 @@ SELECT uuid, actor_uuid, ip_address, user_agent, action, resource_type, resource
 FROM audit_logs
 WHERE
     ($1::timestamptz IS NULL OR created_at >= $1) AND
-    ($2::timestamptz IS NULL OR created_at <= $2) AND
+    ($2::timestamptz IS NULL OR created_at < $2) AND
     ($3::text IS NULL OR action = $3) AND
     ($4::text IS NULL OR resource_type = $4) AND
     ($5::text IS NULL OR status = $5) AND

@@ -18,16 +18,7 @@ SELECT
 FROM
     users
 WHERE
-   email = $1;
-
--- name: ListUsers :many
-SELECT
-    *
-FROM
-    users
-ORDER BY
-    created_at DESC
-LIMIT $1 OFFSET $2;
+   lower(email) = lower($1);
 
 -- name: UpdateUser :one
 UPDATE

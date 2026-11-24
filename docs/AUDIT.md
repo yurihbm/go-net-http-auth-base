@@ -110,7 +110,7 @@ The domain package defines type-safe constants for common values:
 | Query parameter                                        | Description                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------------- |
 | `action`, `resource_type`, `status`, `actor_uuid`      | Exact-match filters                                            |
-| `start_date`, `end_date`                               | RFC 3339 timestamps bounding `created_at`                      |
+| `start_date`, `end_date`                               | RFC 3339 timestamps bounding `created_at` (`start_date` inclusive, `end_date` exclusive) |
 | `limit`                                                | Page size, 1 to 100 (default 20)                               |
 | `cursor`                                               | `meta.next_cursor` from the previous page                      |
 

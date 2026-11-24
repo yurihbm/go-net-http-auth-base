@@ -62,11 +62,11 @@ SELECT
 FROM
     users
 WHERE
-   email = $1
+   lower(email) = lower($1)
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByEmail, email)
+func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByEmail, lower)
 	var i User
 	err := row.Scan(
 		&i.Uuid,
@@ -137,54 +137,6 @@ func (q *Queries) IsEmailReserved(ctx context.Context, arg IsEmailReservedParams
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
-}
-
-const listUsers = `-- name: ListUsers :many
-SELECT
-    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
-FROM
-    users
-ORDER BY
-    created_at DESC
-LIMIT $1 OFFSET $2
-`
-
-type ListUsersParams struct {
-	Limit  int64
-	Offset int64
-}
-
-func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
-	rows, err := q.db.Query(ctx, listUsers, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []User
-	for rows.Next() {
-		var i User
-		if err := rows.Scan(
-			&i.Uuid,
-			&i.Name,
-			&i.Email,
-			&i.PasswordHash,
-			&i.Role,
-			&i.EmailVersion,
-			&i.EmailChangedAt,
-			&i.StepUpFailures,
-			&i.StepUpFailuresWindowStart,
-			&i.PreviousEmail,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const refundUserStepUpGuess = `-- name: RefundUserStepUpGuess :exec

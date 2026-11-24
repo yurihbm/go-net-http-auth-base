@@ -93,6 +93,16 @@ func TestUsersPostgresRepository_Create(t *testing.T) {
 		assert.True(t, errors.As(err, &conflictErr))
 		assert.Equal(t, "users.email.conflict", conflictErr.Error())
 	})
+
+	t.Run("error - duplicate email differing only in case", func(t *testing.T) {
+		_, err := repo.Create(context.Background(), domain.User{Name: "Case", Email: "case.user@example.com", PasswordHash: "h"})
+		require.NoError(t, err)
+
+		_, err = repo.Create(context.Background(), domain.User{Name: "Case", Email: "Case.User@example.com", PasswordHash: "h"})
+		var conflictErr *domain.ConflictError
+		require.True(t, errors.As(err, &conflictErr))
+		assert.Equal(t, "users.email.conflict", conflictErr.Error())
+	})
 }
 
 func TestUsersPostgresRepository_FindByUUID(t *testing.T) {

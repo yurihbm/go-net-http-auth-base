@@ -274,7 +274,7 @@ paths:
         in: query
         name: start_date
         type: string
-      - description: End date (RFC3339)
+      - description: End date, exclusive (RFC3339)
         format: date-time
         in: query
         name: end_date
