@@ -34,3 +34,7 @@ linters:
         linters:
           - gosec
           - noctx
+
+formatters:
+  enable:
+    - gofmt
