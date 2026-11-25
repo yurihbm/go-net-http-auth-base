@@ -1039,8 +1039,8 @@ been cleared for every commercial, promotional, or redistributive use.</metadata
         <text x="105" y="266" class="t-muted" font-size="9" text-anchor="middle">browser / mobile</text>
         </g>
 
-        <g id="node-chain" data-node-id="chain" data-node-label="Global middlewares" tabindex="0" role="button" aria-label="Focus Global middlewares, context, UUID, OTel, log, CORS, rate, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="context, UUID, OTel, log, CORS, rate" data-node-context="Architecture component">
-          <title>Global middlewares · context, UUID, OTel, log, CORS, rate · Architecture component</title>
+        <g id="node-chain" data-node-id="chain" data-node-label="Global middlewares" tabindex="0" role="button" aria-label="Focus Global middlewares, context, IP, headers, UUID, OTel, log, recover, CORS, rate, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="context, IP, headers, UUID, OTel, log, recover, CORS, rate" data-node-context="Architecture component">
+          <title>Global middlewares · context, IP, headers, UUID, OTel, log, recover, CORS, rate · Architecture component</title>
           <rect x="250" y="220" width="200" height="64" rx="8" class="c-mask"/>
           <rect x="250" y="220" width="200" height="64" rx="8" class="c-backend" data-animate="node" style="--step: 1; --flow-node-name: archify-relay-node-2;" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-backend" transform="translate(256 226) scale(0.6875)">
@@ -1048,7 +1048,7 @@ been cleared for every commercial, promotional, or redistributive use.</metadata
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
           <text data-node-label="" x="350" y="250" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Global middlewares</text>
-        <text x="350" y="266" class="t-muted" font-size="8.8" text-anchor="middle">context, UUID, OTel, log, CORS, rate</text>
+        <text x="350" y="266" class="t-muted" font-size="5.4" text-anchor="middle">context, IP, headers, UUID, OTel, log, recover, CORS, rate</text>
         </g>
 
         <g id="node-controllers" data-node-id="controllers" data-node-label="Controllers" tabindex="0" role="button" aria-label="Focus Controllers, decode, validate, map errors, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="decode, validate, map errors" data-node-context="Architecture component">

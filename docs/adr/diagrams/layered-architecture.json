@@ -63,7 +63,7 @@
       "type": "backend",
       "icon": "security",
       "label": "Global middlewares",
-      "sublabel": "context, UUID, OTel, log, CORS, rate",
+      "sublabel": "context, IP, headers, UUID, OTel, log, recover, CORS, rate",
       "pos": [
         250,
         220
