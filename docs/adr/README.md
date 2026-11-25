@@ -46,5 +46,12 @@ The diagrams in [`diagrams/`](diagrams/) were made with
 - `<name>.svg`: the static export embedded in the ADRs. It follows the light or
   dark theme of the page.
 
+To change a diagram, install Archify globally (requires Node 18+; for other
+agents see its [installation options](https://github.com/tt-a1i/archify#installation-options)):
+
+```bash
+npx -y skills@latest add https://archify.si --skill archify --agent claude-code --global --copy --yes
+```
+
 When the cited code moves, update `meta.repository.revision` and the source line
 ranges in the JSON.
