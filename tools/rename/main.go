@@ -41,6 +41,7 @@ func main() {
 	}
 	for _, m := range []string{
 		"set PROJECT_NAME in .env",
+		"after committing, remove tools/rename/, the Makefile rename target and the tools/ exclusion in .golangci.yml",
 		"update the copyright holder in LICENSE",
 		"add .github/CODEOWNERS",
 		"replace the placeholder contact in SECURITY.md",

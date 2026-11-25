@@ -424,10 +424,11 @@ Checklist after creating a repository from this template:
    The command fails when `module` is already the current one, so a repeated run with the same arguments changes nothing. Only the module path is read from `go.mod`; the other strings are matched literally, so after a rename a later one only updates the module path and Go imports.
 2. Set `PROJECT_NAME` in `.env`.
 3. Review the diff and commit it.
-4. Update the copyright holder in `LICENSE`.
-5. Add a `CODEOWNERS` file in `.github/`.
-6. Replace the placeholder contact in `SECURITY.md`.
-7. GitHub disables scheduled workflows after 60 days without repository activity; re-enable them in the Actions tab.
+4. Remove the rename tool, which is only needed once: delete `tools/rename/`, the `rename` target (and its `.PHONY` entry) in the `Makefile`, the `tools/` exclusion in `.golangci.yml` and step 1 of this checklist.
+5. Update the copyright holder in `LICENSE`.
+6. Add a `CODEOWNERS` file in `.github/`.
+7. Replace the placeholder contact in `SECURITY.md`.
+8. GitHub disables scheduled workflows after 60 days without repository activity; re-enable them in the Actions tab.
 
 ### Leaving the template phase
 
