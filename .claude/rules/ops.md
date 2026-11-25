@@ -13,7 +13,7 @@ paths:
 - Reference official GitHub actions (`actions/*`) and the verified publishers already in use (`docker/*`, `golangci/*`) by major tag (`actions/checkout@v7`). Pin every other third-party action by full commit SHA with a `# vX.Y.Z` comment, as `marocchino/sticky-pull-request-comment` is in `test.yml`. Dependabot updates the tags, the SHAs and the comments.
 - Give every workflow a `concurrency:` block (`${{ github.workflow }}-${{ github.ref }}`, cancel in progress only for pull requests) and least-privilege `permissions:`, at the workflow level or per job (`test.yml` grants `pull-requests: write` only to the `test` job).
 - Read tool versions from the `Makefile` (`SWAG_VERSION`, `SQLC_VERSION`, `GOLANG_MIGRATE_VERSION`, parsed with `sed`) and the Go version from `go.mod` (`go-version-file: go.mod`), so local and CI tools match. Keep the `NAME = vX.Y.Z` format of those Makefile lines.
-- Job names are the required status checks listed in the "Branch protection" item of `README.md` (`lint`, `test`, `sqlc-drift`, `govulncheck`). Rename or add a job there in the same change. Path-filtered workflows (`docker.yml`) stay out of that list, because a check that never reports blocks the merge.
+- Job names are the required status checks listed in the "Branch protection" item of `README.md` (`lint`, `test`, `sqlc-drift`, `govulncheck`, `docker-build`). Rename or add a job there in the same change. Filter a required job by changed paths at the job level (a `git diff` job feeding `if:`, as `docker.yml` does), never with `on.paths`: a workflow skipped by its trigger never reports, and the required check blocks the merge.
 - `make check` mirrors the required checks locally; keep it in sync when a job gains a step.
 
 ## Dependabot
