@@ -23,7 +23,7 @@ Repositories handle data persistence. Key patterns:
 - Transactions: Services that need several repository calls to succeed or fail together depend on `domain.Transactor` and call `WithinTx(ctx, func(ctx) error)`, using the closure's `ctx` for every call inside it. Always name the closure parameter `ctx` so it shadows the outer one: using the outer context runs the query outside the transaction without any error. Cover each transactional flow with an integration test that forces a failure and asserts nothing was persisted in `internal/tests/integration` (e.g. `TestAuthService_OAuthLogin`). `repositories.PostgresTransactor` stores the `pgx.Tx` in the context, and repositories are built on `repositories.TxAwareDB` (a `postgres.DBTX`) so they join the active transaction automatically. A nested `WithinTx` joins the outer transaction.
 - New Tables: Add them to every `truncateTables` helper: `internal/repositories/repositories_test.go`, `internal/tests/integration/integration_test.go` and `internal/tests/e2e/helpers_test.go`.
 
-Example Structure:
+Example Structure (abridged; `toDomainUser` maps more fields):
 
 ```go
 type UsersPostgresRepository struct {

@@ -33,6 +33,7 @@ type pendingSignupService struct {
     transactor domain.Transactor
     emails     domain.EmailVerificationService
     hmacKey    []byte
+    now        func() time.Time
 }
 
 func (s *pendingSignupService) StartCredentials(ctx context.Context, dto domain.CreateUserDTO) (string, error) {

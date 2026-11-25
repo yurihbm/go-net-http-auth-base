@@ -16,7 +16,7 @@ Go with standard `net/http` (Go 1.22+ method patterns), PostgreSQL, `golang-migr
 - `internal/services/`: business logic.
 - `internal/repositories/`: data access on `sqlc` queries.
 - `internal/providers/`: adapters for external services (OAuth providers, email).
-- `internal/middlewares/`: auth, step-up, role, CORS, rate limit, logger, telemetry, request UUID, request context data.
+- `internal/middlewares/`: request context data, client IP, security headers, request UUID, telemetry, logger, recover, CORS, rate limit (global and credentials), auth, step-up, role.
 - `internal/domain/`: entities, DTOs, errors and every service/repository interface.
 - `internal/factories/`: composition root. `dependencies.go` (`NewDependencies`) builds the shared graph once; thin per-controller factories wire it into controllers; `handler.go` (`NewHandler`) builds the mux, registers every controller and applies the global middleware chain (used by `cmd/api` and the E2E suite, so tests run the production wiring).
 - `internal/mocks/`: testify mocks of the domain interfaces.

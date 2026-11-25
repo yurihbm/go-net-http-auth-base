@@ -15,7 +15,7 @@ Controllers handle HTTP requests and responses. Key patterns:
 - Request Handling:
   - Use `api.DecodeAndValidate[T](r)` to decode (strict JSON parsing, single-object body) and validate DTOs against their `validate` struct tags in one step.
   - Extract path parameters using `r.PathValue("param")`.
-  - Extract context values (e.g., authenticated user UUID) using `r.Context().Value(key)`.
+  - Read the caller with `actorFromRequest(r)` and the session with `sessionFromRequest(r)` (`actor_helpers.go`).
 - Validation: `internal/api/request.go` wires a single `go-playground/validator` instance used by `DecodeAndValidate`. Decode or validation failures return a `domain.ValidationError` with per-field `details`, mapped to `400` by `internal/api/errors.go`. DTOs declare rules via `validate:"..."` tags (e.g., `validate:"required,email"`) in `internal/domain/*.go`.
 - Response Handling:
   - Use `api.WriteJSONResponse()` helper for consistent JSON responses (format defined in `internal/api/response.go`).
@@ -33,9 +33,11 @@ type UsersController struct {
     userService          domain.UsersService
     emailChangeService   domain.EmailChangeService
     pendingSignupService domain.PendingSignupService
+    passwordService      domain.PasswordService
     auditService         domain.AuditService
     authMiddleware       middlewares.HandlerMiddleware
     stepUpMiddleware     middlewares.HandlerMiddleware
+    credentialsLimiter   middlewares.HandlerMiddleware
     isSecureCookie       bool
 }
 
@@ -45,36 +47,42 @@ func NewUsersController(
     service domain.UsersService,
     emailChangeService domain.EmailChangeService,
     pendingSignupService domain.PendingSignupService,
+    passwordService domain.PasswordService,
     auditService domain.AuditService,
     authMiddleware middlewares.HandlerMiddleware,
     stepUpMiddleware middlewares.HandlerMiddleware,
+    credentialsLimiter middlewares.HandlerMiddleware,
     isSecureCookie bool,
 ) *UsersController {
     return &UsersController{
         userService:          service,
         emailChangeService:   emailChangeService,
         pendingSignupService: pendingSignupService,
+        passwordService:      passwordService,
         auditService:         auditService,
         authMiddleware:       authMiddleware,
         stepUpMiddleware:     stepUpMiddleware,
+        credentialsLimiter:   credentialsLimiter,
         isSecureCookie:       isSecureCookie,
     }
 }
 
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
-    router.HandleFunc("POST /users", c.CreateUser)
+    router.HandleFunc("POST /users", c.credentialsLimiter.Use(c.CreateUser))
     router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
 }
 
 // factories/users_factory.go
-func UsersFactory(deps *Dependencies, cfg *config.Config) controllers.Controller {
+func UsersFactory(deps *Dependencies, cfg *config.Config, credentialsLimiter middlewares.HandlerMiddleware) controllers.Controller {
     return controllers.NewUsersController(
         deps.UsersService,
         deps.EmailChangeService,
         deps.PendingSignupService,
+        deps.PasswordService,
         deps.AuditService,
         deps.AuthMiddleware,
         deps.StepUpMiddleware,
+        credentialsLimiter,
         !cfg.IsDevelopment(),
     )
 }
