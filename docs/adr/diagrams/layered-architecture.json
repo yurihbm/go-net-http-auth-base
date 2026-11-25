@@ -63,7 +63,7 @@
       "type": "backend",
       "icon": "security",
       "label": "Global middlewares",
-      "sublabel": "context, IP, headers, UUID, OTel, log, recover, CORS, rate",
+      "sublabel": "9 steps, in handler.go order",
       "pos": [
         250,
         220
