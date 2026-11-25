@@ -47,7 +47,7 @@ services:
 
   # Remove this service when running migrations on CI/CD
   migrate:
-    image: migrate/migrate:v4.19.1
+    image: migrate/migrate:v4.20.1
     container_name: ${PROJECT_NAME:-auth-base}-migrate-prod
     environment:
       DATABASE_URL: ${DATABASE_URL}
