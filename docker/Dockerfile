@@ -27,8 +27,6 @@ WORKDIR /app
 
 COPY --from=builder /app/api /app/promote-admin ./
 
-RUN chown appuser:appuser api promote-admin
-
 # Switch to non-root user
 USER 1000
 
