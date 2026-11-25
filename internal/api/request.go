@@ -93,7 +93,7 @@ func fieldErrMessage(fe validator.FieldError) string {
 
 // GetClientMetadata extracts the client IP address and User-Agent from the
 // request. The IP is the one resolved by the client IP middleware, which only
-// trusts X-Forwarded-For from configured proxies (ADR-013); without it, it is
+// trusts X-Forwarded-For from configured proxies (ADR-012); without it, it is
 // r.RemoteAddr with the port stripped. X-Real-IP is always ignored.
 func GetClientMetadata(r *http.Request) (ip string, userAgent string) {
 	userAgent = r.Header.Get("User-Agent")

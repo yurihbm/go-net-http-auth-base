@@ -92,7 +92,7 @@ The reasoning behind these choices is recorded in the [Architecture Decision Rec
 
 ## 🧭 Architecture Decision Records
 
-Write an ADR in `docs/adr/` in the same PR when a decision changes or adds a convention, adds or replaces an infrastructure dependency, changes the security model, or is hard to reverse. Local choices (naming, a helper, a behavior-preserving refactor) do not need one. See [docs/adr/README.md](docs/adr/README.md) for the format and the rules (accepted ADRs are never rewritten, only superseded).
+Write an ADR in `docs/adr/` in the same PR when a decision changes or adds a convention, adds or replaces an infrastructure dependency, changes the security model, or is hard to reverse. Local choices (naming, a helper, a behavior-preserving refactor) do not need one. See [docs/adr/README.md](docs/adr/README.md) for the format and the rules (while this is a template, ADRs are edited to describe the final state; afterwards accepted ADRs are never rewritten, only superseded).
 
 ## 🛠️ Scaffolding Tools
 
@@ -133,7 +133,7 @@ Examples:
 
 - **Coverage**: We aim for **80%+ test coverage**.
 - **Unit Tests**: Write unit tests for all new services and controllers.
-- **Integration Tests**: Repository tests run against a real PostgreSQL started by testcontainers (`postgres.NewTestPool`), so a running Docker daemon is required. Each transactional flow needs a test in `internal/tests/integration` that forces a failure and asserts nothing was persisted; HTTP end-to-end flows live in `internal/tests/e2e` (ADR-016).
+- **Integration Tests**: Repository tests run against a real PostgreSQL started by testcontainers (`postgres.NewTestPool`), so a running Docker daemon is required. Each transactional flow needs a test in `internal/tests/integration` that forces a failure and asserts nothing was persisted; HTTP end-to-end flows live in `internal/tests/e2e` (ADR-006).
 - **Naming**: One `Test<Type>_<Method>` per method, with scenarios as `t.Run` subtests.
 - **Running Tests**:
   ```bash

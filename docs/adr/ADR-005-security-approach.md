@@ -1,6 +1,6 @@
 # ADR-005: Security Approach
 
-- **Status:** Accepted; the Microsoft linking statement is superseded by ADR-009, the rate limiter proxy statement by ADR-013 and the password change statement by ADR-015
+- **Status:** Accepted
 - **Date:** 2026-11-14
 
 ## Context
@@ -24,8 +24,8 @@ defaults must be safe. The main threats considered:
 
 - Short-lived HS256 JWTs signed by a single `TokenService`. The secret must be
   at least 32 characters or the app refuses to boot. Every token carries an
-  audience (access, refresh, OAuth state, email verification) checked on
-  verification.
+  audience (access, refresh, OAuth state, email change undo, OAuth link undo)
+  checked on verification.
 - Access tokens last 15 minutes and refresh tokens 7 days. Both are sent only as
   `HttpOnly`, `SameSite=Strict` cookies, `Secure` outside development. The
   refresh cookie is scoped to `Path=/auth/refresh`.
@@ -50,27 +50,40 @@ defaults must be safe. The main threats considered:
   browser that started the flow. PKCE (`S256`) is used on every provider.
 - `redirect_uri` must exactly match `OAUTH_CALLBACK_ALLOW_LIST`, which is
   required in production. This is checked before the state is minted.
-- Accounts are created from a provider identity only when the provider says the
-  email is verified. Linking into an existing account also requires the local
-  email to be verified. Emails are normalized (trim + lowercase) and unique on
-  `lower(email)`.
+- An account is created from a provider identity, or the provider is linked
+  into the account that owns the email, right away only when the provider says
+  the email is verified. Every local account is verified, so linking needs no
+  local check. Otherwise the email is first proven by a one-time code
+  ([ADR-008](ADR-008-otp-email-proof-and-verified-accounts.md)), and a link made
+  without a code notifies the owner with an undo link
+  ([ADR-011](ADR-011-notify-and-undo-oauth-links.md)). Emails are normalized
+  (trim + lowercase) and unique on `lower(email)`.
 
 **Authorization and passwords**
 
 - `AuthMiddleware` verifies the access token, and `RoleMiddleware` reads the role
   from the token without a database lookup. User read/update/delete enforce
   self-or-admin in the service (`Actor.CanAccess`).
-- Passwords are hashed with `bcrypt` (default cost).
+- Passwords are hashed with `bcrypt` (default cost). A password reset or change
+  revokes the other sessions
+  ([ADR-014](ADR-014-password-reset-and-change.md)).
+- Sensitive actions (email change, password change, account deletion) need a
+  recent step-up by a one-time code sent to the current email
+  ([ADR-007](ADR-007-step-up-and-email-change.md)).
 
 **HTTP perimeter**
 
 - Global middleware order:
-  `requestContextData → requestUUID → telemetry → logger → cors → rateLimit → mux`.
+  `requestContextData → clientIP → securityHeaders → requestUUID → telemetry → logger → recover → cors → rateLimit → mux`.
 - CORS is an exact-match allow list. `Vary: Origin` is always set, and preflights
   from disallowed origins get 403.
 - Per-IP token-bucket rate limiting (`RATE_LIMIT_REQUESTS_PER_SECOND`,
-  `RATE_LIMIT_BURST`) keyed on the remote address without the port, returning
-  429 and `X-RateLimit-*` headers.
+  `RATE_LIMIT_BURST`) keyed on the client IP, returning 429 and
+  `X-RateLimit-*` headers. The client IP is the remote address without the port,
+  or the address resolved from `X-Forwarded-For` when the connection comes from
+  a trusted proxy ([ADR-012](ADR-012-trusted-proxies.md)). Credential endpoints
+  add a stricter bucket, and IPv6 clients are keyed by /64
+  ([ADR-015](ADR-015-http-edge-hardening.md)).
 - Security-relevant actions (login, logout, user changes) are written to the
   audit log ([`docs/AUDIT.md`](../AUDIT.md)).
 
@@ -93,14 +106,15 @@ defaults must be safe. The main threats considered:
   the same token revoke the session, so clients must serialize refreshes.
 - Refresh and logout read tokens from cookies only. Mobile clients need a
   header- or body-based transport, which is a follow-up.
-- The rate limiter is in memory and per instance, and it ignores
-  `X-Forwarded-For`. Behind a proxy or across several replicas it needs a shared
-  store and a trusted-proxy policy.
-- There is no per-account login throttling, and login timing allows user
+- The rate limiter is in memory and per instance. Across several replicas it
+  needs a shared store, and behind a proxy `TRUSTED_PROXIES` must list the proxy
+  addresses (ADR-012).
+- There is no per-account login throttling (only the per-IP credential limiter
+  of ADR-015), and login timing allows user
   enumeration. This is deferred, because `POST /users` already reveals taken
   emails with 409.
 - The OAuth state JWT is not single-use within its 5-minute lifetime. Microsoft
-  never reports a verified email, so it can only link into existing verified
-  accounts.
-- There are no logout-all or list/revoke-sessions endpoints yet, and a password
-  change does not revoke existing sessions.
+  never reports a verified email, so a first Microsoft login always proves the
+  email by code (ADR-008).
+- `POST /auth/logout-others` revokes every other session (ADR-007), but there
+  is no endpoint to list sessions or revoke a single other one.

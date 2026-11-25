@@ -103,7 +103,7 @@ func TestPendingSignupService_StartCredentials(t *testing.T) {
 - **Test Isolation**: Truncate tables between tests using a `truncateTables()` helper function; add new tables to its list.
 - **Short Mode**: `TestMain` skips the container with `-short`, and each test calls `t.Skip` when `testing.Short()`.
 - **Test Coverage**: Test success cases, constraint violations (e.g., duplicate email), invalid inputs, and not found scenarios.
-- **Composition Tests**: Not here. Service flows composed with several real repositories (transaction atomicity) live in `internal/tests/integration` (ADR-016).
+- **Composition Tests**: Not here. Service flows composed with several real repositories (transaction atomicity) live in `internal/tests/integration` (ADR-006).
 
 **Example**:
 

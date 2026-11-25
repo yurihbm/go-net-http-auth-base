@@ -42,9 +42,9 @@ composition root.
   service, repository and provider interface. Each layer depends only on the
   interfaces of the layer below.
 - **Composition root.** `factories.NewDependencies` builds repositories, services
-  and shared middlewares once. `cmd/main.go` passes `*Dependencies` to thin
-  per-controller factories and wraps the mux in the global middleware chain. No
-  struct creates its own dependencies.
+  and shared middlewares once. `factories.NewHandler` (called by `cmd/api`)
+  passes `*Dependencies` to thin per-controller factories and wraps the mux in
+  the global middleware chain. No struct creates its own dependencies.
 - `context.Context` is the first argument of every service and repository method
   and flows from `r.Context()` down to the database.
 

@@ -1,4 +1,4 @@
-# ADR-012: Notify and Undo OAuth Provider Links
+# ADR-011: Notify and Undo OAuth Provider Links
 
 - **Status:** Accepted
 - **Date:** 2026-11-22
@@ -6,7 +6,7 @@
 ## Context
 
 When an OAuth login reports a verified email that matches an existing account,
-the provider is linked to that account right away (Case 2, ADR-005/ADR-009) and
+the provider is linked to that account right away (Case 2, ADR-005/ADR-008) and
 the login signs in, without the owner being told. The link rests on the
 provider's claim that its user controls the mailbox.
 
@@ -21,7 +21,7 @@ example after a recycled domain or mailbox: the notice then reaches the
 attacker.
 
 The email change already has this shape of defence: a notice to the old address
-with an undo link (ADR-009).
+with an undo link (ADR-007).
 
 ## Decision
 
@@ -48,7 +48,7 @@ with an undo link (ADR-009).
 Rejected alternatives:
 
 - **Requiring a code before linking.** It would add friction for every OAuth
-  login of verified providers, which ADR-009 deliberately avoids.
+  login of verified providers, which ADR-008 deliberately avoids.
 - **Storing a revert token row.** The link row already carries the needed state.
 
 ## Consequences
@@ -63,10 +63,10 @@ Rejected alternatives:
   - The notice has no send limit of its own, only the OAuth login rate and the
     global rate limiter.
   - The notice can be lost when every send attempt fails, because the failure
-    is only logged (ADR-011).
+    is only logged (ADR-010).
   - The access token of a revoked session stays valid for up to 15 minutes,
     since `AuthMiddleware` is stateless.
   - A legitimate owner who undoes the link also signs out every device.
 
-See [ADR-009](ADR-009-otp-email-proof-and-verified-accounts.md) and
-[ADR-011](ADR-011-email-send-retries.md).
+See [ADR-008](ADR-008-otp-email-proof-and-verified-accounts.md) and
+[ADR-010](ADR-010-email-send-retries.md).

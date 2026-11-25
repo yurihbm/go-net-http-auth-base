@@ -4,35 +4,37 @@ This directory records the key architectural decisions behind this template,
 using the [Nygard format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions):
 Status, Context, Decision and Consequences.
 
-| ADR                                             | Title                                 | Status   |
-| :---------------------------------------------- | :------------------------------------ | :------- |
-| [ADR-001](ADR-001-layered-architecture.md)      | Layered Architecture Pattern          | Accepted |
-| [ADR-002](ADR-002-error-handling.md)            | Error Handling Strategy               | Accepted |
-| [ADR-003](ADR-003-database-strategy.md)         | Database Strategy (PostgreSQL + sqlc) | Accepted |
-| [ADR-004](ADR-004-logging-observability.md)     | Logging & Observability               | Accepted |
-| [ADR-005](ADR-005-security-approach.md)         | Security Approach                     | Accepted; Microsoft linking statement superseded by ADR-009, rate limiter proxy statement by ADR-013, password change statement by ADR-015 |
-| [ADR-006](ADR-006-e2e-testing.md)               | End-to-End Testing Approach           | Accepted; test location superseded by ADR-016 |
-| [ADR-007](ADR-007-email-change.md)              | Verified Email Change                 | Superseded by ADR-008 |
-| [ADR-008](ADR-008-step-up-and-email-change-hardening.md) | Step-Up and Email Change Hardening | Partially superseded by ADR-009 |
-| [ADR-009](ADR-009-otp-email-proof-and-verified-accounts.md) | One-Time Code Email Proof and Always-Verified Accounts | Accepted |
-| [ADR-010](ADR-010-per-address-code-failure-counter.md) | Per-Address Code Failure Counter and Its Lockout Risk | Accepted |
-| [ADR-011](ADR-011-email-send-retries.md) | Email Send Retries and Idempotency Key | Accepted |
-| [ADR-012](ADR-012-notify-and-undo-oauth-links.md) | Notify and Undo OAuth Provider Links | Accepted |
-| [ADR-013](ADR-013-trusted-proxies.md) | Trusted Proxies and Client IP Resolution | Accepted |
-| [ADR-014](ADR-014-traefik-reverse-proxy.md) | Traefik Reverse Proxy and TLS in Production | Partially superseded by ADR-018 |
-| [ADR-015](ADR-015-password-reset-and-change.md) | Password Reset and Change | Accepted |
-| [ADR-016](ADR-016-cross-layer-test-suites.md) | Cross-Layer Test Suites | Accepted |
-| [ADR-017](ADR-017-http-edge-hardening.md) | HTTP Edge Hardening | Accepted |
-| [ADR-018](ADR-018-traefik-file-provider.md) | Traefik File Provider Instead of the Docker Socket | Accepted |
-| [ADR-019](ADR-019-injected-clock-in-services.md) | Injected Clock in Services | Accepted |
+| ADR                                                         | Title                                                  | Status   |
+| :---------------------------------------------------------- | :----------------------------------------------------- | :------- |
+| [ADR-001](ADR-001-layered-architecture.md)                  | Layered Architecture Pattern                           | Accepted |
+| [ADR-002](ADR-002-error-handling.md)                        | Error Handling Strategy                                | Accepted |
+| [ADR-003](ADR-003-database-strategy.md)                     | Database Strategy (PostgreSQL + sqlc)                  | Accepted |
+| [ADR-004](ADR-004-logging-observability.md)                 | Logging & Observability                                | Accepted |
+| [ADR-005](ADR-005-security-approach.md)                     | Security Approach                                      | Accepted |
+| [ADR-006](ADR-006-e2e-and-cross-layer-test-suites.md)       | End-to-End and Cross-Layer Test Suites                 | Accepted |
+| [ADR-007](ADR-007-step-up-and-email-change.md)              | Step-Up and Verified Email Change                      | Accepted |
+| [ADR-008](ADR-008-otp-email-proof-and-verified-accounts.md) | One-Time Code Email Proof and Always-Verified Accounts | Accepted |
+| [ADR-009](ADR-009-per-address-code-failure-counter.md)      | Per-Address Code Failure Counter and Its Lockout Risk  | Accepted |
+| [ADR-010](ADR-010-email-send-retries.md)                    | Email Send Retries and Idempotency Key                 | Accepted |
+| [ADR-011](ADR-011-notify-and-undo-oauth-links.md)           | Notify and Undo OAuth Provider Links                   | Accepted |
+| [ADR-012](ADR-012-trusted-proxies.md)                       | Trusted Proxies and Client IP Resolution               | Accepted |
+| [ADR-013](ADR-013-traefik-reverse-proxy.md)                 | Traefik Reverse Proxy and TLS in Production            | Accepted |
+| [ADR-014](ADR-014-password-reset-and-change.md)             | Password Reset and Change                              | Accepted |
+| [ADR-015](ADR-015-http-edge-hardening.md)                   | HTTP Edge Hardening                                    | Accepted |
+| [ADR-016](ADR-016-injected-clock-in-services.md)            | Injected Clock in Services                             | Accepted |
 
 ## Writing a new ADR
 
 1. Copy the structure of an existing ADR and use the next number
    (`ADR-00N-short-title.md`).
-2. Never rewrite an accepted ADR to change its decision. Write a new one and set
-   the old one's status to `Superseded by ADR-00N`.
-3. Add it to the table above.
+2. While this repository is a template, do not add superseding records: edit the
+   affected ADRs so the set describes the template's final state, with every
+   ADR `Accepted`. Projects created from the template should start from its
+   final decisions, not from its construction history.
+3. After leaving the template phase, accepted ADRs are immutable. Never rewrite
+   one to change its decision: write a new one and set the old one's status to
+   `Superseded by ADR-00N`.
+4. Add it to the table above.
 
 ## Diagrams
 

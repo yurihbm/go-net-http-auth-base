@@ -1,4 +1,4 @@
-# ADR-017: HTTP Edge Hardening
+# ADR-015: HTTP Edge Hardening
 
 - **Status:** Accepted
 - **Date:** 2026-11-24
@@ -7,7 +7,7 @@
 
 The API answered without any browser-facing security headers, and its only
 rate limit was one token bucket per client IP for every route (ADR-005,
-ADR-013). That bucket is generous on purpose (20 requests per second), so it
+ADR-012). That bucket is generous on purpose (20 requests per second), so it
 does not slow down credential guessing, code submission or email-triggering
 endpoints. It also keyed an IPv6 client by its full address, while a single
 subscriber usually controls a whole /64 and can rotate through 2^64 addresses.

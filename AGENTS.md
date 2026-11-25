@@ -66,7 +66,7 @@ make show-cover            # coverage as reported by CI
 ### Code
 
 - **Layers**: controllers decode, validate and call services; services hold business rules; repositories only persist. Program to the interfaces in `internal/domain`, so everything can be mocked.
-- **Dependency Injection**: every dependency comes through a constructor, never created inside the dependent struct. Shared instances are built once in `internal/factories/dependencies.go`, not per factory. Services get the clock as `now func() time.Time` and never call `time.Now()` (ADR-019).
+- **Dependency Injection**: every dependency comes through a constructor, never created inside the dependent struct. Shared instances are built once in `internal/factories/dependencies.go`, not per factory. Services get the clock as `now func() time.Time` and never call `time.Now()` (ADR-016).
 - **Transactions**: in `WithinTx(ctx, func(ctx context.Context) error { ... })` always name the closure parameter `ctx` so it shadows the outer one; the outer context silently runs queries outside the transaction.
 - **IDs**: always UUIDv7. Tables use a `uuid uuid DEFAULT uuidv7()` primary key; IDs generated in Go (persisted rows, request UUIDs) use `uuid.NewV7()`.
 - **Errors**: dot-separated keys (e.g., `"users.email.conflict"`) for i18n, documented in `docs/ERRORS.md`. Return errors as-is unless wrapping adds real context.
@@ -88,7 +88,7 @@ Decisions live in `docs/adr/` (index and rules in `docs/adr/README.md`). Write a
 Local choices (naming, a new helper, a refactor that keeps behavior) do not need one. When in doubt, ask the user.
 
 - **Format**: Nygard (Status, Date, Context, Decision, Consequences), in English, as `docs/adr/ADR-00N-short-title.md` with the next number, added to the index table.
-- **Immutability**: never rewrite the decision of an accepted ADR. Write a new ADR and set the old one's status to `Superseded by ADR-00N`.
+- **Immutability**: while this repository is a template, edit the affected ADRs so the set describes the final state (every ADR `Accepted`, no superseded records), so derived projects start from the final decisions. After the template phase, never rewrite the decision of an accepted ADR: write a new ADR and set the old one's status to `Superseded by ADR-00N`.
 - **Diagrams (optional)**: only when a structure or flow is hard to explain in text. Install the pinned Archify with `make install-archify` (Node 18+), follow `.tools/archify/SKILL.md`, and commit only the JSON source and the SVG export to `docs/adr/diagrams/`. If Archify is unavailable, ship the ADR without the diagram.
 - **Keep docs in sync**: if the ADR changes a convention, update the matching section of this file, the rule in `.claude/rules/` or `docs/AUTH.md` in the same PR.
 

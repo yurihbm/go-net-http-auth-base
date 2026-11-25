@@ -1,4 +1,4 @@
-# ADR-019: Injected Clock in Services
+# ADR-016: Injected Clock in Services
 
 - **Status:** Accepted
 - **Date:** 2026-11-24

@@ -1,11 +1,11 @@
-# ADR-010: Per-Address Code Failure Counter and Its Lockout Risk
+# ADR-009: Per-Address Code Failure Counter and Its Lockout Risk
 
 - **Status:** Accepted
 - **Date:** 2026-11-21
 
 ## Context
 
-[ADR-009](ADR-009-otp-email-proof-and-verified-accounts.md) proves every email
+[ADR-008](ADR-008-otp-email-proof-and-verified-accounts.md) proves every email
 with a 6-digit code. A code has only 10^6 values, so wrong guesses are capped
 per pending sign-up or challenge (5 attempts) and also per destination address:
 `email_send_limits.failures` allows `EmailMaxCodeFailures` (20) wrong codes per
@@ -29,7 +29,7 @@ Keep the per-address counter and accept the lockout as a residual risk.
 The per-address cap is what bounds brute force spread over many pending sign-ups
 or challenges. Without it an attacker could open pendings repeatedly and, after
 enough guesses, verify an account on an address they do not own, which is the
-takeover ADR-009 removes.
+takeover ADR-008 removes.
 
 Alternatives weighed:
 

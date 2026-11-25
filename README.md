@@ -212,8 +212,8 @@ All variables are read and validated once at startup in `config/config.go`; the 
 | `OAUTH_CALLBACK_ALLOW_LIST`                                              | - (**required** in production) | Comma-separated `redirect_uri` values accepted after OAuth (exact match); https only in production                            |
 | `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`                           | -                              | Comma-separated CORS allow lists (exact match); no `*` in production                                                      |
 | `RATE_LIMIT_REQUESTS_PER_SECOND`, `RATE_LIMIT_BURST`                     | `20`, `50`                     | Per-IP token bucket                                                                                 |
-| `RATE_LIMIT_CREDENTIALS_PER_MINUTE`, `RATE_LIMIT_CREDENTIALS_BURST`       | `5`, `10`                      | Stricter per-IP bucket on credential endpoints (login, sign-up, password reset, step-up; [ADR-017](docs/adr/ADR-017-http-edge-hardening.md)) |
-| `TRUSTED_PROXIES`                                                        | -                              | Comma-separated CIDRs or IPs of reverse proxies whose `X-Forwarded-For` is trusted ([ADR-013](docs/adr/ADR-013-trusted-proxies.md)) |
+| `RATE_LIMIT_CREDENTIALS_PER_MINUTE`, `RATE_LIMIT_CREDENTIALS_BURST`       | `5`, `10`                      | Stricter per-IP bucket on credential endpoints (login, sign-up, password reset, step-up; [ADR-015](docs/adr/ADR-015-http-edge-hardening.md)) |
+| `TRUSTED_PROXIES`                                                        | -                              | Comma-separated CIDRs or IPs of reverse proxies whose `X-Forwarded-For` is trusted ([ADR-012](docs/adr/ADR-012-trusted-proxies.md)) |
 | `RESEND_API_KEY`, `EMAIL_FROM`                                           | - (**required** outside development) | Resend credentials and sender; without a key, emails are only logged                          |
 | `EMAIL_CHANGE_REVERT_URL`                                                | - (**required** outside development) | Frontend URL that receives the "it wasn't me" revert token                                     |
 | `EMAIL_OAUTH_LINK_REVERT_URL`                                             | - (**required** outside development) | Frontend URL that receives the OAuth link undo token                                           |
@@ -245,7 +245,7 @@ To build and run the application in a production-ready Docker container, you hav
 
 #### Option 1: Docker Compose with Traefik (Recommended)
 
-This method sets up the application, a PostgreSQL database and [Traefik](https://traefik.io) as reverse proxy and TLS terminator with automatic Let's Encrypt certificates ([ADR-014](docs/adr/ADR-014-traefik-reverse-proxy.md)). TLS is required in production because the auth cookies are `Secure`/`__Host-`.
+This method sets up the application, a PostgreSQL database and [Traefik](https://traefik.io) as reverse proxy and TLS terminator with automatic Let's Encrypt certificates ([ADR-013](docs/adr/ADR-013-traefik-reverse-proxy.md)). TLS is required in production because the auth cookies are `Secure`/`__Host-`.
 
 1. **Point DNS and open ports**: create an A/AAAA record for your domain pointing to the VPS and allow inbound ports 80 and 443 (80 redirects to 443 and serves as fallback for Let's Encrypt).
 
@@ -272,7 +272,7 @@ This method sets up the application, a PostgreSQL database and [Traefik](https:/
    docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./promote-admin <email>
    ```
 
-Only Traefik publishes ports (80 and 443). The database sits on an `internal` network with no external access, and the API is reachable only through Traefik, which routes by the versioned file `docker/traefik/dynamic.yaml` (file provider; the Docker socket is not mounted, [ADR-018](docs/adr/ADR-018-traefik-file-provider.md)). The domain and port come from `API_DOMAIN` and `API_PORT`. To add another service to the same Traefik, add a router and a service to that file. Always pass `--env-file .env` to `docker compose`, also for `down`, `logs` and `exec`.
+Only Traefik publishes ports (80 and 443). The database sits on an `internal` network with no external access, and the API is reachable only through Traefik, which routes by the versioned file `docker/traefik/dynamic.yaml` (file provider; the Docker socket is not mounted, [ADR-013](docs/adr/ADR-013-traefik-reverse-proxy.md)). The domain and port come from `API_DOMAIN` and `API_PORT`. To add another service to the same Traefik, add a router and a service to that file. Always pass `--env-file .env` to `docker compose`, also for `down`, `logs` and `exec`.
 
 #### Option 2: Manual Build & Run (no TLS)
 
@@ -394,12 +394,12 @@ Logs carry `trace_id`/`span_id`, so a trace in Tempo links to its logs in Loki (
 ## 🔐 Security
 
 - Passwords are hashed using bcrypt
-- Accounts only exist once the email is proven: sign-up emails a 6-digit code that only works in the browser that started it (HttpOnly `pending_signup` cookie), with per-address send and failure limits ([ADR-009](docs/adr/ADR-009-otp-email-proof-and-verified-accounts.md))
+- Accounts only exist once the email is proven: sign-up emails a 6-digit code that only works in the browser that started it (HttpOnly `pending_signup` cookie), with per-address send and failure limits ([ADR-008](docs/adr/ADR-008-otp-email-proof-and-verified-accounts.md))
 - Short-lived JWTs (15 min access, 7 day refresh) sent only as `HttpOnly`, `SameSite=Strict` cookies (`Secure` outside development); the app refuses to boot with a `JWT_SECRET` shorter than 32 characters
 - Server-side, per-device sessions with refresh token rotation and reuse detection; logout ends the current session
 - OAuth with PKCE, a state nonce bound to the browser, an exact `redirect_uri` allow list, and account creation/linking only through emails proven by the provider or by a one-time code
 - Self-or-admin authorization on user endpoints, admin-only audit logs and Swagger UI
-- Exact-match CORS and per-IP rate limiting; `X-Forwarded-For` is only trusted from the proxies listed in `TRUSTED_PROXIES` ([ADR-013](docs/adr/ADR-013-trusted-proxies.md))
+- Exact-match CORS and per-IP rate limiting; `X-Forwarded-For` is only trusted from the proxies listed in `TRUSTED_PROXIES` ([ADR-012](docs/adr/ADR-012-trusted-proxies.md))
 - Audit log of security-relevant actions ([docs/AUDIT.md](docs/AUDIT.md))
 - Prepared statements via sqlc to prevent SQL injection
 
@@ -436,7 +436,9 @@ Checklist after creating a repository from this template:
 
 ### Leaving the template phase
 
-While this is a template, schema changes go into `postgres/migrations/000001_init_db.*`. Once the first real deployment exists, stop editing those files and use `make migrate-create` instead. Update the "Template Phase" statements in `CLAUDE.md` (`AGENTS.md` is a symlink to it), `CONTRIBUTING.md`, this README, `.claude/rules/repositories.md` and `.claude/skills/go-migration-scaffolder`. The decision is recorded in [ADR-003](docs/adr/ADR-003-database-strategy.md): write a new ADR that supersedes it instead of editing it.
+While this is a template, schema changes go into `postgres/migrations/000001_init_db.*`. Once the first real deployment exists, stop editing those files and use `make migrate-create` instead. Update the "Template Phase" statements in `AGENTS.md` (`CLAUDE.md` is a symlink to it), `CONTRIBUTING.md`, this README, `.claude/rules/repositories.md` and `.claude/skills/go-migration-scaffolder`. The decision is recorded in [ADR-003](docs/adr/ADR-003-database-strategy.md): write a new ADR that supersedes it instead of editing it.
+
+The ADRs describe the template's final state: during the template phase they are edited in place instead of superseded. Make them immutable from then on by updating the rule in `docs/adr/README.md` ("Writing a new ADR") and the **Immutability** bullet in `AGENTS.md`, so later changes go through new ADRs that supersede the old ones.
 
 ### Recommended GitHub settings
 

@@ -41,7 +41,8 @@ The alternatives considered were:
   `AuditLogsPartitionManager`, with a default partition as fallback).
 - **Tests:** repository tests are integration tests against a real PostgreSQL
   in Docker. Every transactional flow has a test that forces a failure and
-  asserts that nothing was persisted.
+  asserts that nothing was persisted (in `internal/tests/integration`, see
+  [ADR-006](ADR-006-e2e-and-cross-layer-test-suites.md)).
 
 ## Consequences
 

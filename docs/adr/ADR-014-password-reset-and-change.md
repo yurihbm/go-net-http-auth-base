@@ -1,15 +1,15 @@
-# ADR-015: Password Reset and Change
+# ADR-014: Password Reset and Change
 
 - **Status:** Accepted
 - **Date:** 2026-11-23
 
 ## Context
 
-Neither a reset nor a change of password existed: a user who forgot the
-password was locked out, and a user who knew it could not rotate it. ADR-005
-also noted that a password change would not revoke existing sessions, which no
-longer fits a template where every account is verified by an emailed code
-(ADR-009) and every sensitive action is protected by step-up (ADR-008).
+Without a reset or a change of password, a user who forgot the password is
+locked out, and a user who knows it cannot rotate it. A password change that
+kept existing sessions would not fit a template where every account is verified
+by an emailed code (ADR-008) and every sensitive action is protected by step-up
+(ADR-007).
 
 The reset has to prove control of the mailbox without creating an account
 enumeration oracle worse than the one already accepted (`POST /users` answers
@@ -24,7 +24,7 @@ than sign-up.
   row. `POST /auth/password/reset` takes the code and the new password and needs
   that cookie, so the code is useless in any other browser. The code is stored
   as `HMAC-SHA256(JWT_SECRET, "password-reset:<uuid>:" + code)`, with 5 attempts
-  per row and the per-address 24h counter of ADR-010. The row stores the user's
+  per row and the per-address 24h counter of ADR-009. The row stores the user's
   `email_version`, and the update is a compare-and-set on it, so an email change
   between request and reset invalidates the reset.
 - **Same answer for unknown addresses.** The request always answers `202` with a
@@ -66,15 +66,13 @@ Rejected alternatives:
 
 - New table `password_resets`, new cookie, three routes, two emails and three
   audit actions (see `docs/AUTH.md`, `docs/ERRORS.md`, `docs/AUDIT.md`).
-- The password change statement of ADR-005 is superseded: a password change now
-  revokes the other sessions.
 - Residual risks:
   - The response time of `POST /auth/password/forgot` reveals registered emails
     (a known address sends an email synchronously), consistent with the `409` of
     `POST /users`.
   - Access tokens already issued stay valid for up to 15 minutes after a reset
     or change, because `AuthMiddleware` is stateless.
-  - The per-address code counter (ADR-010) is shared with sign-up and email
+  - The per-address code counter (ADR-009) is shared with sign-up and email
     change: 20 wrong codes lock every code flow of the address for 24 hours, so
     an anonymous attacker who holds a reset cookie can lock a victim out of
     resetting for that long.
@@ -83,7 +81,7 @@ Rejected alternatives:
     attacker can exhaust `EmailMaxCodeFailures` (5 requests per hour times 5
     wrong codes per cookie is 25, above 20) and observe
     `429 auth.email.codeLocked`, which an unknown address never returns. The
-    same steps lock the owner out of every code flow for 24 hours (ADR-010).
+    same steps lock the owner out of every code flow for 24 hours (ADR-009).
     Accepted because `POST /users` already reveals registered emails with 409.
   - `auth.passwordReset.sendFailed` is a 500 only for registered addresses, so
     a provider outage reveals registration. Accepted: hiding it would leave
