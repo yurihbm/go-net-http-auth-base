@@ -35,6 +35,7 @@ Prefer these project skills (`.claude/skills/`) over writing the boilerplate by 
 
 - `go-resource-scaffolder`: scaffolds a vertical slice (domain, repository with integration tests, service and controller with unit tests, mocks, factory): `npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular]` (e.g. `Product` creates `products_controller.go`, `Auth --singular` creates `auth_controller.go`). Then follow the printed next steps (wire the service in `dependencies.go`, register the factory in `internal/factories/handler.go`, add the table and queries, implement the repository placeholders).
 - `go-migration-scaffolder`: schema and query workflow (`npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>`). During the template phase do not run its script (see below).
+- `go-endpoint-checklist`: checklist for adding an endpoint to an existing controller (DTO, service method and mock, handler with swag annotations, route guards, docs, tests), ending with `make check`.
 
 ## Commands
 
