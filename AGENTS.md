@@ -106,6 +106,7 @@ Local choices (naming, a new helper, a refactor that keeps behavior) do not need
 | Telemetry, logging, dashboards | `.claude/rules/telemetry.md` | telemetry, middlewares, logger, tracers, Grafana, `cmd/**` |
 | Auth and email invariants | `.claude/rules/auth.md` | auth, users, sessions, step-up, sign-up and email files |
 | Environment variables | `.claude/rules/config.md` | `config/**`, `internal/env/**`, `cmd/*/main.go`, compose files, E2E `TestMain` |
+| CI, Docker, compose, Traefik | `.claude/rules/ops.md` | `docker/**`, `.github/**`, `.dockerignore`, `Makefile` |
 | Sign-up, OAuth, sessions, step-up, email change | `docs/AUTH.md` | read on demand |
 | Error keys and mapping | `docs/ERRORS.md` | read on demand |
 | Audit log actions | `docs/AUDIT.md` | read on demand |
