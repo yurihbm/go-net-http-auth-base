@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,6 +32,8 @@ const (
 
 	defaultRateLimitRequestsPerSecond = 20.0
 	defaultRateLimitBurst             = 50
+	defaultCredentialsPerMinute       = 5.0
+	defaultCredentialsBurst           = 10
 
 	defaultSessionMaxAge      = 30 * 24 * time.Hour
 	defaultMaxSessionsPerUser = 10
@@ -111,6 +114,9 @@ type TelemetryConfig struct {
 type RateLimitConfig struct {
 	RequestsPerSecond float64
 	Burst             int
+
+	CredentialsPerMinute float64
+	CredentialsBurst     int
 }
 
 type envReader struct {
@@ -198,6 +204,9 @@ func Load() (*Config, error) {
 		RateLimit: RateLimitConfig{
 			RequestsPerSecond: read(r, env.LookupFloat, "RATE_LIMIT_REQUESTS_PER_SECOND", defaultRateLimitRequestsPerSecond),
 			Burst:             read(r, env.LookupInt, "RATE_LIMIT_BURST", defaultRateLimitBurst),
+
+			CredentialsPerMinute: read(r, env.LookupFloat, "RATE_LIMIT_CREDENTIALS_PER_MINUTE", defaultCredentialsPerMinute),
+			CredentialsBurst:     read(r, env.LookupInt, "RATE_LIMIT_CREDENTIALS_BURST", defaultCredentialsBurst),
 		},
 
 		Email: EmailConfig{
@@ -239,6 +248,14 @@ func Load() (*Config, error) {
 		return nil, errors.New("RATE_LIMIT_BURST must be positive")
 	}
 
+	if perMinute := cfg.RateLimit.CredentialsPerMinute; !(perMinute > 0) || math.IsInf(perMinute, 0) {
+		return nil, errors.New("RATE_LIMIT_CREDENTIALS_PER_MINUTE must be positive")
+	}
+
+	if cfg.RateLimit.CredentialsBurst <= 0 {
+		return nil, errors.New("RATE_LIMIT_CREDENTIALS_BURST must be positive")
+	}
+
 	if cfg.DBStatsLogInterval <= 0 {
 		return nil, errors.New("DB_STATS_LOG_INTERVAL must be positive")
 	}
@@ -268,6 +285,29 @@ func Load() (*Config, error) {
 		for _, v := range required {
 			if v.value == "" {
 				return nil, fmt.Errorf("%s not set in environment", v.name)
+			}
+		}
+	}
+
+	if cfg.IsProduction() {
+		if slices.Contains(cfg.CORS.AllowedOrigins, "*") {
+			return nil, errors.New("CORS_ALLOWED_ORIGINS must not contain * in production")
+		}
+
+		httpsURLs := []struct {
+			name   string
+			values []string
+		}{
+			{"API_URL", []string{cfg.APIURL}},
+			{"EMAIL_CHANGE_REVERT_URL", []string{cfg.Email.ChangeRevertURL}},
+			{"EMAIL_OAUTH_LINK_REVERT_URL", []string{cfg.Email.OAuthLinkRevertURL}},
+			{"OAUTH_CALLBACK_ALLOW_LIST", cfg.OAuth.CallbackAllowList},
+		}
+		for _, v := range httpsURLs {
+			for _, value := range v.values {
+				if parsed, err := url.Parse(value); err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+					return nil, fmt.Errorf("%s must contain only absolute https URLs in production", v.name)
+				}
 			}
 		}
 	}

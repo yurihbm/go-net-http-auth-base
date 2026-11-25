@@ -1,90 +1,58 @@
 ---
 name: go-resource-scaffolder
-description: 'Scaffolds a new resource (Controller, Service, Repository, Domain, Factory) for the Go REST API project. Use when asked to "create a new resource", "add a new entity", "scaffold a vertical slice" or "generate a new API endpoint".'
+description: Scaffolds a new resource for this Go API as a vertical slice (domain model and interfaces, repository with integration tests, service and controller with unit tests, mocks, factory) from templates, then lists the wiring steps. Use when asked to create a new resource or entity, scaffold a vertical slice, or add endpoints for a resource that has no controller yet; to add an endpoint to an existing controller, use go-endpoint-checklist.
 ---
 
 # Go Resource Scaffolder
 
-This skill generates the boilerplate code for a new resource in the layered architecture of the `go-net-http-auth-base` project.
-
-## Capabilities
-
-- Generates Domain Model and Interface (`internal/domain/<resources>.go`)
-- Generates Repository implementation (`internal/repositories/<resources>_repository.go`)
-- Generates Service implementation (`internal/services/<resources>_service.go`)
-- Generates Controller implementation (`internal/controllers/<resources>_controller.go`)
-- Generates Factory for dependency injection (`internal/factories/<resources>_factory.go`)
-- Generates testify mocks for the Service and Repository (`internal/mocks/<resources>_{service,repository}_mock.go`)
-- Generates Unit Tests for Service and Controller
-- Generates Integration Tests for Repository (`internal/repositories/<resources>_repository_test.go`)
-
-The generated code follows the conventions in `AGENTS.md` and `.claude/rules/`: `context.Context` first on every service and repository method, `api.DecodeAndValidate` + `api.HandleError` in the controller, swag annotations on every handler, domain errors in the repository, and a factory that reads from `*factories.Dependencies`. It compiles and passes `go vet`, `golangci-lint` and the unit tests right away. The repository methods are placeholders that return an `InternalServerError` until the queries exist, so the repository integration tests fail until step 4 below.
-
-## Usage
-
-To scaffold a new resource, run the `scaffold.ts` script provided in the `scripts` directory.
-
-### Command
+## Run the Script
 
 ```bash
 npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular|-s]
 ```
 
-### Options
+`<ResourceName>` is PascalCase (`Product`). File and type names are plural by default (`products_service.go`, `ProductsService`); `--singular` keeps them singular for inherently singular resources (`Auth` gives `auth_service.go`).
 
-- `<ResourceName>`: The name of the resource (e.g., `Product`, `User`).
-- `--singular`, `-s`: Force singular naming for files and interfaces (e.g., `auth_service.go` instead of `auths_service.go`). Useful for resources that are inherently singular like `Auth`.
+For `Product` it creates:
 
-### Example
-
-**Default (Plural naming - Recommended for entities):**
-
-```bash
-npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts Product
-```
-
-This will create:
 - `internal/domain/products.go`
-- `internal/repositories/products_repository.go`
-- `internal/services/products_service.go`
-- `internal/controllers/products_controller.go`
+- `internal/repositories/products_repository.go` and `products_repository_test.go`
+- `internal/services/products_service.go` and `products_service_test.go`
+- `internal/controllers/products_controller.go` and `products_controller_test.go`
 - `internal/factories/products_factory.go`
-- `internal/mocks/products_repository_mock.go`, `internal/mocks/products_service_mock.go`
-- `internal/services/products_service_test.go`, `internal/controllers/products_controller_test.go`
-- `internal/repositories/products_repository_test.go`
+- `internal/mocks/products_repository_mock.go` and `products_service_mock.go`
 
-**Singular naming:**
+The generated code follows `AGENTS.md` and `.claude/rules/` (`ctx` first, `api.DecodeAndValidate` and `api.HandleError`, swag annotations, domain errors) and passes build, vet, lint and the unit tests as generated. The repository methods are placeholders returning an `InternalServerError`, so the repository integration tests fail until step 4.
 
-```bash
-npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts Auth --singular
+## Next Steps
+
+The script prints these steps with the names filled in. Copy the checklist into your reply and tick items as they are done:
+
+```
+- [ ] 1. Wire the service in dependencies.go
+- [ ] 2. Register the factory in handler.go
+- [ ] 3. Add the table to the schema and to every truncateTables
+- [ ] 4. Write the queries, run make sqlc-gen, implement the repository
+- [ ] 5. Add fields, rules and tests; run make swagger-gen
+- [ ] 6. Run make check
 ```
 
-This will create:
-- `internal/domain/auth.go`
-- `internal/repositories/auth_repository.go`
-- ...
+1. Wiring: build the service once in `NewDependencies` (`internal/factories/dependencies.go`), on the shared `db`:
+   ```go
+   type Dependencies struct {
+       // ...
+       ProductsService domain.ProductsService
+   }
 
-## Next Steps After Scaffolding
+   // in NewDependencies, before the return
+   productsService := services.NewProductsService(repositories.NewProductsPostgresRepository(db))
 
-The script prints these steps with the resource names filled in.
-
-1.  **Wiring**: Build the service once in the composition root, `internal/factories/dependencies.go`:
-    ```go
-    type Dependencies struct {
-        // ...
-        ProductsService domain.ProductsService
-    }
-
-    // in NewDependencies, before the return
-    productsService := services.NewProductsService(repositories.NewProductsPostgresRepository(db))
-
-    // in the returned literal
-    ProductsService: productsService,
-    ```
-2.  **Routes**: Register the factory in `NewHandler` (`internal/factories/handler.go`), next to the other factories:
-    ```go
-    ProductsFactory(deps).RegisterRoutes(mux)
-    ```
-3.  **Schema**: While this repository is still a template, add the table to `postgres/migrations/000001_init_db.up.sql` (and its `DROP` to `.down.sql`) instead of a new migration file. Add the table to `truncateTables` in `internal/repositories/repositories_test.go`.
-4.  **Queries**: Write `postgres/queries/products.sql`, run `make sqlc-gen`, and replace the placeholders in `products_repository.go` following `users_repository.go` (`parseUUID`, `isNoRowsError`, `isConflictError`, `domain.NewInternalServerError`, a `toProduct` mapper). The repository integration tests should then pass.
-5.  **Fields and rules**: Add the fields to the domain model and the DTOs (`validate` tags on create DTOs, pointer fields on update DTOs), map them in the service, extend the tests, add authorization if the resource is per-owner (see `domain.Actor`), and run `make swagger-gen`.
+   // in the returned literal
+   ProductsService: productsService,
+   ```
+   A service that needs the clock takes `now func() time.Time` as its last constructor parameter and receives `time.Now` here (ADR-016).
+2. Routes: add `ProductsFactory(deps).RegisterRoutes(mux)` in `NewHandler` (`internal/factories/handler.go`), next to the other factories. Pick the route guards as described in the `go-endpoint-checklist` skill.
+3. Schema: while this repository is a template, add the table to `postgres/migrations/000001_init_db.up.sql` and its `DROP` to `.down.sql` (the `go-migration-scaffolder` skill has the workflow). Add the table to every `truncateTables`: `internal/repositories/repositories_test.go`, `internal/tests/integration/integration_test.go` and `internal/tests/e2e/helpers_test.go`.
+4. Queries: write `postgres/queries/products.sql`, run `make sqlc-gen`, and replace the placeholders in `products_repository.go` following `users_repository.go` (`parseUUID`, `isNoRowsError`, `isConflictError`, `domain.NewInternalServerError`, a `toProduct` mapper). The repository integration tests then pass.
+5. Fields and rules: add the fields to the model and DTOs (`validate` tags on create DTOs, pointer fields on update DTOs), map them in the service, add authorization with `domain.Actor` if the resource is per owner, extend the tests, document new error keys in `docs/ERRORS.md`, and run `make swagger-gen`.
+6. Validate: run `make check` and fix every failure until it passes.

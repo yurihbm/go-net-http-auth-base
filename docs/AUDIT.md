@@ -20,7 +20,7 @@ Defines the core audit data structures and interfaces:
 
 ### 2. Controllers (`internal/controllers/audit_helpers.go`, `audit_controller.go`)
 
-- **Writing**: `UsersController` and `AuthController` call the unexported `auditLog` helper on both the success and failure paths of each audited action. It fills `RequestUUID` from `shared.RequestContextData` and the client IP and user agent from the request, then calls `AuditService.Log`. The IP is `RequestContextData.ClientIP`: the `r.RemoteAddr` host, or the address resolved from `X-Forwarded-For` when the connection comes from a proxy in `TRUSTED_PROXIES` (see ADR-013). `X-Real-IP` is ignored. A persistence failure is only logged (`audit log failed`) and never changes the HTTP response.
+- **Writing**: `UsersController` and `AuthController` call the unexported `auditLog` helper on both the success and failure paths of each audited action. It fills `RequestUUID` from `shared.RequestContextData` and the client IP and user agent from the request, then calls `AuditService.Log`. The IP is `RequestContextData.ClientIP`: the `r.RemoteAddr` host, or the address resolved from `X-Forwarded-For` when the connection comes from a proxy in `TRUSTED_PROXIES` (see ADR-012). `X-Real-IP` is ignored. A persistence failure is only logged (`audit log failed`) and never changes the HTTP response.
 - **Reading**: `AuditController` serves `GET /audit-logs` (see [Listing Audit Logs](#listing-audit-logs)).
 
 ### 3. Service Layer (`internal/services/audit_service.go`)
@@ -110,7 +110,7 @@ The domain package defines type-safe constants for common values:
 | Query parameter                                        | Description                                                    |
 | ------------------------------------------------------ | -------------------------------------------------------------- |
 | `action`, `resource_type`, `status`, `actor_uuid`      | Exact-match filters                                            |
-| `start_date`, `end_date`                               | RFC 3339 timestamps bounding `created_at`                      |
+| `start_date`, `end_date`                               | RFC 3339 timestamps bounding `created_at` (`start_date` inclusive, `end_date` exclusive) |
 | `limit`                                                | Page size, 1 to 100 (default 20)                               |
 | `cursor`                                               | `meta.next_cursor` from the previous page                      |
 
@@ -264,7 +264,7 @@ type AuditLogsPartitionManager struct {
 
 ### Initialization
 
-On application startup (`cmd/main.go`):
+On application startup (`cmd/api/main.go`):
 
 ```go
 partitionManager := infra.NewAuditLogsPartitionManager(pool)
@@ -278,7 +278,7 @@ This ensures the current and next month's partitions exist immediately.
 
 ### Maintenance Schedule
 
-A background goroutine (`runEvery` in `cmd/main.go`) runs maintenance every 24 hours and stops when the shutdown signal cancels `ctx`; graceful shutdown waits for it:
+A background goroutine (`runEvery` in `cmd/api/main.go`) runs maintenance every 24 hours and stops when the shutdown signal cancels `ctx`; graceful shutdown waits for it:
 
 ```go
 runEvery(

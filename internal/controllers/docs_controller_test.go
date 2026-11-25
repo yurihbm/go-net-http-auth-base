@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+const swaggerCSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'"
+
 type rejectingMiddleware struct {
 	status int
 }
@@ -55,6 +57,20 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Body.String(), "swagger-ui")
+	})
+
+	t.Run("success - UI relaxes the CSP for its inline scripts", func(t *testing.T) {
+		router := http.NewServeMux()
+		authMiddleware := new(mocks.AuthMiddlewareMock)
+		roleMiddleware := new(mocks.AuthMiddlewareMock)
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		controllers.NewDocsController(authMiddleware, roleMiddleware).RegisterRoutes(router)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/swagger/index.html", nil))
+
+		assert.Equal(t, swaggerCSP, w.Header().Get("Content-Security-Policy"))
 	})
 
 	t.Run("success - UI injects the logout button and the logout interceptor", func(t *testing.T) {
@@ -126,7 +142,7 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
 		assert.Equal(t, "DENY", w.Header().Get("X-Frame-Options"))
-		assert.Equal(t, "frame-ancestors 'none'", w.Header().Get("Content-Security-Policy"))
+		assert.Equal(t, swaggerCSP, w.Header().Get("Content-Security-Policy"))
 		assert.Contains(t, w.Body.String(), "/auth/login")
 	})
 
@@ -139,4 +155,21 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
+}
+
+type passthroughMiddleware struct{}
+
+func (passthroughMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
+	return next
+}
+
+const limiterMarkerHeader = "X-Credentials-Limiter"
+
+type limiterMarker struct{}
+
+func (limiterMarker) Use(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(limiterMarkerHeader, "true")
+		w.WriteHeader(http.StatusTeapot)
+	}
 }

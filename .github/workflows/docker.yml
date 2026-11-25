@@ -1,0 +1,50 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docker: ${{ steps.diff.outputs.docker }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check Docker build inputs changed
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if git diff --quiet "$BASE_SHA" HEAD -- docker go.mod go.sum .dockerignore .github/workflows/docker.yml; then
+            echo "docker=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docker=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  docker-build:
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        run: docker build -f docker/Dockerfile .

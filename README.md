@@ -68,6 +68,8 @@ go-net-http-auth-base/
 - Go 1.27 or higher
 - Docker and Docker Compose
 - Make
+- Node.js 18+ (`npx tsx` runs the scaffolder scripts in `.claude/skills/`)
+- `$(go env GOPATH)/bin` on your `PATH`, where `make setup` installs `air`, `migrate`, `sqlc` and `swag`
 
 ### Installation
 
@@ -78,16 +80,9 @@ go-net-http-auth-base/
    cd go-net-http-auth-base
    ```
 
-2. **Rename base module (optional)**
+2. **Rename the base module (optional)**
 
-   ```bash
-   # On Linux:
-   find . -type f -not -path './.git/*' -exec sed -i 's/go-net-http-auth-base/{NEW_BASE_MODULE_NAME}/g' {} +
-   # On Mac:
-   find . -type f -not -path './.git/*' -exec sed -i '' 's/go-net-http-auth-base/{NEW_BASE_MODULE_NAME}/g' {} +
-   ```
-
-   Replace `{NEW_BASE_MODULE_NAME}` with the desired name for the project.
+   See [Using this template](#-using-this-template).
 
 3. **Install development tools**
 
@@ -96,6 +91,8 @@ go-net-http-auth-base/
    ```
 
    This installs the pinned versions of `air`, `sqlc`, `migrate` and `swag`, and runs `go mod tidy`.
+
+   Optionally run `make hooks` to enable the versioned pre-commit hook (see [CONTRIBUTING.md](CONTRIBUTING.md#-git-hooks)).
 
 4. **Configure environment**
 
@@ -132,7 +129,7 @@ go-net-http-auth-base/
 ```bash
 make promote-admin email=you@example.com
 # production
-docker compose -f docker/docker-compose.prod.yaml exec api ./main promote-admin you@example.com
+docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./promote-admin you@example.com
 ```
 
 The command only promotes existing users, never creates them, and is idempotent: running it again for an admin is a no-op.
@@ -146,6 +143,7 @@ air             # Run with live reload (development)
 make setup      # Install all required tools for development
 make build      # Build production binary (outputs to bin/app)
 make tidy       # Tidy go.mod and go.sum
+make hooks      # Enable the pre-commit hook (opt-in)
 ```
 
 ### Database
@@ -177,34 +175,14 @@ go test ./... -cover             # Run with coverage report
 make test-e2e                    # Only the HTTP end-to-end suite (needs Docker)
 make test-cover                  # Coverage (all suites count) without generated and wiring packages (writes coverage.out)
 make show-cover                  # test-cover plus the per-function report CI posts on PRs
+make check                       # Pre-PR checks: build, vet, lint, all tests, Swagger and sqlc drift
 ```
 
 ## 🌐 API Endpoints
 
 Every response uses the [standard format](#api-response-format). Authenticated endpoints read the `access_token` cookie set by login.
 
-| Method   | Path                          | Auth  | Description                                                         |
-| -------- | ----------------------------- | ----- | ------------------------------------------------------------------- |
-| `POST`   | `/users`                      | -     | Start a sign-up: emails a 6-digit code and sets the `pending_signup` cookie |
-| `POST`   | `/auth/signup/verify`         | -     | Create the account with the code (needs the `pending_signup` cookie); signs in |
-| `POST`   | `/auth/signup/resend`         | -     | Send a new sign-up code (needs the `pending_signup` cookie)         |
-| `GET`    | `/users/me`                   | User  | Current user                                                        |
-| `POST`   | `/users/me/email`             | User  | Request an email change (6-digit code sent to the new address)      |
-| `POST`   | `/users/me/email/confirm`     | User  | Confirm the email change with the code, in the same session; signs out every device |
-| `GET`    | `/users/{uuid}`               | User  | Get a user (self or admin)                                          |
-| `PUT`    | `/users/{uuid}`               | User  | Update a user's name (self or admin)                                |
-| `DELETE` | `/users/{uuid}`               | User  | Delete a user (self or admin)                                       |
-| `POST`   | `/auth/login`                 | -     | Email/password login; sets the `access_token` and `refresh_token` cookies |
-| `POST`   | `/auth/refresh`               | -     | Rotate the refresh token (reads the `refresh_token` cookie)        |
-| `POST`   | `/auth/logout`                | User  | End the current session                                             |
-| `GET`    | `/auth/{provider}/login`      | -     | Start OAuth (`google`, `github`, `microsoft`)                       |
-| `GET`    | `/auth/{provider}/callback`   | -     | OAuth callback                                                      |
-| `GET`    | `/audit-logs`                 | Admin | List audit logs (filters and cursor pagination)                     |
-| `GET`    | `/swagger/`                   | -     | Swagger UI login gate                                               |
-| `GET`    | `/swagger/index.html`         | Admin | Swagger UI and spec                                                 |
-| `GET`    | `/health`, `/ready`           | -     | Liveness, and readiness (checks the database)                       |
-
-The Swagger UI has the full request and response schemas.
+The routes, request and response schemas and auth requirements are documented in the Swagger UI at `/swagger/`, which is the source of truth. `/swagger/` serves a login page; the UI itself needs an admin session (sign in with an admin account, then it loads). The flows (sign-up, OAuth, sessions, step-up, email change) are explained in [docs/AUTH.md](docs/AUTH.md). `GET /health` and `GET /ready` are the liveness and readiness (database) probes.
 
 OAuth callback contract for the frontend: the callback always ends in a `302` to the `redirect_uri` of the login step.
 When the provider does not vouch for the email (GitHub unverified primary email, Microsoft), the user is not signed in:
@@ -232,10 +210,11 @@ All variables are read and validated once at startup in `config/config.go`; the 
 | `SESSION_MAX_AGE`                                                        | `720h` (30 days)               | Absolute lifetime of a login session (never extended by refreshes)                                  |
 | `MAX_SESSIONS_PER_USER`                                                  | `10`                           | Sessions kept per user; the least recently used is evicted                                          |
 | `GOOGLE_CLIENT_ID`/`_SECRET`, `GITHUB_CLIENT_ID`/`_SECRET`, `MICROSOFT_CLIENT_ID`/`_SECRET` | -   | OAuth credentials                                                                                   |
-| `OAUTH_CALLBACK_ALLOW_LIST`                                              | - (**required** in production) | Comma-separated `redirect_uri` values accepted after OAuth (exact match)                            |
-| `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`                           | -                              | Comma-separated CORS allow lists (exact match)                                                      |
+| `OAUTH_CALLBACK_ALLOW_LIST`                                              | - (**required** in production) | Comma-separated `redirect_uri` values accepted after OAuth (exact match); https only in production                            |
+| `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`                           | -                              | Comma-separated CORS allow lists (exact match); no `*` in production                                                      |
 | `RATE_LIMIT_REQUESTS_PER_SECOND`, `RATE_LIMIT_BURST`                     | `20`, `50`                     | Per-IP token bucket                                                                                 |
-| `TRUSTED_PROXIES`                                                        | -                              | Comma-separated CIDRs or IPs of reverse proxies whose `X-Forwarded-For` is trusted ([ADR-013](docs/adr/ADR-013-trusted-proxies.md)) |
+| `RATE_LIMIT_CREDENTIALS_PER_MINUTE`, `RATE_LIMIT_CREDENTIALS_BURST`       | `5`, `10`                      | Stricter per-IP bucket on credential endpoints (login, sign-up, password reset, step-up; [ADR-015](docs/adr/ADR-015-http-edge-hardening.md)) |
+| `TRUSTED_PROXIES`                                                        | -                              | Comma-separated CIDRs or IPs of reverse proxies whose `X-Forwarded-For` is trusted ([ADR-012](docs/adr/ADR-012-trusted-proxies.md)) |
 | `RESEND_API_KEY`, `EMAIL_FROM`                                           | - (**required** outside development) | Resend credentials and sender; without a key, emails are only logged                          |
 | `EMAIL_CHANGE_REVERT_URL`                                                | - (**required** outside development) | Frontend URL that receives the "it wasn't me" revert token                                     |
 | `EMAIL_OAUTH_LINK_REVERT_URL`                                             | - (**required** outside development) | Frontend URL that receives the OAuth link undo token                                           |
@@ -246,12 +225,12 @@ All variables are read and validated once at startup in `config/config.go`; the 
 
 ### Docker for Development
 
-You may use the `docker/docker-compose.dev.yaml` file for development (it does not run the API itself; use `air`). It provides a local Postgres Database (localhost:5432), the pgAdmin application (localhost:5050) and the Grafana LGTM stack (Grafana at http://localhost:3000, default `admin`/`admin`; OTLP gRPC on 4317 and OTLP HTTP on 4318). You should provide a valid .env file.
+You may use the `docker/docker-compose.dev.yaml` file for development (it does not run the API itself; use `air`). It provides a local Postgres Database (localhost:5432), the pgAdmin application (localhost:5050) and the Grafana LGTM stack (Grafana at http://localhost:3000, default `admin`/`admin`; OTLP gRPC on 4317 and OTLP HTTP on 4318). Every port is bound to `127.0.0.1` only. You should provide a valid .env file and always pass it with `--env-file .env`: the compose files read it through `${VAR}` interpolation, so each container receives only the variables it needs (`POSTGRES_*` for the database, `DATABASE_URL` for `migrate`, `PGADMIN_DEFAULT_EMAIL`/`PGADMIN_DEFAULT_PASSWORD` for pgAdmin); only the API gets the whole file.
 
 ```bash
 docker compose --env-file .env -f docker/docker-compose.dev.yaml up -d --build  # Start services
-docker compose -f docker/docker-compose.dev.yaml down                           # Stop services
-docker compose -f docker/docker-compose.dev.yaml logs                           # View logs
+docker compose --env-file .env -f docker/docker-compose.dev.yaml down                  # Stop services
+docker compose --env-file .env -f docker/docker-compose.dev.yaml logs                  # View logs
 ```
 
 To send traces and metrics to the LGTM stack, set these variables in your `.env`:
@@ -267,7 +246,7 @@ To build and run the application in a production-ready Docker container, you hav
 
 #### Option 1: Docker Compose with Traefik (Recommended)
 
-This method sets up the application, a PostgreSQL database and [Traefik](https://traefik.io) as reverse proxy and TLS terminator with automatic Let's Encrypt certificates ([ADR-014](docs/adr/ADR-014-traefik-reverse-proxy.md)). TLS is required in production because the auth cookies are `Secure`/`__Host-`.
+This method sets up the application, a PostgreSQL database and [Traefik](https://traefik.io) as reverse proxy and TLS terminator with automatic Let's Encrypt certificates ([ADR-013](docs/adr/ADR-013-traefik-reverse-proxy.md)). TLS is required in production because the auth cookies are `Secure`/`__Host-`.
 
 1. **Point DNS and open ports**: create an A/AAAA record for your domain pointing to the VPS and allow inbound ports 80 and 443 (80 redirects to 443 and serves as fallback for Let's Encrypt).
 
@@ -291,10 +270,10 @@ This method sets up the application, a PostgreSQL database and [Traefik](https:/
 4. **Create the first admin** (after signing up through the API):
 
    ```bash
-   docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./main promote-admin <email>
+   docker compose --env-file .env -f docker/docker-compose.prod.yaml exec api ./promote-admin <email>
    ```
 
-Only Traefik publishes ports (80 and 443). The database sits on an `internal` network with no external access, and the API is reachable only through Traefik, which reads the Docker socket read-only to discover routes by label.
+Only Traefik publishes ports (80 and 443). The database sits on an `internal` network with no external access, and the API is reachable only through Traefik, which routes by the versioned file `docker/traefik/dynamic.yaml` (file provider; the Docker socket is not mounted, [ADR-013](docs/adr/ADR-013-traefik-reverse-proxy.md)). The domain and port come from `API_DOMAIN` and `API_PORT`. To add another service to the same Traefik, add a router and a service to that file. Always pass `--env-file .env` to `docker compose`, also for `down`, `logs` and `exec`.
 
 #### Option 2: Manual Build & Run (no TLS)
 
@@ -416,16 +395,59 @@ Logs carry `trace_id`/`span_id`, so a trace in Tempo links to its logs in Loki (
 ## 🔐 Security
 
 - Passwords are hashed using bcrypt
-- Accounts only exist once the email is proven: sign-up emails a 6-digit code that only works in the browser that started it (HttpOnly `pending_signup` cookie), with per-address send and failure limits ([ADR-009](docs/adr/ADR-009-otp-email-proof-and-verified-accounts.md))
+- Accounts only exist once the email is proven: sign-up emails a 6-digit code that only works in the browser that started it (HttpOnly `pending_signup` cookie), with per-address send and failure limits ([ADR-008](docs/adr/ADR-008-otp-email-proof-and-verified-accounts.md))
 - Short-lived JWTs (15 min access, 7 day refresh) sent only as `HttpOnly`, `SameSite=Strict` cookies (`Secure` outside development); the app refuses to boot with a `JWT_SECRET` shorter than 32 characters
 - Server-side, per-device sessions with refresh token rotation and reuse detection; logout ends the current session
 - OAuth with PKCE, a state nonce bound to the browser, an exact `redirect_uri` allow list, and account creation/linking only through emails proven by the provider or by a one-time code
 - Self-or-admin authorization on user endpoints, admin-only audit logs and Swagger UI
-- Exact-match CORS and per-IP rate limiting; `X-Forwarded-For` is only trusted from the proxies listed in `TRUSTED_PROXIES` ([ADR-013](docs/adr/ADR-013-trusted-proxies.md))
+- Exact-match CORS and per-IP rate limiting; `X-Forwarded-For` is only trusted from the proxies listed in `TRUSTED_PROXIES` ([ADR-012](docs/adr/ADR-012-trusted-proxies.md))
 - Audit log of security-relevant actions ([docs/AUDIT.md](docs/AUDIT.md))
 - Prepared statements via sqlc to prevent SQL injection
 
 The threat model and the accepted residual risks (for example, access tokens stay valid for up to 15 minutes after logout) are in [ADR-005](docs/adr/ADR-005-security-approach.md).
+
+## 🧩 Using this template
+
+Checklist after creating a repository from this template:
+
+1. **Rename the project.**
+
+   ```bash
+   make rename module=github.com/acme/foo name=foo title="Foo API"
+   ```
+
+   `module` is the Go module path, `name` a lowercase slug and `title` the human-readable name. The command rewrites the repository text files (it skips `.git/`, `.env*`, `go.sum`, binaries and `docs/swagger/`, which is regenerated at the end with `make swagger-gen`, so `swag` must be installed):
+
+   | Occurrence | Becomes |
+   | --- | --- |
+   | `module` line in `go.mod` and Go import paths (including the scaffolder templates) | `module` |
+   | `go-net-http-auth-base` as a name: default `OTEL_SERVICE_NAME`, `User-Agent`, Grafana dashboards and provisioning, the dev compose mount, Docker examples | `name` |
+   | `${PROJECT_NAME:-auth-base}` in the compose files | `${PROJECT_NAME:-<name>}` |
+   | `Go net/http Auth Base` (README and CONTRIBUTING headings) and the Swagger `@title` (`... API`) | `title` |
+   | `yurihbm/go-net-http-auth-base` (badges, clone URL) | `<owner>/<repo>` when `module` starts with `github.com/<owner>/<repo>`; otherwise left in place and listed as a manual step |
+
+   The command fails when `module` is already the current one, so a repeated run with the same arguments changes nothing. Only the module path is read from `go.mod`; the other strings are matched literally, so after a rename a later one only updates the module path and Go imports.
+2. Set `PROJECT_NAME` in `.env`.
+3. Review the diff and commit it.
+4. Remove the rename tool, which is only needed once: delete `tools/rename/`, the `rename` target (and its `.PHONY` entry) in the `Makefile`, the `tools/` exclusion in `.golangci.yml` and step 1 of this checklist.
+5. Update the copyright holder in `LICENSE`.
+6. Add a `CODEOWNERS` file in `.github/`.
+7. Replace the placeholder contact in `SECURITY.md`.
+8. GitHub disables scheduled workflows after 60 days without repository activity; re-enable them in the Actions tab.
+
+### Leaving the template phase
+
+While this is a template, ADRs are edited in place to describe its final state, and schema changes go into `postgres/migrations/000001_init_db.*`. Once the first real deployment exists, switch both rules, in this order:
+
+1. Make the ADRs immutable: delete the template-phase point in `docs/adr/README.md` ("Writing a new ADR"), the template-phase sentence of the **Immutability** bullet in `AGENTS.md` (`CLAUDE.md` is a symlink to it) and the template-phase clause about ADRs in `CONTRIBUTING.md`.
+2. Stop editing the initial migration and use `make migrate-create` instead. Update the "Template Phase" statements in `AGENTS.md`, `CONTRIBUTING.md`, this README, `.claude/rules/repositories.md` and `.claude/skills/go-migration-scaffolder`, and record the change in a new ADR that supersedes [ADR-003](docs/adr/ADR-003-database-strategy.md).
+
+### Recommended GitHub settings
+
+- Branch protection on `main`: require a pull request, require signed commits and require these status checks, named after the jobs in `.github/workflows`: `lint`, `test`, `sqlc-drift`, `govulncheck` and `docker-build`.
+- `docker-build` builds the image only when `docker/**`, `go.mod`, `go.sum`, `.dockerignore` or `docker.yml` change. Otherwise the job is skipped, which satisfies the required check. Keep that filter in the `changes` job rather than in `on.paths`: a workflow skipped by a trigger filter never reports its checks, and a required check that never reports blocks the merge.
+- Allow merge commits only. Rebase and squash merges are re-created by GitHub and produce unsigned commits on `main`.
+- Enable Dependabot alerts and security updates, and private vulnerability reporting (see [SECURITY.md](SECURITY.md)).
 
 ## 🤝 Contributing
 

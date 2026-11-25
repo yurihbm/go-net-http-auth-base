@@ -11,8 +11,9 @@ import (
 
 func NewHandler(ctx context.Context, deps *Dependencies, cfg *config.Config, tel *telemetry.Telemetry) http.Handler {
 	mux := http.NewServeMux()
-	UsersFactory(deps, cfg).RegisterRoutes(mux)
-	AuthFactory(deps, cfg).RegisterRoutes(mux)
+	credentialsLimiter := CredentialsRateLimitFactory(ctx, cfg.RateLimit)
+	UsersFactory(deps, cfg, credentialsLimiter).RegisterRoutes(mux)
+	AuthFactory(deps, cfg, credentialsLimiter).RegisterRoutes(mux)
 	HealthFactory(deps).RegisterRoutes(mux)
 	AuditFactory(deps).RegisterRoutes(mux)
 	DocsFactory(deps).RegisterRoutes(mux)
@@ -25,15 +26,18 @@ func NewHandler(ctx context.Context, deps *Dependencies, cfg *config.Config, tel
 	requestIDMiddleware := RequestUUIDFactory()
 	requestContextDataMiddleware := RequestContextDataFactory()
 	clientIPMiddleware := ClientIPFactory(cfg.TrustedProxies)
+	securityHeadersMiddleware := SecurityHeadersFactory(cfg)
 	return requestContextDataMiddleware.Use(
 		clientIPMiddleware.Use(
-			requestIDMiddleware.Use(
-				telemetryMiddleware.Use(
-					loggerMiddleware.Use(
-						recoverMiddleware.Use(
-							corsMiddleware.Use(
-								rateLimitMiddleware.Use(
-									mux,
+			securityHeadersMiddleware.Use(
+				requestIDMiddleware.Use(
+					telemetryMiddleware.Use(
+						loggerMiddleware.Use(
+							recoverMiddleware.Use(
+								corsMiddleware.Use(
+									rateLimitMiddleware.Use(
+										mux,
+									),
 								),
 							),
 						),

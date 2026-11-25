@@ -32,7 +32,7 @@ func (p *microsoftOAuthProvider) GetUserInfo(ctx context.Context, code string, c
 		ID:    microsoftUser.ID,
 		Name:  microsoftUser.Name,
 		Email: microsoftUser.Email,
-		// The email is mutable and tenant-controlled, so it is always proven by code (ADR-009).
+		// The email is mutable and tenant-controlled, so it is always proven by code (ADR-008).
 		EmailVerified: false,
 	}, nil
 }

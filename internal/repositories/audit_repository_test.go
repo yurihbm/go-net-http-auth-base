@@ -220,6 +220,29 @@ func TestAuditPostgresRepository_List(t *testing.T) {
 		assert.Len(t, logs, 3)
 	})
 
+	t.Run("filter by date range - end date is exclusive", func(t *testing.T) {
+		boundary := time.Now().Add(-2 * time.Hour).Truncate(time.Second)
+		_, err := testDB.Exec(ctx, "UPDATE audit_logs SET created_at = $1 WHERE uuid = (SELECT uuid FROM audit_logs ORDER BY uuid LIMIT 1)", boundary)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_, _ = testDB.Exec(ctx, "UPDATE audit_logs SET created_at = now() WHERE created_at = $1", boundary)
+		})
+
+		start := boundary.Add(-1 * time.Hour).Unix()
+		end := boundary.Unix()
+		logs, total, err := repo.List(ctx, domain.ListAuditLogsDTO{Limit: 10, StartDate: &start, EndDate: &end})
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), total)
+		assert.Empty(t, logs)
+
+		start = boundary.Unix()
+		end = boundary.Add(time.Hour).Unix()
+		logs, total, err = repo.List(ctx, domain.ListAuditLogsDTO{Limit: 10, StartDate: &start, EndDate: &end})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		assert.Len(t, logs, 1)
+	})
+
 	t.Run("filter by date range - excludes all rows", func(t *testing.T) {
 		past := time.Now().Add(-48 * time.Hour).Unix()
 		pastEnd := time.Now().Add(-24 * time.Hour).Unix()

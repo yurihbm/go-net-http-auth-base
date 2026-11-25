@@ -69,7 +69,7 @@ The project implements a **Clean Architecture** inspired pattern, structured int
 
 - **Dependency Inversion**: High-level modules (Controllers) depend on abstractions (Interfaces defined in `internal/domain`), not concrete implementations.
 - **Domain-Centric**: The `internal/domain` package defines the core entities and interfaces, serving as the contract between layers.
-- **Dependency Injection**: `factories.NewDependencies` builds the shared repositories, services and middlewares once, and `cmd/main.go` passes them to thin per-controller factories, ensuring loose coupling and testability.
+- **Dependency Injection**: `factories.NewDependencies` builds the shared repositories, services and middlewares once, and `cmd/api/main.go` passes them to thin per-controller factories, ensuring loose coupling and testability.
 
 The reasoning behind these choices is recorded in the [Architecture Decision Records](docs/adr/README.md). [AGENTS.md](AGENTS.md) and the path-scoped rules in [`.claude/rules/`](.claude/rules/) describe the conventions in detail, and [docs/AUTH.md](docs/AUTH.md) the authentication and email flows (written for AI agents, but useful for humans too).
 
@@ -92,7 +92,7 @@ The reasoning behind these choices is recorded in the [Architecture Decision Rec
 
 ## 🧭 Architecture Decision Records
 
-Write an ADR in `docs/adr/` in the same PR when a decision changes or adds a convention, adds or replaces an infrastructure dependency, changes the security model, or is hard to reverse. Local choices (naming, a helper, a behavior-preserving refactor) do not need one. See [docs/adr/README.md](docs/adr/README.md) for the format and the rules (accepted ADRs are never rewritten, only superseded).
+Write an ADR in `docs/adr/` in the same PR when a decision changes or adds a convention, adds or replaces an infrastructure dependency, changes the security model, or is hard to reverse. Local choices (naming, a helper, a behavior-preserving refactor) do not need one. See [docs/adr/README.md](docs/adr/README.md) for the format and the rules (while this is a template, ADRs are edited to describe the final state; afterwards accepted ADRs are never rewritten, only superseded).
 
 ## 🛠️ Scaffolding Tools
 
@@ -133,7 +133,7 @@ Examples:
 
 - **Coverage**: We aim for **80%+ test coverage**.
 - **Unit Tests**: Write unit tests for all new services and controllers.
-- **Integration Tests**: Repository tests run against a real PostgreSQL started by testcontainers (`postgres.NewTestPool`), so a running Docker daemon is required. Each transactional flow needs a test in `internal/tests/integration` that forces a failure and asserts nothing was persisted; HTTP end-to-end flows live in `internal/tests/e2e` (ADR-016).
+- **Integration Tests**: Repository tests run against a real PostgreSQL started by testcontainers (`postgres.NewTestPool`), so a running Docker daemon is required. Each transactional flow needs a test in `internal/tests/integration` that forces a failure and asserts nothing was persisted; HTTP end-to-end flows live in `internal/tests/e2e` (ADR-006).
 - **Naming**: One `Test<Type>_<Method>` per method, with scenarios as `t.Run` subtests.
 - **Running Tests**:
   ```bash
@@ -148,12 +148,16 @@ Examples:
 2.  **Install dependencies**: Run `make setup`.
 3.  **Make your changes** following the code standards.
 4.  **Add tests** for your changes.
-5.  **Run tests** to ensure everything is working: `go test ./...`.
-6.  **Run linter** (`golangci-lint run`, if available locally) or check CI status.
+5.  **Run the checks**: `make check` builds, vets, lints, runs every test and fails on Swagger or sqlc drift (needs Docker).
+6.  **Check CI status** after pushing.
 7.  **Update docs**: `make swagger-gen` for handler changes, an ADR for architectural decisions, and README/AGENTS.md (or the matching `.claude/rules/` file or `docs/AUTH.md`) when a convention, flow or command changes.
 8.  **Commit your changes** using the conventional commit format.
 9.  **Push to your fork** and submit a Pull Request.
 10. **Description**: Provide a clear description of your changes and link to any relevant issues.
+
+## 🪝 Git Hooks
+
+`make hooks` (opt-in) sets `core.hooksPath` to the versioned `.githooks/` directory. The `pre-commit` hook does nothing unless Go files are staged; then it runs `gofmt -l` on them, `go build ./...`, `golangci-lint run --new-from-rev=HEAD ./...` (skipped with a warning if not installed) and `go test -short` on the packages of the staged files. It checks the working tree, not only the staged content. Full tests, E2E, `govulncheck` and the Docker build run in CI.
 
 ## ⚙️ Development Setup
 

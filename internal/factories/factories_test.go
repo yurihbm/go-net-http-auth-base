@@ -48,13 +48,13 @@ func TestNewDependencies(t *testing.T) {
 }
 
 func TestAuthFactory(t *testing.T) {
-	controller := factories.AuthFactory(newTestDependencies(t), newTestConfig())
+	controller := factories.AuthFactory(newTestDependencies(t), newTestConfig(), passthroughMiddleware{})
 	assert.NotNil(t, controller)
 	assert.IsType(t, &controllers.AuthController{}, controller)
 }
 
 func TestUsersFactory(t *testing.T) {
-	controller := factories.UsersFactory(newTestDependencies(t), newTestConfig())
+	controller := factories.UsersFactory(newTestDependencies(t), newTestConfig(), passthroughMiddleware{})
 	assert.NotNil(t, controller)
 	assert.IsType(t, &controllers.UsersController{}, controller)
 }
@@ -91,7 +91,7 @@ func TestClientIPFactory(t *testing.T) {
 }
 
 func TestCORSFactory(t *testing.T) {
-	t.Run("default values", func(t *testing.T) {
+	t.Run("success - default values", func(t *testing.T) {
 		middleware := factories.CORSFactory(config.CORSConfig{
 			AllowedOrigins: []string{},
 			AllowedMethods: []string{},
@@ -100,7 +100,7 @@ func TestCORSFactory(t *testing.T) {
 		assert.IsType(t, &middlewares.CORSMiddleware{}, middleware)
 	})
 
-	t.Run("with configured values", func(t *testing.T) {
+	t.Run("success - with configured values", func(t *testing.T) {
 		origin := "http://example.com"
 
 		middleware := factories.CORSFactory(config.CORSConfig{
@@ -135,6 +135,35 @@ func TestRateLimitFactory(t *testing.T) {
 	assert.IsType(t, &middlewares.RateLimitMiddleware{}, middleware)
 }
 
+func TestCredentialsRateLimitFactory(t *testing.T) {
+	middleware := factories.CredentialsRateLimitFactory(t.Context(), config.RateLimitConfig{
+		CredentialsPerMinute: 5,
+		CredentialsBurst:     10,
+	})
+
+	assert.NotNil(t, middleware)
+	assert.IsType(t, &middlewares.CredentialsRateLimitMiddleware{}, middleware)
+}
+
+func TestSecurityHeadersFactory(t *testing.T) {
+	serve := func(env string) *httptest.ResponseRecorder {
+		cfg := newTestConfig()
+		cfg.Env = env
+		w := httptest.NewRecorder()
+		factories.SecurityHeadersFactory(cfg).Use(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
+			ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+		return w
+	}
+
+	t.Run("success - development has no HSTS", func(t *testing.T) {
+		assert.Empty(t, serve("development").Header().Get("Strict-Transport-Security"))
+	})
+
+	t.Run("success - production sets HSTS", func(t *testing.T) {
+		assert.NotEmpty(t, serve("production").Header().Get("Strict-Transport-Security"))
+	})
+}
+
 func TestRequestContextDataFactory(t *testing.T) {
 	middleware := factories.RequestContextDataFactory()
 
@@ -162,7 +191,7 @@ func TestTelemetryFactory(t *testing.T) {
 		w.WriteHeader(http.StatusTeapot)
 	})
 
-	t.Run("disabled - returns pass-through", func(t *testing.T) {
+	t.Run("success - disabled returns pass-through", func(t *testing.T) {
 		tel, recorder := newTelemetry(false)
 		middleware := factories.TelemetryFactory(tel, "api.test")
 		w := httptest.NewRecorder()
@@ -173,7 +202,7 @@ func TestTelemetryFactory(t *testing.T) {
 		assert.Empty(t, recorder.Ended())
 	})
 
-	t.Run("enabled - wraps handler", func(t *testing.T) {
+	t.Run("success - enabled wraps handler", func(t *testing.T) {
 		tel, recorder := newTelemetry(true)
 		middleware := factories.TelemetryFactory(tel, "api.test")
 		w := httptest.NewRecorder()
@@ -187,12 +216,12 @@ func TestTelemetryFactory(t *testing.T) {
 
 func TestNewHandler(t *testing.T) {
 	cfg := newTestConfig()
-	cfg.RateLimit = config.RateLimitConfig{RequestsPerSecond: 100, Burst: 100}
+	cfg.RateLimit = config.RateLimitConfig{RequestsPerSecond: 100, Burst: 100, CredentialsPerMinute: 60, CredentialsBurst: 100}
 	tel, err := telemetry.New(context.Background(), config.TelemetryConfig{}, "test")
 	assert.NoError(t, err)
 	handler := factories.NewHandler(t.Context(), newTestDependencies(t), cfg, tel)
 
-	t.Run("GET /health returns 200", func(t *testing.T) {
+	t.Run("success - GET /health returns 200", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health", nil))
@@ -200,14 +229,65 @@ func TestNewHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 
-	t.Run("GET /users/me without cookie returns 401", func(t *testing.T) {
+	t.Run("error - GET /users/me without cookie returns 401", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/users/me", nil))
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
+	newHandler := func(t *testing.T, rl config.RateLimitConfig) http.Handler {
+		cfg := newTestConfig()
+		cfg.RateLimit = rl
+		return factories.NewHandler(t.Context(), newTestDependencies(t), cfg, tel)
+	}
+	serve := func(handler http.Handler, method, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, nil)
+		req.RemoteAddr = "192.0.2.1:1234"
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		return w
+	}
+
+	t.Run("success - security headers are set on regular responses", func(t *testing.T) {
+		handler := newHandler(t, config.RateLimitConfig{RequestsPerSecond: 100, Burst: 100, CredentialsPerMinute: 60, CredentialsBurst: 10})
+
+		w := serve(handler, http.MethodGet, "/health")
+
+		assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+	})
+
+	t.Run("error - security headers are set on global rate limit 429", func(t *testing.T) {
+		handler := newHandler(t, config.RateLimitConfig{RequestsPerSecond: 0.001, Burst: 1, CredentialsPerMinute: 60, CredentialsBurst: 10})
+		serve(handler, http.MethodGet, "/health")
+
+		w := serve(handler, http.MethodGet, "/health")
+
+		assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+		assert.Equal(t, "default-src 'none'; frame-ancestors 'none'", w.Header().Get("Content-Security-Policy"))
+	})
+
+	t.Run("error - credential limiter returns 429 on login after the burst and leaves other routes alone", func(t *testing.T) {
+		handler := newHandler(t, config.RateLimitConfig{RequestsPerSecond: 100, Burst: 100, CredentialsPerMinute: 0.001, CredentialsBurst: 2})
+
+		assert.Equal(t, http.StatusBadRequest, serve(handler, http.MethodPost, "/auth/login").Code)
+		assert.Equal(t, http.StatusBadRequest, serve(handler, http.MethodPost, "/auth/login").Code)
+		w := serve(handler, http.MethodPost, "/auth/login")
+
+		assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		assert.Contains(t, w.Body.String(), "rateLimit.exceeded")
+		assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+		assert.Equal(t, http.StatusOK, serve(handler, http.MethodGet, "/health").Code)
+		assert.Equal(t, http.StatusUnauthorized, serve(handler, http.MethodGet, "/users/me").Code)
+	})
+
 }
+
+type passthroughMiddleware struct{}
+
+func (passthroughMiddleware) Use(next http.HandlerFunc) http.HandlerFunc { return next }
 
 func TestRecoverFactory(t *testing.T) {
 	middleware := factories.RecoverFactory()

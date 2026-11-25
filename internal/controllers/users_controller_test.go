@@ -29,7 +29,7 @@ func newTestEmailChangeController() (*controllers.UsersController, *mocks.EmailC
 	emailChangeMock := new(mocks.EmailChangeServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), true)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, true)
 
 	return controller, emailChangeMock, auditMock, middlewareMock
 }
@@ -39,7 +39,7 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
 	stepUpMiddlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, true)
+	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, passthroughMiddleware{}, true)
 
 	return controller, serviceMock, auditMock, middlewareMock, stepUpMiddlewareMock
 }
@@ -47,7 +47,7 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, *mocks.PendingSignupServiceMock, *mocks.AuditServiceMock) {
 	pendingMock := new(mocks.PendingSignupServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), isSecure)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, isSecure)
 
 	return controller, pendingMock, auditMock
 }
@@ -55,7 +55,7 @@ func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, 
 func newTestPasswordUsersController() (*controllers.UsersController, *mocks.PasswordServiceMock, *mocks.AuditServiceMock) {
 	passwordMock := new(mocks.PasswordServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), true)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, true)
 
 	return controller, passwordMock, auditMock
 }
@@ -98,7 +98,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 		_, serviceMock, _, authMiddleware, _ := newTestUsersControllerWithStepUp()
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
 		serviceMock.On("GetByUUID", mock.Anything, mock.Anything).Return(nil, errors.New("stop")).Maybe()
-		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, true)
+		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, passthroughMiddleware{}, true)
 
 		controller.RegisterRoutes(router)
 
@@ -121,6 +121,28 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			router.ServeHTTP(w, httptest.NewRequest(route.method, route.path, nil))
 
 			assert.Equal(t, route.stepUp, w.Header().Get(stepUpMarkerHeader) != "", route.method+" "+route.path)
+		}
+	})
+
+	t.Run("success - credential routes are wrapped by the limiter", func(t *testing.T) {
+		router := http.NewServeMux()
+		authMiddleware := rejectingMiddleware{http.StatusUnauthorized}
+		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, limiterMarker{}, true)
+		controller.RegisterRoutes(router)
+
+		for route, limited := range map[string]bool{
+			"POST /users":                     true,
+			"POST /users/revert-email-change": true,
+			"GET /users/me":                   false,
+			"POST /users/me/email/confirm":    false,
+			"PUT /users/some-uuid":            false,
+		} {
+			parts := strings.SplitN(route, " ", 2)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, httptest.NewRequest(parts[0], parts[1], nil))
+
+			assert.Equal(t, limited, w.Header().Get(limiterMarkerHeader) != "", route)
 		}
 	})
 }

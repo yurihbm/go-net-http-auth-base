@@ -19,7 +19,7 @@ SELECT uuid, actor_uuid, ip_address, user_agent, action, resource_type, resource
 FROM audit_logs
 WHERE
     (sqlc.narg(start_date)::timestamptz IS NULL OR created_at >= sqlc.narg(start_date)) AND
-    (sqlc.narg(end_date)::timestamptz IS NULL OR created_at <= sqlc.narg(end_date)) AND
+    (sqlc.narg(end_date)::timestamptz IS NULL OR created_at < sqlc.narg(end_date)) AND
     (sqlc.narg(action)::text IS NULL OR action = sqlc.narg(action)) AND
     (sqlc.narg(resource_type)::text IS NULL OR resource_type = sqlc.narg(resource_type)) AND
     (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)) AND

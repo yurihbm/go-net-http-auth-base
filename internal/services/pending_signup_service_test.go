@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/mocks"
@@ -39,7 +38,7 @@ func newTestPendingSignupService() (domain.PendingSignupService, pendingSignupMo
 		users:   new(mocks.UsersRepositoryMock),
 		emails:  new(mocks.EmailVerificationServiceMock),
 	}
-	service := services.NewPendingSignupService(m.pending, m.limiter, m.users, newTransactorMock(), m.emails, signupKey)
+	service := services.NewPendingSignupService(m.pending, m.limiter, m.users, newTransactorMock(), m.emails, signupKey, testClock)
 	return service, m
 }
 
@@ -91,8 +90,8 @@ func TestPendingSignupService_StartCredentials(t *testing.T) {
 		assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte(dto.Password)))
 		assert.Regexp(t, `^\d{6}$`, code)
 		assert.Equal(t, signupHash(pendingUUID, code), stored.CodeHash)
-		assert.WithinDuration(t, time.Now().Add(domain.SignupCodeTTL), time.Unix(stored.CodeExpiresAt, 0), 5*time.Second)
-		assert.WithinDuration(t, time.Now().Add(domain.PendingSignupTTL), time.Unix(stored.ExpiresAt, 0), 5*time.Second)
+		assert.Equal(t, testNow.Add(domain.SignupCodeTTL).Unix(), stored.CodeExpiresAt)
+		assert.Equal(t, testNow.Add(domain.PendingSignupTTL).Unix(), stored.ExpiresAt)
 		m.pending.AssertExpectations(t)
 		m.limiter.AssertExpectations(t)
 		m.emails.AssertExpectations(t)

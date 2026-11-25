@@ -54,7 +54,7 @@ func testOAuthLoginResolveUser(t *testing.T) {
 		providerMock := new(mocks.OAuthProviderMock)
 		registry.On("Get", provider).Return(providerMock, nil)
 		providerMock.On("GetUserInfo", mock.Anything, code, codeVerifier).Return(userInfo, nil)
-		service := services.NewAuthService(usersService, pending, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key"), emails, testSessionMaxAge, testMaxSessions)
+		service := services.NewAuthService(usersService, pending, authRepo, sessionsRepo, registry, transactor, services.NewTokenService("test-secret-key", testClock), emails, testSessionMaxAge, testMaxSessions, testClock)
 		return fixture{service, usersService, authRepo, transactor, pending, emails, sessionsRepo}
 	}
 

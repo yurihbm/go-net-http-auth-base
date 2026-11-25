@@ -64,8 +64,8 @@ func newEmailChangeFixture(t *testing.T, sessionsErr error, providersErr error) 
 	}
 
 	return emailChangeFixture{
-		service:           services.NewEmailChangeService(usersRepo, emailVerification, serviceSessionsRepo, serviceAuthRepo, emailChanges, limiter, repositories.NewPostgresTransactor(testDB), emailChangeKey),
-		users:             services.NewUserService(usersRepo, repositories.NewPostgresTransactor(testDB)),
+		service:           services.NewEmailChangeService(usersRepo, emailVerification, serviceSessionsRepo, serviceAuthRepo, emailChanges, limiter, repositories.NewPostgresTransactor(testDB), emailChangeKey, time.Now),
+		users:             services.NewUserService(usersRepo, repositories.NewPostgresTransactor(testDB), time.Now),
 		emailChanges:      emailChanges,
 		limiter:           limiter,
 		usersRepo:         usersRepo,
@@ -163,7 +163,7 @@ func TestEmailChangeService_ConfirmEmailChange(t *testing.T) {
 		releaseOnce := sync.Once{}
 		release := func() { releaseOnce.Do(func() { close(blocking.release) }) }
 		t.Cleanup(release)
-		service := services.NewEmailChangeService(f.usersRepo, f.emailVerification, blocking, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), emailChangeKey)
+		service := services.NewEmailChangeService(f.usersRepo, f.emailVerification, blocking, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), emailChangeKey, time.Now)
 		code := requestEmailChangeCode(t, f)
 		f.emailVerification.On("SendEmailChangedNotice", mock.Anything).Return(nil)
 
@@ -199,7 +199,7 @@ func TestEmailChangeService_ConfirmEmailChange(t *testing.T) {
 			Version:   1,
 			ChangedAt: time.Now().Unix(),
 		}, nil)
-		revertService := services.NewEmailChangeService(f.usersRepo, f.emailVerification, f.sessionsRepo, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), emailChangeKey)
+		revertService := services.NewEmailChangeService(f.usersRepo, f.emailVerification, f.sessionsRepo, f.authRepo, f.emailChanges, f.limiter, repositories.NewPostgresTransactor(testDB), emailChangeKey, time.Now)
 		_, err := revertService.RevertEmailChange(context.Background(), "revert-token")
 		require.NoError(t, err)
 		stored, err := f.usersRepo.FindByUUID(context.Background(), f.user.UUID)

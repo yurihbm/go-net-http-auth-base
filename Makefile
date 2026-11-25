@@ -10,27 +10,27 @@ AIR_VERSION = v1.65.3
 SQLC_VERSION = v1.31.1
 GOLANG_MIGRATE_VERSION = v4.19.1
 SWAG_VERSION = v1.16.6
-ARCHIFY_VERSION = v3.2.0
-ARCHIFY_DIR = .tools/archify
 
 .PHONY: install-tools \
 	install-air \
 	install-migrate \
 	install-sqlc \
 	install-swag \
-	install-archify \
 	tidy \
 	setup \
+	hooks \
 	build \
 	migrate-create \
 	promote-admin \
+	rename \
 	migrate-up \
 	migrate-down \
 	sqlc-gen \
 	swagger-gen \
 	test-cover \
 	show-cover \
-	test-e2e
+	test-e2e \
+	check
 
 install-tools: install-air install-migrate install-sqlc install-swag
 
@@ -45,14 +45,6 @@ install-sqlc:
 
 install-swag:
 	go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
-
-install-archify:
-	rm -rf $(ARCHIFY_DIR) $(ARCHIFY_DIR)-src
-	git clone --quiet --depth 1 --filter=blob:none --sparse --branch $(ARCHIFY_VERSION) https://github.com/tt-a1i/archify.git $(ARCHIFY_DIR)-src
-	git -C $(ARCHIFY_DIR)-src sparse-checkout set archify
-	mv $(ARCHIFY_DIR)-src/archify $(ARCHIFY_DIR)
-	rm -rf $(ARCHIFY_DIR)-src
-	node $(ARCHIFY_DIR)/bin/archify.mjs doctor
 
 tidy:
 	go mod tidy
@@ -75,10 +67,17 @@ test-e2e:
 
 setup: install-tools tidy
 
-# Build application binary
+# Enable the versioned git hooks (opt-in, changes this clone's core.hooksPath)
+hooks:
+	git config core.hooksPath .githooks
+
+# Build application binary (override with make build GOOS=darwin GOARCH=arm64)
+build: GOOS ?= linux
+build: GOARCH ?= amd64
 build:
 	@echo "Building application binary..."
-	GOOS=linux GOARCH=amd64 go build -o bin/app ./cmd/main.go
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o bin/app ./cmd/api
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o bin/promote-admin ./cmd/promote-admin
 
 # Create a new database migration
 migrate-create:
@@ -89,13 +88,21 @@ migrate-create:
 	@echo ">> Creating a new database migration: $(name)"
 	migrate create -ext sql -dir postgres/migrations -seq $(name)
 
+# Rebrand the template (module path, project name and title)
+rename:
+	@if [ -z "$(module)" ] || [ -z "$(name)" ] || [ -z "$(title)" ]; then \
+		echo "Error: module, name and title are required. Usage: make rename module=github.com/acme/foo name=foo title=\"Foo API\""; \
+		exit 1; \
+	fi
+	go run ./tools/rename -module "$(module)" -name "$(name)" -title "$(title)"
+
 # Promote an existing user to admin
 promote-admin:
 	@if [ -z "$(email)" ]; then \
 		echo "Error: email variable is required. Usage: make promote-admin email=user@example.com"; \
 		exit 1; \
 	fi
-	go run ./cmd/main.go promote-admin $(email)
+	go run ./cmd/promote-admin $(email)
 
 # Run database migrations
 migrate-up:
@@ -112,7 +119,25 @@ sqlc-gen:
 	@echo "Generating code with sqlc..."
 	DATABASE_URL=$(DATABASE_URL) sqlc generate
 
+# Run every pre-PR check: build, vet, lint, full tests (Docker) and generated code drift.
+# sqlc needs a database with the schema, so the drift check uses a throwaway PostgreSQL container, like the sqlc-drift CI job.
+check:
+	go build ./...
+	go vet ./...
+	golangci-lint run ./...
+	go test ./...
+	$(MAKE) swagger-gen
+	git diff --exit-code -- docs/swagger
+	@echo "Checking sqlc generated code..."
+	@set -e; \
+	container=$$(docker run -d --rm -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=sqlc -p 127.0.0.1::5432 postgres:18-alpine); \
+	trap 'docker stop $$container >/dev/null' EXIT; \
+	for i in $$(seq 30); do docker exec $$container pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1 && break; sleep 1; done; \
+	url="postgres://postgres:postgres@$$(docker port $$container 5432/tcp | head -n 1)/sqlc?sslmode=disable"; \
+	migrate -database "$$url" -path postgres/migrations up; \
+	DATABASE_URL="$$url" sqlc diff
+
 # Generate the Swagger spec from the handler annotations
 swagger-gen:
 	@echo "Generating Swagger docs..."
-	swag init -g cmd/main.go -o docs/swagger --parseInternal --parseDependency
+	swag init -g cmd/api/main.go -o docs/swagger --parseInternal --parseDependency

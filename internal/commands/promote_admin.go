@@ -11,9 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const PromoteAdminName = "promote-admin"
-
-var errPromoteAdminUsage = errors.New("usage: main promote-admin <email>")
+var errPromoteAdminUsage = errors.New("usage: promote-admin <email>")
 
 func PromoteAdmin(ctx context.Context, users domain.UsersService, audit domain.AuditService, out io.Writer, args []string) error {
 	if len(args) != 1 {

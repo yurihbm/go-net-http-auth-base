@@ -17,6 +17,7 @@ type UsersController struct {
 	auditService         domain.AuditService
 	authMiddleware       middlewares.HandlerMiddleware
 	stepUpMiddleware     middlewares.HandlerMiddleware
+	credentialsLimiter   middlewares.HandlerMiddleware
 	isSecureCookie       bool
 }
 
@@ -30,6 +31,7 @@ func NewUsersController(
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	stepUpMiddleware middlewares.HandlerMiddleware,
+	credentialsLimiter middlewares.HandlerMiddleware,
 	isSecureCookie bool,
 ) *UsersController {
 	return &UsersController{
@@ -40,13 +42,14 @@ func NewUsersController(
 		auditService:         auditService,
 		authMiddleware:       authMiddleware,
 		stepUpMiddleware:     stepUpMiddleware,
+		credentialsLimiter:   credentialsLimiter,
 		isSecureCookie:       isSecureCookie,
 	}
 }
 
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
-	router.HandleFunc("POST /users", c.CreateUser)
-	router.HandleFunc("POST /users/revert-email-change", c.RevertEmailChange)
+	router.HandleFunc("POST /users", c.credentialsLimiter.Use(c.CreateUser))
+	router.HandleFunc("POST /users/revert-email-change", c.credentialsLimiter.Use(c.RevertEmailChange))
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
 	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.RequestEmailChange)))
 	router.HandleFunc("POST /users/me/email/confirm", c.authMiddleware.Use(c.ConfirmEmailChange))

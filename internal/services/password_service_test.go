@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/mocks"
@@ -39,7 +38,7 @@ func newTestPasswordService() (domain.PasswordService, passwordMocks) {
 		limiter:  new(mocks.EmailSendLimiterMock),
 		emails:   new(mocks.EmailVerificationServiceMock),
 	}
-	service := services.NewPasswordService(m.resets, m.users, m.sessions, m.limiter, newTransactorMock(), m.emails, signupKey)
+	service := services.NewPasswordService(m.resets, m.users, m.sessions, m.limiter, newTransactorMock(), m.emails, signupKey, testClock)
 	return service, m
 }
 
@@ -78,7 +77,7 @@ func TestPasswordService_RequestReset(t *testing.T) {
 		assert.Equal(t, 2, stored.EmailVersion)
 		assert.Regexp(t, `^\d{6}$`, code)
 		assert.Equal(t, services.HashOTP(signupKey, "password-reset:"+stored.UUID, code), stored.CodeHash)
-		assert.WithinDuration(t, time.Now().Add(domain.PasswordResetTTL), time.Unix(stored.ExpiresAt, 0), 5*time.Second)
+		assert.Equal(t, testNow.Add(domain.PasswordResetTTL).Unix(), stored.ExpiresAt)
 		assert.Equal(t, stored.UUID, resetUUID)
 		m.resets.AssertExpectations(t)
 		m.emails.AssertExpectations(t)

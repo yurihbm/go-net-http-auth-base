@@ -1,0 +1,35 @@
+#!/bin/sh
+# Light pre-commit checks on the staged Go files. Full tests and E2E run in CI.
+# It inspects the working tree, not only the staged content.
+set -eu
+
+files=$(git diff --cached --name-only --diff-filter=ACMR | grep '\.go$' || true)
+[ -z "$files" ] && exit 0
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: gofmt"
+unformatted=$(echo "$files" | xargs gofmt -l)
+if [ -n "$unformatted" ]; then
+	echo "Unformatted files (run gofmt -w):"
+	echo "$unformatted"
+	exit 1
+fi
+
+echo "pre-commit: go build"
+go build ./...
+
+if command -v golangci-lint >/dev/null 2>&1; then
+	echo "pre-commit: golangci-lint"
+	golangci-lint run --new-from-rev=HEAD ./...
+else
+	echo "pre-commit: golangci-lint not installed, skipping"
+fi
+
+pkgs=$(echo "$files" | xargs -n1 dirname | sort -u | while read -r dir; do
+	[ -d "$dir" ] && echo "./$dir"
+done)
+if [ -n "$pkgs" ]; then
+	echo "pre-commit: go test -short on changed packages"
+	echo "$pkgs" | xargs go test -short
+fi

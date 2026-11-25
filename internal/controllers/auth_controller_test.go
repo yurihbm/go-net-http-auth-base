@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go-net-http-auth-base/internal/api"
@@ -39,7 +40,7 @@ func newTestAuthControllerWithMiddleware(isSecure bool, allowList []string) (*co
 	auditMock := new(mocks.AuditServiceMock)
 	authMiddleware := new(mocks.AuthMiddlewareMock)
 
-	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, authMiddleware, isSecure, allowList)
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, authMiddleware, passthroughMiddleware{}, isSecure, allowList)
 	return controller, authServiceMock, auditMock, authMiddleware
 }
 
@@ -48,7 +49,7 @@ func newTestAuthControllerWithStepUp() (*controllers.AuthController, *mocks.Auth
 	stepUpMock := new(mocks.StepUpServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, stepUpMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), true, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(authServiceMock, stepUpMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, true, []string{allowedRedirectURI})
 	return controller, authServiceMock, stepUpMock, auditMock
 }
 
@@ -57,7 +58,7 @@ func newTestAuthControllerWithSignup(isSecure bool) (*controllers.AuthController
 	pendingMock := new(mocks.PendingSignupServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), isSecure, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(authServiceMock, new(mocks.StepUpServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, isSecure, []string{allowedRedirectURI})
 	return controller, authServiceMock, pendingMock, auditMock
 }
 
@@ -65,7 +66,7 @@ func newTestAuthControllerWithPassword(isSecure bool) (*controllers.AuthControll
 	passwordMock := new(mocks.PasswordServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 
-	controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), isSecure, []string{allowedRedirectURI})
+	controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, isSecure, []string{allowedRedirectURI})
 	return controller, passwordMock, auditMock
 }
 
@@ -144,6 +145,35 @@ func TestAuthController_RegisterRoutes(t *testing.T) {
 			req := httptest.NewRequest(route.method, route.path, nil)
 			_, pattern := router.Handler(req)
 			assert.NotEmpty(t, pattern)
+		}
+	})
+
+	t.Run("success - credential routes are wrapped by the limiter", func(t *testing.T) {
+		router := http.NewServeMux()
+		controller := controllers.NewAuthController(new(mocks.AuthServiceMock), new(mocks.StepUpServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), rejectingMiddleware{http.StatusUnauthorized}, limiterMarker{}, true, []string{allowedRedirectURI})
+		controller.RegisterRoutes(router)
+
+		for route, limited := range map[string]bool{
+			"POST /auth/login":             true,
+			"POST /auth/step-up":           true,
+			"POST /auth/step-up/verify":    true,
+			"POST /auth/signup/verify":     true,
+			"POST /auth/signup/resend":     true,
+			"POST /auth/password/forgot":   true,
+			"POST /auth/password/reset":    true,
+			"POST /auth/oauth/revert-link": true,
+			"POST /auth/refresh":           false,
+			"POST /auth/logout":            false,
+			"POST /auth/logout-others":     false,
+			"GET /auth/unknown/login":      false,
+			"GET /auth/unknown/callback":   false,
+		} {
+			parts := strings.SplitN(route, " ", 2)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, httptest.NewRequest(parts[0], parts[1], nil))
+
+			assert.Equal(t, limited, w.Header().Get(limiterMarkerHeader) != "", route)
 		}
 	})
 }

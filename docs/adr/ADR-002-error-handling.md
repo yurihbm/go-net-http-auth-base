@@ -22,7 +22,8 @@ and map them to HTTP in exactly one place.
 - **Domain error types** (`internal/domain/errors.go`) describe *what* went
   wrong: `NotFoundError` (404), `ValidationError` (400, with per-field
   `details`), `ConflictError` (409), `UnauthorizedError` (401),
-  `ForbiddenError` (403) and `InternalServerError` (500, wraps the cause).
+  `ForbiddenError` (403), `TooManyRequestsError` (429) and
+  `InternalServerError` (500, wraps the cause).
 - **Repositories** translate infrastructure errors: no rows becomes
   `NotFoundError`, SQLSTATE `23505` becomes `ConflictError`, and anything
   unknown becomes `InternalServerError` wrapping the original error.
@@ -31,7 +32,7 @@ and map them to HTTP in exactly one place.
 - **Controllers** never choose a status code for an error. They call
   `api.HandleError(ctx, w, err)`, which uses `errors.As` to pick the status, and
   anything unrecognized becomes a 500.
-- **Messages are dot-separated keys** (`user.create.password_required`) so
+- **Messages are dot-separated keys** (`users.email.conflict`) so
   clients can translate them. A 500 never exposes its wrapped cause in the body.
 - **Input validation** goes through `api.DecodeAndValidate[T]`: strict JSON
   (unknown fields rejected, exactly one object) plus `validate` struct tags, and

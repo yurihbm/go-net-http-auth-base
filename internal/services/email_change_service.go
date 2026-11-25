@@ -18,6 +18,7 @@ type emailChangeService struct {
 	limiter           domain.EmailSendLimiter
 	transactor        domain.Transactor
 	hmacKey           []byte
+	now               func() time.Time
 }
 
 func NewEmailChangeService(
@@ -29,6 +30,7 @@ func NewEmailChangeService(
 	limiter domain.EmailSendLimiter,
 	transactor domain.Transactor,
 	hmacKey []byte,
+	now func() time.Time,
 ) domain.EmailChangeService {
 	return &emailChangeService{
 		repo:              repo,
@@ -39,6 +41,7 @@ func NewEmailChangeService(
 		limiter:           limiter,
 		transactor:        transactor,
 		hmacKey:           hmacKey,
+		now:               now,
 	}
 }
 
@@ -52,7 +55,7 @@ func (s *emailChangeService) RequestEmailChange(ctx context.Context, actor domai
 		return err
 	}
 
-	if isEmailChangeLocked(user) {
+	if isEmailChangeLocked(user, s.now()) {
 		return domain.NewConflictError("users.emailChange.locked")
 	}
 
@@ -90,7 +93,7 @@ func (s *emailChangeService) RequestEmailChange(ctx context.Context, actor domai
 			NewEmail:     newEmail,
 			EmailVersion: user.EmailVersion,
 			CodeHash:     s.hashEmailChangeCode(sessionUUID, code),
-			ExpiresAt:    time.Now().Add(domain.EmailChangeCodeTTL).Unix(),
+			ExpiresAt:    s.now().Add(domain.EmailChangeCodeTTL).Unix(),
 		}, domain.EmailChangeCooldown)
 		if err != nil {
 			return err
@@ -145,11 +148,11 @@ func (s *emailChangeService) ConfirmEmailChange(ctx context.Context, actor domai
 		return nil, domain.NewUnauthorizedError("users.emailChange.staleToken")
 	}
 
-	if isEmailChangeLocked(user) {
+	now := s.now()
+	if isEmailChangeLocked(user, now) {
 		return nil, domain.NewConflictError("users.emailChange.locked")
 	}
 
-	now := time.Now()
 	var updated *domain.User
 	err = s.transactor.WithinTx(ctx, func(ctx context.Context) error {
 		var err error

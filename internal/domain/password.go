@@ -28,11 +28,11 @@ type ForgotPasswordDTO struct {
 
 type ResetPasswordDTO struct {
 	Code     string `json:"code"     validate:"required,len=6,numeric"`
-	Password string `json:"password" validate:"required,min=8,max=72"`
+	Password string `json:"password" validate:"required,min=8,max=64,maxbytes=72"`
 }
 
 type ChangePasswordDTO struct {
-	NewPassword string `json:"new_password" validate:"required,min=8,max=72"`
+	NewPassword string `json:"new_password" validate:"required,min=8,max=64,maxbytes=72"`
 }
 
 type PasswordResetRepository interface {

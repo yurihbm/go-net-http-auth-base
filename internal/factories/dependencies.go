@@ -7,6 +7,7 @@ import (
 	"go-net-http-auth-base/internal/providers"
 	"go-net-http-auth-base/internal/repositories"
 	"go-net-http-auth-base/internal/services"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -48,7 +49,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 
 	db := repositories.NewTxAwareDB(pool)
 
-	tokenService := services.NewTokenService(cfg.JWTSecret)
+	tokenService := services.NewTokenService(cfg.JWTSecret, time.Now)
 	emailProvider := o.emailProvider
 	if emailProvider == nil {
 		emailProvider = newEmailProvider(cfg.Env, cfg.Email)
@@ -61,7 +62,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 	emailSendLimits := repositories.NewEmailSendLimitsPostgresRepository(db)
 	sessionChallenges := repositories.NewSessionChallengesPostgresRepository(db)
 	transactor := repositories.NewPostgresTransactor(pool)
-	usersService := services.NewUserService(usersRepository, transactor)
+	usersService := services.NewUserService(usersRepository, transactor, time.Now)
 	emailChangeService := services.NewEmailChangeService(
 		usersRepository,
 		emailVerificationService,
@@ -71,6 +72,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		emailSendLimits,
 		transactor,
 		[]byte(cfg.JWTSecret),
+		time.Now,
 	)
 	oauthProviderRegistry, err := providers.NewOAuthProviderRegistry(
 		map[domain.OAuthProviderName]domain.OAuthProvider{
@@ -95,6 +97,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		transactor,
 		emailVerificationService,
 		[]byte(cfg.JWTSecret),
+		time.Now,
 	)
 	passwordService := services.NewPasswordService(
 		repositories.NewPasswordResetsPostgresRepository(db),
@@ -104,6 +107,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		transactor,
 		emailVerificationService,
 		[]byte(cfg.JWTSecret),
+		time.Now,
 	)
 	authService := services.NewAuthService(
 		usersService,
@@ -116,6 +120,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		emailVerificationService,
 		cfg.SessionMaxAge,
 		cfg.MaxSessionsPerUser,
+		time.Now,
 	)
 
 	stepUpService := services.NewStepUpService(
@@ -125,6 +130,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		transactor,
 		emailVerificationService,
 		[]byte(cfg.JWTSecret),
+		time.Now,
 	)
 
 	auditRepository := repositories.NewAuditPostgresRepository(db)

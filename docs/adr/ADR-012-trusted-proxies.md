@@ -1,12 +1,12 @@
-# ADR-013: Trusted Proxies and Client IP Resolution
+# ADR-012: Trusted Proxies and Client IP Resolution
 
 - **Status:** Accepted
 - **Date:** 2026-11-23
 
 ## Context
 
-Every client IP came from `r.RemoteAddr` (ADR-005). Behind a reverse proxy
-(Traefik, nginx, a cloud load balancer) that is always the proxy's address, so
+Taking every client IP from `r.RemoteAddr` breaks behind a reverse proxy
+(Traefik, nginx, a cloud load balancer): that is always the proxy's address, so
 all clients share one rate-limit bucket and the audit log and request log record
 the proxy instead of the client. Reading `X-Forwarded-For` unconditionally is
 worse: any client can send the header and pick its own IP, which defeats the
@@ -56,8 +56,6 @@ rate limiter and falsifies the audit trail.
   clients) lets those clients spoof their IP.
 - The proxy must append to, not just pass through, `X-Forwarded-For`; most do by
   default.
-- This supersedes ADR-005's statement that the rate limiter ignores
-  `X-Forwarded-For`.
 - Accepted residual risk: the rate limiter is still in memory and per instance.
   With several replicas each keeps its own buckets, and a shared store is still
   needed for a global limit.

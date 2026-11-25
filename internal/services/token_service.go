@@ -11,10 +11,11 @@ import (
 
 type tokenService struct {
 	jwtSecret string
+	now       func() time.Time
 }
 
-func NewTokenService(jwtSecret string) domain.TokenService {
-	return &tokenService{jwtSecret: jwtSecret}
+func NewTokenService(jwtSecret string, now func() time.Time) domain.TokenService {
+	return &tokenService{jwtSecret: jwtSecret, now: now}
 }
 
 func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDTO) (*domain.VerifiedTokenData, error) {
@@ -23,7 +24,7 @@ func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDT
 			return nil, domain.NewUnauthorizedError("auth.verifyToken.invalidTokenSigningMethod")
 		}
 		return []byte(s.jwtSecret), nil
-	})
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithTimeFunc(s.now))
 
 	if err != nil {
 		return nil, ErrInvalidToken
@@ -63,7 +64,7 @@ func (s *tokenService) VerifyToken(ctx context.Context, dto domain.VerifyTokenDT
 func (s *tokenService) GenerateToken(ctx context.Context, dto domain.GenerateTokenDTO) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":     dto.Subject,
-		"exp":     getTokenExpiration(dto.Audience),
+		"exp":     s.tokenExpiration(dto.Audience),
 		"aud":     dto.Audience,
 		"payload": dto.Payload,
 	}
@@ -91,19 +92,17 @@ func (s *tokenService) GenerateToken(ctx context.Context, dto domain.GenerateTok
 	return signedString, nil
 }
 
-func getTokenExpiration(audience domain.TokenAudience) int64 {
+func (s *tokenService) tokenExpiration(audience domain.TokenAudience) int64 {
 	switch audience {
 	case domain.TokenAudienceRefresh:
-		return time.Now().Add(domain.TokenExpirationRefresh).Unix()
-	case domain.TokenAudienceExchange:
-		return time.Now().Add(domain.TokenExpirationExchange).Unix()
+		return s.now().Add(domain.TokenExpirationRefresh).Unix()
 	case domain.TokenAudienceOAuthState:
-		return time.Now().Add(domain.TokenExpirationOAuthState).Unix()
+		return s.now().Add(domain.TokenExpirationOAuthState).Unix()
 	case domain.TokenAudienceEmailChangeRevert:
-		return time.Now().Add(domain.TokenExpirationEmailChangeRevert).Unix()
+		return s.now().Add(domain.TokenExpirationEmailChangeRevert).Unix()
 	case domain.TokenAudienceOAuthLinkRevert:
-		return time.Now().Add(domain.TokenExpirationOAuthLinkRevert).Unix()
+		return s.now().Add(domain.TokenExpirationOAuthLinkRevert).Unix()
 	default:
-		return time.Now().Add(domain.TokenExpirationAccess).Unix()
+		return s.now().Add(domain.TokenExpirationAccess).Unix()
 	}
 }

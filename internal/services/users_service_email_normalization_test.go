@@ -3,6 +3,7 @@ package services_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/mocks"
@@ -23,7 +24,7 @@ const (
 func TestUsersService_EmailNormalization(t *testing.T) {
 	t.Run("Create stores the normalized email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), time.Now)
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).
 			Return(&domain.User{UUID: "uuid", Email: normalizedEmail}, nil).Once()
@@ -36,7 +37,7 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 
 	t.Run("CreateOAuth stores the normalized email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), time.Now)
 		repo.On("IsEmailReserved", mock.Anything).Return(false, nil).Maybe()
 		repo.On("Create", mock.MatchedBy(func(u domain.User) bool { return u.Email == normalizedEmail })).
 			Return(&domain.User{UUID: "uuid", Email: normalizedEmail}, nil).Once()
@@ -49,7 +50,7 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 
 	t.Run("GetByEmail looks up the normalized email", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		service := services.NewUserService(repo, newTransactorMock())
+		service := services.NewUserService(repo, newTransactorMock(), time.Now)
 		repo.On("FindByEmail", normalizedEmail).Return(&domain.User{UUID: "uuid", Email: normalizedEmail}, nil).Once()
 
 		user, err := service.GetByEmail(context.Background(), messyEmail)
@@ -61,12 +62,12 @@ func TestUsersService_EmailNormalization(t *testing.T) {
 }
 
 func newAuthServiceOverRealUsers(repo *mocks.UsersRepositoryMock, authRepo *mocks.AuthRepositoryMock, registry *mocks.OAuthProviderRegistryMock, emailProvider *mocks.EmailProviderMock) domain.AuthService {
-	tokens := services.NewTokenService(normalizationKey)
+	tokens := services.NewTokenService(normalizationKey, time.Now)
 	sessionsRepo := new(mocks.SessionsRepositoryMock)
 	sessionsRepo.On("DeleteExpiredByUser", mock.Anything, mock.Anything).Return(nil)
 	sessionsRepo.On("Create", mock.Anything).Return(&domain.UserSession{UUID: "session-uuid"}, nil)
 	sessionsRepo.On("DeleteOldestBeyond", mock.Anything, mock.Anything).Return(nil)
-	return services.NewAuthService(services.NewUserService(repo, newTransactorMock()), nil, authRepo, sessionsRepo, registry, newTransactorMock(), tokens, services.NewEmailVerificationService(tokens, emailProvider, "https://app.test/revert-email-change", "https://app.test/revert-oauth-link"), testSessionMaxAge, testMaxSessions)
+	return services.NewAuthService(services.NewUserService(repo, newTransactorMock(), time.Now), nil, authRepo, sessionsRepo, registry, newTransactorMock(), tokens, services.NewEmailVerificationService(tokens, emailProvider, "https://app.test/revert-email-change", "https://app.test/revert-oauth-link"), testSessionMaxAge, testMaxSessions, time.Now)
 }
 
 func TestAuthService_EmailNormalization(t *testing.T) {
@@ -109,7 +110,7 @@ func TestAuthService_EmailNormalization(t *testing.T) {
 			stored = args.Get(0).(domain.User)
 			stored.UUID = "local-uuid"
 		}).Return(&domain.User{UUID: "local-uuid", Email: normalizedEmail}, nil).Once()
-		_, err := services.NewUserService(repo, newTransactorMock()).Create(context.Background(), domain.NewUserDTO{Name: "User", Email: messyEmail, PasswordHash: "hash"})
+		_, err := services.NewUserService(repo, newTransactorMock(), time.Now).Create(context.Background(), domain.NewUserDTO{Name: "User", Email: messyEmail, PasswordHash: "hash"})
 		require.NoError(t, err)
 		require.Equal(t, normalizedEmail, stored.Email)
 

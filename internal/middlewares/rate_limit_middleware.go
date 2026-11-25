@@ -3,6 +3,7 @@ package middlewares
 import (
 	"context"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"sync"
 	"time"
@@ -45,20 +46,40 @@ func newRateLimitMiddleware(ctx context.Context, r rate.Limit, b int, now func()
 
 func (m *RateLimitMiddleware) Use(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		limiter := m.getVisitor(shared.ClientIP(r))
-
-		if !limiter.AllowN(m.now(), 1) {
-			m.setHeaders(w, limiter)
-			api.WriteJSONResponse(w, http.StatusTooManyRequests, api.ResponseBody[any]{
-				Message: "rateLimit.exceeded",
-				Error:   "too many requests",
-			})
-			return
+		if m.allow(w, r) {
+			next.ServeHTTP(w, r)
 		}
-
-		m.setHeaders(w, limiter)
-		next.ServeHTTP(w, r)
 	})
+}
+
+func (m *RateLimitMiddleware) allow(w http.ResponseWriter, r *http.Request) bool {
+	limiter := m.getVisitor(rateLimitKey(shared.ClientIP(r)))
+	allowed := limiter.AllowN(m.now(), 1)
+	m.setHeaders(w, limiter)
+	if !allowed {
+		api.WriteJSONResponse(w, http.StatusTooManyRequests, api.ResponseBody[any]{
+			Message: "rateLimit.exceeded",
+			Error:   "too many requests",
+		})
+	}
+	return allowed
+}
+
+// rateLimitKey groups IPv6 clients by /64, since a single subscriber usually controls the whole prefix.
+func rateLimitKey(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ip
+	}
+	addr = addr.Unmap()
+	if addr.Is4() {
+		return addr.String()
+	}
+	prefix, err := addr.Prefix(64)
+	if err != nil {
+		return ip
+	}
+	return prefix.String()
 }
 
 func (m *RateLimitMiddleware) getVisitor(ip string) *rate.Limiter {

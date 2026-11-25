@@ -1,67 +1,59 @@
 ---
 name: go-migration-scaffolder
-description: 'Helps with database migrations and queries. Use when asked to "add a table", "modify schema", "create migration", or "add sqlc query".'
+description: Guides database schema and sqlc query changes in this Go API, either by editing the initial migration (while the repository is a template) or by scaffolding a new migration and query file with a script. Use when asked to add or change a table, column or index, create a migration, or add a sqlc query.
 ---
 
 # Go Migration Scaffolder
 
-This skill streamlines the workflow for modifying the database schema and adding queries in this project.
+Tables use a `uuid uuid DEFAULT uuidv7()` primary key and `created_at`/`updated_at` timestamps, like `users` in `postgres/migrations/000001_init_db.up.sql`. Queries live in `postgres/queries/*.sql`; the Go code generated from them (`postgres/*.sql.go`, `models.go`) is only changed through `make sqlc-gen`.
 
-## Capabilities
+## Choose the Workflow
 
-- Scaffolds new database migrations (`postgres/migrations/`)
-- Scaffolds new query files (`postgres/queries/`)
-- Automates the `make` commands for creating and applying migrations
+Check `AGENTS.md`: while it has the "Template Phase" rule, use the template workflow, because a template ships a single initial migration (ADR-003). Otherwise use the migration workflow.
 
-## Template Phase
+## Template Workflow
 
-While this repository is still a template, schema changes go into `postgres/migrations/000001_init_db.up.sql` and `000001_init_db.down.sql`, never into a new migration file (see `docs/adr/ADR-003-database-strategy.md`). In that phase, **do not run the script** (it always creates a new migration):
+Edit the existing files instead of running the script (it always creates a new migration):
 
-1.  Edit `000001_init_db.up.sql` (DDL) and `000001_init_db.down.sql` (the matching `DROP`, in reverse dependency order).
-2.  Create or edit the query file in `postgres/queries/` (see step 2 below for the format).
-3.  Re-apply the schema with `make migrate-down && make migrate-up` (this drops the local data), then run `make sqlc-gen`.
+```
+- [ ] 1. Add the DDL to postgres/migrations/000001_init_db.up.sql
+- [ ] 2. Add the matching DROP to 000001_init_db.down.sql, in reverse dependency order
+- [ ] 3. Write the queries in postgres/queries/
+- [ ] 4. make migrate-down && make migrate-up (drops the local data)
+- [ ] 5. make sqlc-gen
+- [ ] 6. New table: add it to every truncateTables (see .claude/rules/repositories.md)
+- [ ] 7. make check
+```
 
-Use the script below only once a real service has been bootstrapped from the template.
+## Migration Workflow
 
-## Usage
-
-### 1. Scaffold Migration and Query Files
-
-Run the `create-migration.ts` script to generate the necessary files.
+Scaffold the migration and an empty query file:
 
 ```bash
 npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
 ```
 
-**Example:**
-```bash
-npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts add_products_table
+For `add_products_table` it runs `make migrate-create name=add_products_table`, creates `postgres/queries/products.sql` if missing and prints the created paths. Then:
+
+```
+- [ ] 1. Write the DDL in the new .up.sql
+- [ ] 2. Write the revert in the new .down.sql, so make migrate-down restores the previous schema
+- [ ] 3. Write the queries in the query file
+- [ ] 4. make migrate-up && make sqlc-gen
+- [ ] 5. New table: add it to every truncateTables (see .claude/rules/repositories.md)
+- [ ] 6. make check
 ```
 
-This will:
-1.  Run `make migrate-create name=add_products_table`
-2.  Create a corresponding empty query file: `postgres/queries/products.sql` (if it doesn't exist)
-3.  Output the paths of the created files.
+## Query Format
 
-### 2. Implement SQL (Agent Task)
+```sql
+-- name: CreateProduct :one
+INSERT INTO products (name) VALUES (@name) RETURNING *;
 
-After running the script, the Agent (you) should:
-1.  **Edit the `.up.sql` file**: Add the DDL (CREATE TABLE, ALTER TABLE, etc.) based on the user's request.
-2.  **Edit the `.down.sql` file**: Add the DDL to revert the changes (DROP TABLE, etc.). This is critical for rollbacks.
-3.  **Edit the `queries/*.sql` file**: Add the necessary queries (formatted for sqlc).
-    ```sql
-    -- name: CreateProduct :one
-    INSERT INTO products (...) VALUES (...) RETURNING *;
-
-    -- name: GetProductByUUID :one
-    SELECT * FROM products WHERE uuid = @uuid;
-    ```
-    Tables use a `uuid uuid DEFAULT uuidv7()` primary key and `created_at`/`updated_at` timestamps, like `users` in `000001_init_db.up.sql`.
-
-### 3. Apply and Generate
-
-Once the SQL is written, run:
-
-```bash
-make migrate-up && make sqlc-gen
+-- name: GetProductByUUID :one
+SELECT * FROM products WHERE uuid = @uuid;
 ```
+
+## Validate
+
+`make sqlc-gen` fails on SQL that does not match the schema; fix the query or the DDL and run it again. Finish with `make check`, which also fails if the committed generated code differs from the queries.

@@ -11,6 +11,8 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
+const swaggerCSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'"
+
 //go:embed assets/swagger_login.html
 var swaggerLoginPage []byte
 
@@ -45,15 +47,19 @@ func (c *DocsController) RegisterRoutes(router *http.ServeMux) {
 func (c *DocsController) LoginGate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", swaggerCSP)
 	if _, err := w.Write(swaggerLoginPage); err != nil {
 		slog.ErrorContext(r.Context(), "LoginGate write failed", "error", err)
 	}
 }
 
 func (c *DocsController) swaggerUI() http.HandlerFunc {
-	return httpSwagger.Handler(
+	ui := httpSwagger.Handler(
 		httpSwagger.AfterScript(swaggerLogoutScript),
 		httpSwagger.UIConfig(map[string]string{"responseInterceptor": swaggerResponseInterceptor}),
 	)
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", swaggerCSP)
+		ui(w, r)
+	}
 }

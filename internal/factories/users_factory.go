@@ -3,9 +3,10 @@ package factories
 import (
 	"go-net-http-auth-base/config"
 	"go-net-http-auth-base/internal/controllers"
+	"go-net-http-auth-base/internal/middlewares"
 )
 
-func UsersFactory(deps *Dependencies, cfg *config.Config) controllers.Controller {
+func UsersFactory(deps *Dependencies, cfg *config.Config, credentialsLimiter middlewares.HandlerMiddleware) controllers.Controller {
 	return controllers.NewUsersController(
 		deps.UsersService,
 		deps.EmailChangeService,
@@ -14,6 +15,7 @@ func UsersFactory(deps *Dependencies, cfg *config.Config) controllers.Controller
 		deps.AuditService,
 		deps.AuthMiddleware,
 		deps.StepUpMiddleware,
+		credentialsLimiter,
 		!cfg.IsDevelopment(),
 	)
 }

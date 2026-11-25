@@ -20,6 +20,7 @@ type passwordService struct {
 	transactor domain.Transactor
 	emails     domain.EmailVerificationService
 	hmacKey    []byte
+	now        func() time.Time
 }
 
 func NewPasswordService(
@@ -30,6 +31,7 @@ func NewPasswordService(
 	transactor domain.Transactor,
 	emails domain.EmailVerificationService,
 	hmacKey []byte,
+	now func() time.Time,
 ) domain.PasswordService {
 	return &passwordService{
 		resets:     resets,
@@ -39,6 +41,7 @@ func NewPasswordService(
 		transactor: transactor,
 		emails:     emails,
 		hmacKey:    hmacKey,
+		now:        now,
 	}
 }
 
@@ -76,7 +79,7 @@ func (s *passwordService) RequestReset(ctx context.Context, email string) (strin
 		Email:        user.Email,
 		EmailVersion: user.EmailVersion,
 		CodeHash:     s.hashCode(resetUUID.String(), code),
-		ExpiresAt:    time.Now().Add(domain.PasswordResetTTL).Unix(),
+		ExpiresAt:    s.now().Add(domain.PasswordResetTTL).Unix(),
 	})
 	if err != nil {
 		return "", err

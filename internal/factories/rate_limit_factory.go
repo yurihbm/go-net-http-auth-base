@@ -11,3 +11,7 @@ import (
 func RateLimitFactory(ctx context.Context, rlCfg config.RateLimitConfig) middlewares.GlobalMiddleware {
 	return middlewares.NewRateLimitMiddleware(ctx, rate.Limit(rlCfg.RequestsPerSecond), rlCfg.Burst)
 }
+
+func CredentialsRateLimitFactory(ctx context.Context, rlCfg config.RateLimitConfig) middlewares.HandlerMiddleware {
+	return middlewares.NewCredentialsRateLimitMiddleware(ctx, rlCfg.CredentialsPerMinute, rlCfg.CredentialsBurst)
+}

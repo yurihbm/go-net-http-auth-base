@@ -35,6 +35,7 @@ type authService struct {
 	emailVerification     domain.EmailVerificationService
 	sessionMaxAge         time.Duration
 	maxSessionsPerUser    int
+	now                   func() time.Time
 }
 
 func NewAuthService(
@@ -48,6 +49,7 @@ func NewAuthService(
 	emailVerification domain.EmailVerificationService,
 	sessionMaxAge time.Duration,
 	maxSessionsPerUser int,
+	now func() time.Time,
 ) domain.AuthService {
 	return &authService{
 		usersService,
@@ -60,6 +62,7 @@ func NewAuthService(
 		emailVerification,
 		sessionMaxAge,
 		maxSessionsPerUser,
+		now,
 	}
 }
 
@@ -177,7 +180,7 @@ func (s *authService) RefreshToken(ctx context.Context, dto domain.RefreshTokenD
 		return domain.AuthTokens{}, err
 	}
 
-	if time.Now().Unix() >= session.ExpiresAt || session.CurrentJTI != tokenData.ID {
+	if s.now().Unix() >= session.ExpiresAt || session.CurrentJTI != tokenData.ID {
 		return domain.AuthTokens{}, s.revokeSession(ctx, userUUID, sessionUUID)
 	}
 
@@ -229,7 +232,7 @@ func (s *authService) LogoutOthers(ctx context.Context, userUUID string, session
 		}
 		return err
 	}
-	if time.Now().Unix() >= session.ExpiresAt {
+	if s.now().Unix() >= session.ExpiresAt {
 		return ErrInvalidToken
 	}
 
@@ -251,7 +254,7 @@ func (s *authService) startSession(ctx context.Context, user *domain.User) (doma
 		session, err := s.sessionsRepository.Create(ctx, domain.UserSession{
 			UserUUID:   user.UUID,
 			CurrentJTI: jti,
-			ExpiresAt:  time.Now().Add(s.sessionMaxAge).Unix(),
+			ExpiresAt:  s.now().Add(s.sessionMaxAge).Unix(),
 		})
 		if err != nil {
 			return err

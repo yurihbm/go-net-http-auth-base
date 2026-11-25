@@ -1,0 +1,14 @@
+http:
+  routers:
+    api:
+      rule: Host(`{{ env "API_DOMAIN" }}`)
+      entryPoints:
+        - websecure
+      service: api
+      tls:
+        certResolver: letsencrypt
+  services:
+    api:
+      loadBalancer:
+        servers:
+          - url: http://api:{{ env "API_PORT" }}
