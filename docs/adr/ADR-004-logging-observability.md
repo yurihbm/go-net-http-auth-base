@@ -37,7 +37,7 @@ exporters), and a hand-written wrapper would duplicate it with weaker types.
 
 ![Telemetry pipeline](diagrams/telemetry-pipeline.svg)
 
-<sub>[Diagram source](diagrams/telemetry-pipeline.json) ([how to view it interactively](README.md#diagrams))</sub>
+<sub>[Diagram source](diagrams/telemetry-pipeline.json) ([made with Archify](README.md#diagrams))</sub>
 
 - `internal/telemetry` starts the SDK once (traces, metrics and logs over
   OTLP/HTTP, plus Go runtime metrics) and flushes it on shutdown.

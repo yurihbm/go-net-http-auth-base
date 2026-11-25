@@ -23,7 +23,7 @@ const (
 var (
 	namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-	skippedDirs  = []string{".git", ".claude/skills/archify", ".claude/worktrees", "bin", "tmp", "docs/swagger", "tools/rename"}
+	skippedDirs  = []string{".git", ".claude/worktrees", "bin", "tmp", "docs/swagger", "tools/rename"}
 	skippedFiles = []string{"go.mod", "go.sum"}
 )
 

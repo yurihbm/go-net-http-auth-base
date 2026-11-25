@@ -41,11 +41,5 @@ conductor
 # OpenCode specific files
 .opencode
 
-# Archify rendered diagrams (docs/adr/diagrams)
-.archify
-
-# Pinned Archify skill installed by the Makefile (make install-archify)
-.claude/skills/archify/
-
 # Claude Code worktrees
 .claude/worktrees/

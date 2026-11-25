@@ -10,15 +10,12 @@ AIR_VERSION = v1.65.3
 SQLC_VERSION = v1.31.1
 GOLANG_MIGRATE_VERSION = v4.19.1
 SWAG_VERSION = v1.16.6
-ARCHIFY_VERSION = v3.3.1
-ARCHIFY_DIR = .claude/skills/archify
 
 .PHONY: install-tools \
 	install-air \
 	install-migrate \
 	install-sqlc \
 	install-swag \
-	install-archify \
 	tidy \
 	setup \
 	hooks \
@@ -47,14 +44,6 @@ install-sqlc:
 
 install-swag:
 	go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
-
-install-archify:
-	rm -rf $(ARCHIFY_DIR) $(ARCHIFY_DIR)-src
-	git clone --quiet --depth 1 --filter=blob:none --sparse --branch $(ARCHIFY_VERSION) https://github.com/tt-a1i/archify.git $(ARCHIFY_DIR)-src
-	git -C $(ARCHIFY_DIR)-src sparse-checkout set archify
-	mv $(ARCHIFY_DIR)-src/archify $(ARCHIFY_DIR)
-	rm -rf $(ARCHIFY_DIR)-src
-	node $(ARCHIFY_DIR)/bin/archify.mjs doctor
 
 tidy:
 	go mod tidy

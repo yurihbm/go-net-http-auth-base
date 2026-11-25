@@ -23,7 +23,7 @@ composition root.
 
 ![Layered architecture and composition root](diagrams/layered-architecture.svg)
 
-<sub>[Diagram source](diagrams/layered-architecture.json) ([how to view it interactively](README.md#diagrams))</sub>
+<sub>[Diagram source](diagrams/layered-architecture.json) ([made with Archify](README.md#diagrams))</sub>
 
 - **Controllers** (`internal/controllers`) handle HTTP: decode and validate
   input with `api.DecodeAndValidate`, call exactly one service method, and write

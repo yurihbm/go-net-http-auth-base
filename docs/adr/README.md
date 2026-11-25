@@ -38,27 +38,13 @@ Status, Context, Decision and Consequences.
 
 ## Diagrams
 
-Diagrams are generated with [Archify](https://github.com/tt-a1i/archify) from
-the JSON sources in [`diagrams/`](diagrams/). Each one has two files:
+The diagrams in [`diagrams/`](diagrams/) were made with
+[Archify](https://github.com/tt-a1i/archify). Each one has two files:
 
 - `<name>.json`: the source. Its components cite the code they describe, pinned
   to a commit.
 - `<name>.svg`: the static export embedded in the ADRs. It follows the light or
   dark theme of the page.
 
-To view a diagram interactively or change it, install the pinned Archify version
-(`make install-archify`, requires Node 18+). It is installed as a project skill
-in `.claude/skills/archify/` (git-ignored), so Claude Code offers `/archify` in
-this repository. A personal skill with the same name (`~/.claude/skills/archify`)
-takes precedence over it, so keep yours at `ARCHIFY_VERSION` (Makefile) or remove
-it. Render the JSON from the repository root into `.archify/` (git-ignored) and
-open the resulting HTML in a browser. `<type>` is the JSON's `diagram_type`.
-
-```bash
-node .claude/skills/archify/bin/archify.mjs finalize <type> docs/adr/diagrams/<name>.json \
-  .archify/<name>.html --repo-root . --quality showcase
-```
-
-After changing the JSON, export the SVG from the HTML viewer
-(**Export → SVG · Auto**) over `docs/adr/diagrams/<name>.svg`. When the cited code
-moves, update `meta.repository.revision` and the source line ranges in the JSON.
+When the cited code moves, update `meta.repository.revision` and the source line
+ranges in the JSON.

@@ -37,7 +37,7 @@ defaults must be safe. The main threats considered:
 
 ![Refresh token rotation and reuse detection](diagrams/refresh-token-rotation.svg)
 
-<sub>[Diagram source](diagrams/refresh-token-rotation.json) ([how to view it interactively](README.md#diagrams))</sub>
+<sub>[Diagram source](diagrams/refresh-token-rotation.json) ([made with Archify](README.md#diagrams))</sub>
 
 - A reused or stale refresh token, an expired session or a lost concurrent
   refresh deletes **only that session**, so the user's other devices stay signed

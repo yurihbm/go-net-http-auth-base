@@ -2,7 +2,6 @@
 .gitignore
 .github/
 .claude/
-.archify/
 .env*
 bin/
 tmp/
