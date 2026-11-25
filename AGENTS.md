@@ -105,6 +105,7 @@ Local choices (naming, a new helper, a refactor that keeps behavior) do not need
 | Tests, mocks, E2E | `.claude/rules/testing.md` | `**/*_test.go`, `internal/mocks/**`, `internal/tests/**` |
 | Telemetry, logging, dashboards | `.claude/rules/telemetry.md` | telemetry, middlewares, logger, tracers, Grafana, `cmd/**` |
 | Auth and email invariants | `.claude/rules/auth.md` | auth, users, sessions, step-up, sign-up and email files |
+| Environment variables | `.claude/rules/config.md` | `config/**`, `internal/env/**`, `cmd/*/main.go`, compose files, E2E `TestMain` |
 | Sign-up, OAuth, sessions, step-up, email change | `docs/AUTH.md` | read on demand |
 | Error keys and mapping | `docs/ERRORS.md` | read on demand |
 | Audit log actions | `docs/AUDIT.md` | read on demand |
