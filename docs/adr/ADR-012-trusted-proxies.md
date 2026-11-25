@@ -17,7 +17,10 @@ rate limiter and falsifies the audit trail.
 - **Allow-list.** `TRUSTED_PROXIES` is a comma-separated list of CIDRs or bare
   IPs (a bare IP is a /32 or /128). It is empty by default, so a deployment
   without a proxy never reads `X-Forwarded-For`. An invalid entry fails
-  `config.Load`.
+  `config.Load`. In production an empty list is allowed but logs a warning at
+  startup (`cmd/api`), since behind a proxy it collapses every client into one
+  rate-limit bucket. The production compose file sets it to the Traefik `edge`
+  subnet by default (ADR-013).
 - **Resolution.** `ClientIPMiddleware` runs right after the request context data
   middleware and stores the result in `RequestContextData.ClientIP`. If the
   connection's `RemoteAddr` host is not in the allow-list, it is the client. If

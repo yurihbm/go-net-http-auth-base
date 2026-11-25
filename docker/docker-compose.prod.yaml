@@ -71,6 +71,8 @@ services:
     container_name: ${PROJECT_NAME:-auth-base}-api-prod
     env_file:
       - ../.env
+    environment:
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.30.0.0/24}
     expose:
       - "${API_PORT:-8080}"
     networks:

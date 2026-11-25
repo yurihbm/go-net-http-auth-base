@@ -100,13 +100,15 @@ func SetAuthCookies(w http.ResponseWriter, tokens domain.AuthTokens, secure bool
 	})
 }
 
-func DeleteAuthCookies(w http.ResponseWriter) {
+func DeleteAuthCookies(w http.ResponseWriter, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     AccessTokenCookieName,
 		Value:    "",
 		Path:     AccessTokenCookiePath,
 		HttpOnly: true,
 		MaxAge:   -1,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
 	})
 
 	http.SetCookie(w, &http.Cookie{
@@ -115,5 +117,7 @@ func DeleteAuthCookies(w http.ResponseWriter) {
 		Path:     RefreshTokenCookiePath,
 		HttpOnly: true,
 		MaxAge:   -1,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
 	})
 }

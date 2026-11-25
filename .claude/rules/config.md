@@ -24,4 +24,4 @@ paths:
 
 ## Docker Compose
 
-Only the `api` service in `docker/docker-compose.prod.yaml` receives the whole `.env` (`env_file`), so a new API variable needs no compose change. Any other service gets explicit `${VAR}` entries under `environment:` (interpolated from `--env-file .env`), only the ones it uses, like `POSTGRES_*` for `db` and `API_DOMAIN`/`API_PORT` for `traefik`.
+Only the `api` service in `docker/docker-compose.prod.yaml` receives the whole `.env` (`env_file`), so a new API variable needs no compose change. The one exception is `TRUSTED_PROXIES`, which `api` also lists under `environment:` as `${TRUSTED_PROXIES:-172.30.0.0/24}` (the `edge` subnet, so it overrides the `env_file` value); `cmd/api` logs a warning when it is empty in production. Any other service gets explicit `${VAR}` entries under `environment:` (interpolated from `--env-file .env`), only the ones it uses, like `POSTGRES_*` for `db` and `API_DOMAIN`/`API_PORT` for `traefik`.

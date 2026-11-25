@@ -32,7 +32,8 @@ more privileges than routing needs.
   `internal` (`internal: true`) holds the database, migration and API. The
   database has no route to the outside. The API sits on both, so it keeps
   outbound access (OAuth providers, email, telemetry) through `edge`.
-- **Client IP.** `TRUSTED_PROXIES=172.30.0.0/24` makes the API trust
+- **Client IP.** `docker-compose.prod.yaml` sets `TRUSTED_PROXIES` for the API
+  to `${TRUSTED_PROXIES:-172.30.0.0/24}`, which makes the API trust
   `X-Forwarded-For` only from Traefik. Traefik's default forwarded-headers
   behavior stays on, so `X-Forwarded-*` sent by clients is discarded and
   replaced.
@@ -67,7 +68,7 @@ more privileges than routing needs.
 - A single Traefik and API instance on one host: no high availability. The
   in-memory rate limiter stays correct for that reason (ADR-012).
 - `TRUSTED_PROXIES` must contain the `edge` subnet. Changing the subnet in the
-  compose file requires changing the variable, or clients share the proxy's rate
-  limit bucket again.
+  compose file requires changing the default (or setting the variable), or
+  clients share the proxy's rate limit bucket again.
 - `API_DOMAIN` and `ACME_EMAIL` are required variables, and the domain must
   resolve to the VPS before the first start for the certificate to be issued.

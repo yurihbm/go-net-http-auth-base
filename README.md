@@ -18,7 +18,8 @@ The project follows a layered architecture pattern. For a detailed explanation o
 ```
 go-net-http-auth-base/
 ├── cmd/
-│   └── main.go         # Entry point: config, telemetry, DB pool, routes, middleware chain
+│   ├── api/            # Server: config, telemetry, DB pool, routes, middleware chain
+│   └── promote-admin/  # One-shot CLI that promotes an existing user to admin
 ├── config/             # Environment variable loading and validation
 ├── internal/           # Private application code
 │   ├── api/            # Request decoding/validation, responses, error mapping, cookies
@@ -30,7 +31,8 @@ go-net-http-auth-base/
 │   ├── factories/      # Composition root (dependency injection)
 │   ├── middlewares/    # HTTP middlewares
 │   ├── mocks/          # testify mocks of the domain interfaces
-│   ├── infra/          # Audit log partition manager
+│   ├── commands/       # Logic behind the CLI in cmd/promote-admin
+│   ├── infra/          # Background tasks: audit log partition manager, expired records sweeper
 │   ├── tests/          # Cross-layer suites: e2e (HTTP) and integration (service + repositories)
 │   ├── logger/         # slog setup
 │   ├── telemetry/      # OpenTelemetry SDK bootstrap
@@ -100,7 +102,7 @@ go-net-http-auth-base/
    cp .env.example .env
    ```
 
-   Edit `.env` with your configuration. `JWT_SECRET` (at least 32 characters) and `DATABASE_URL` are required; see the Configuration section below for the rest.
+   Edit `.env` with your configuration. `JWT_SECRET` (at least 32 characters), `DATABASE_URL` and `API_ENV` (`development` or `production`) are required by the API, and the dev compose file also needs `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `PGADMIN_DEFAULT_EMAIL` and `PGADMIN_DEFAULT_PASSWORD` (`PROJECT_NAME` is optional and prefixes the container and volume names); see the Configuration section below for the rest.
 
 5. **Start the database**
 
@@ -257,7 +259,7 @@ This method sets up the application, a PostgreSQL database and [Traefik](https:/
    # Edit .env with your configuration
    ```
 
-   Besides the usual variables, set `API_ENV=production`, `API_DOMAIN` (the domain routed to the API, e.g. `api.example.com`), `ACME_EMAIL` (Let's Encrypt contact), `API_URL=https://<API_DOMAIN>`, `OAUTH_CALLBACK_ALLOW_LIST` and `CORS_ALLOWED_ORIGINS` with `https://` URLs, and `TRUSTED_PROXIES=172.30.0.0/24`. That is the `edge` network subnet in the compose file; if you change one, change the other.
+   Besides the usual variables, set `API_ENV=production`, `API_DOMAIN` (the domain routed to the API, e.g. `api.example.com`), `ACME_EMAIL` (Let's Encrypt contact), `API_URL=https://<API_DOMAIN>`, `OAUTH_CALLBACK_ALLOW_LIST` and `CORS_ALLOWED_ORIGINS` with `https://` URLs, and, only if you change the `edge` subnet in the compose file, `TRUSTED_PROXIES` (the compose file defaults it to the current subnet, `172.30.0.0/24`). The API logs a warning at startup when `TRUSTED_PROXIES` is empty in production.
 
 3. **Run with Docker Compose**
 
@@ -448,6 +450,11 @@ While this is a template, ADRs are edited in place to describe its final state, 
 - `docker-build` builds the image only when `docker/**`, `go.mod`, `go.sum`, `.dockerignore` or `docker.yml` change. Otherwise the job is skipped, which satisfies the required check. Keep that filter in the `changes` job rather than in `on.paths`: a workflow skipped by a trigger filter never reports its checks, and a required check that never reports blocks the merge.
 - Allow merge commits only. Rebase and squash merges are re-created by GitHub and produce unsigned commits on `main`.
 - Enable Dependabot alerts and security updates, and private vulnerability reporting (see [SECURITY.md](SECURITY.md)).
+- Enable secret scanning with push protection, and CodeQL default setup for Go and GitHub Actions.
+- Set the default `GITHUB_TOKEN` permissions to read-only and do not let Actions approve pull requests.
+- In the `main` ruleset, block deletion and force pushes (non-fast-forward).
+
+These are optional recommendations that mirror this template repository's own setup. Each derived project chooses its own settings. Secret scanning, push protection and code scanning are paid features for private repositories (GitHub Secret Protection and GitHub Code Security).
 
 ## 🤝 Contributing
 

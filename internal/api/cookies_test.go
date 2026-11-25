@@ -97,3 +97,34 @@ func TestSetAuthCookies(t *testing.T) {
 	assert.Equal(t, int(domain.TokenExpirationRefresh.Seconds()), refresh.MaxAge)
 	assert.True(t, refresh.Secure)
 }
+
+func TestDeleteAuthCookies(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		secure bool
+	}{
+		{"secure", true},
+		{"not secure", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			api.DeleteAuthCookies(w, tc.secure)
+
+			access := responseCookie(t, w, api.AccessTokenCookieName)
+			assert.Empty(t, access.Value)
+			assert.Equal(t, api.AccessTokenCookiePath, access.Path)
+			assert.Negative(t, access.MaxAge)
+			assert.True(t, access.HttpOnly)
+			assert.Equal(t, tc.secure, access.Secure)
+			assert.Equal(t, http.SameSiteStrictMode, access.SameSite)
+			refresh := responseCookie(t, w, api.RefreshTokenCookieName)
+			assert.Empty(t, refresh.Value)
+			assert.Equal(t, api.RefreshTokenCookiePath, refresh.Path)
+			assert.Negative(t, refresh.MaxAge)
+			assert.True(t, refresh.HttpOnly)
+			assert.Equal(t, tc.secure, refresh.Secure)
+			assert.Equal(t, http.SameSiteStrictMode, refresh.SameSite)
+		})
+	}
+}
