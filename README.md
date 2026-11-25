@@ -175,6 +175,7 @@ go test ./... -cover             # Run with coverage report
 make test-e2e                    # Only the HTTP end-to-end suite (needs Docker)
 make test-cover                  # Coverage (all suites count) without generated and wiring packages (writes coverage.out)
 make show-cover                  # test-cover plus the per-function report CI posts on PRs
+make check                       # Pre-PR checks: build, vet, lint, all tests, Swagger and sqlc drift
 ```
 
 ## 🌐 API Endpoints

@@ -52,6 +52,7 @@ go test -short ./...       # unit tests (skips integration tests)
 go test ./...              # everything (integration and E2E tests need Docker)
 make test-e2e              # E2E suite only
 make show-cover            # coverage as reported by CI
+make check                 # build, vet, lint, full tests and swagger/sqlc drift (needs Docker)
 ```
 
 ## Rules That Always Apply
@@ -61,6 +62,7 @@ make show-cover            # coverage as reported by CI
 - **TDD**: new logic, bug fixes and features start with a failing test; refactors keep the existing tests green and add missing coverage. Tests live next to the code they test (`_test.go`).
 - **Test Naming**: one `Test<Type>_<Method>` per tested method (`TestNew<Type>` for constructors), scenarios as `t.Run` subtests (`"success"`, `"error - <description>"`); never a standalone `Test...` per scenario. E2E flows are the exception (`Test<Flow>`). Details in `.claude/rules/testing.md`.
 - **Template Phase**: while this repository is a template, schema changes go into `postgres/migrations/000001_init_db.up.sql`/`.down.sql`, never a new migration file. Re-apply with `make migrate-down && make migrate-up`, then `make sqlc-gen`.
+- **Before a PR**: run `make check`; it runs what the required CI checks run (build, vet, lint, full tests, swagger and sqlc drift).
 - **Swagger**: every handler carries swag annotations. Run `make swagger-gen` after changing a handler or a DTO it uses and commit `docs/swagger/`; CI fails on drift.
 
 ### Code

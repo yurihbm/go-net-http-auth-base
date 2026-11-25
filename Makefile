@@ -29,7 +29,8 @@ SWAG_VERSION = v1.16.6
 	swagger-gen \
 	test-cover \
 	show-cover \
-	test-e2e
+	test-e2e \
+	check
 
 install-tools: install-air install-migrate install-sqlc install-swag
 
@@ -117,6 +118,27 @@ migrate-down:
 sqlc-gen:
 	@echo "Generating code with sqlc..."
 	DATABASE_URL=$(DATABASE_URL) sqlc generate
+
+# Run every pre-PR check: build, vet, lint, full tests (Docker) and generated code drift.
+# sqlc needs a database with the schema, so the drift check uses a throwaway PostgreSQL container, like the sqlc-drift CI job.
+# The .env block exports every variable, so build's GOOS/GOARCH defaults would reach go test
+check: GOOS := $(shell go env GOHOSTOS)
+check: GOARCH := $(shell go env GOHOSTARCH)
+check:
+	go build ./...
+	go vet ./...
+	golangci-lint run ./...
+	go test ./...
+	$(MAKE) swagger-gen
+	git diff --exit-code -- docs/swagger
+	@echo "Checking sqlc generated code..."
+	@set -e; \
+	container=$$(docker run -d --rm -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=sqlc -p 127.0.0.1::5432 postgres:18-alpine); \
+	trap 'docker stop $$container >/dev/null' EXIT; \
+	for i in $$(seq 30); do docker exec $$container pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1 && break; sleep 1; done; \
+	url="postgres://postgres:postgres@$$(docker port $$container 5432/tcp | head -n 1)/sqlc?sslmode=disable"; \
+	migrate -database "$$url" -path postgres/migrations up; \
+	DATABASE_URL="$$url" sqlc diff
 
 # Generate the Swagger spec from the handler annotations
 swagger-gen:

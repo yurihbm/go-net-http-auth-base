@@ -148,8 +148,8 @@ Examples:
 2.  **Install dependencies**: Run `make setup`.
 3.  **Make your changes** following the code standards.
 4.  **Add tests** for your changes.
-5.  **Run tests** to ensure everything is working: `go test ./...`.
-6.  **Run linter** (`golangci-lint run`, if available locally) or check CI status.
+5.  **Run the checks**: `make check` builds, vets, lints, runs every test and fails on Swagger or sqlc drift (needs Docker).
+6.  **Check CI status** after pushing.
 7.  **Update docs**: `make swagger-gen` for handler changes, an ADR for architectural decisions, and README/AGENTS.md (or the matching `.claude/rules/` file or `docs/AUTH.md`) when a convention, flow or command changes.
 8.  **Commit your changes** using the conventional commit format.
 9.  **Push to your fork** and submit a Pull Request.
