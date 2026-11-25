@@ -61,16 +61,33 @@ func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, f
 // @BasePath		/
 func main() {
 	if err := run(); err != nil {
-		slog.Error("Application failed", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run() (runErr error) {
 	err := godotenv.Load()
 
 	// Single os.Getenv call before config.Load, so config errors can be logged properly.
 	logger.Setup(os.Getenv("API_ENV") == "production")
+
+	// Logs the failure before flushing telemetry, so it is also exported over OTLP.
+	var tel *telemetry.Telemetry
+	defer func() {
+		if runErr != nil {
+			slog.Error("Application failed", "error", runErr)
+		}
+		if tel == nil {
+			return
+		}
+
+		telemetryCtx, cancelTelemetry := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelTelemetry()
+
+		if err := tel.Shutdown(telemetryCtx); err != nil {
+			slog.Error("Failed to shutdown telemetry", "error", err)
+		}
+	}()
 
 	cfg, cfgErr := config.Load()
 	if cfgErr != nil {
@@ -88,7 +105,7 @@ func run() error {
 	)
 	defer stopBackgroundTasks()
 
-	tel, err := telemetry.New(ctx, cfg.Telemetry, cfg.Env)
+	tel, err = telemetry.New(ctx, cfg.Telemetry, cfg.Env)
 	if err != nil {
 		return fmt.Errorf("initialize telemetry: %w", err)
 	}
@@ -197,7 +214,6 @@ func run() error {
 		}
 	}()
 
-	var runErr error
 	select {
 	case <-ctx.Done():
 	case err := <-serverErr:
@@ -219,13 +235,6 @@ func run() error {
 	}
 
 	slog.Info("Server exited")
-
-	telemetryCtx, cancelTelemetry := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelTelemetry()
-
-	if err := tel.Shutdown(telemetryCtx); err != nil {
-		slog.Error("Failed to shutdown telemetry", "error", err)
-	}
 
 	return runErr
 }
