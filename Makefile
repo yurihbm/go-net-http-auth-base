@@ -11,7 +11,7 @@ SQLC_VERSION = v1.31.1
 GOLANG_MIGRATE_VERSION = v4.19.1
 SWAG_VERSION = v1.16.6
 ARCHIFY_VERSION = v3.3.1
-ARCHIFY_DIR = .tools/archify
+ARCHIFY_DIR = .claude/skills/archify
 
 .PHONY: install-tools \
 	install-air \

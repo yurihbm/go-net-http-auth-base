@@ -139,6 +139,7 @@ func TestRun(t *testing.T) {
 		writeFile(t, root, "docs/swagger/docs.go", "go-net-http-auth-base\n")
 		writeFile(t, root, ".git/config", "go-net-http-auth-base\n")
 		writeFile(t, root, ".claude/worktrees/w/a.txt", "go-net-http-auth-base\n")
+		writeFile(t, root, ".claude/skills/archify/SKILL.md", "go-net-http-auth-base\n")
 		writeFile(t, root, "bin/app", "go-net-http-auth-base\n")
 		writeFile(t, root, "tmp/a.txt", "go-net-http-auth-base\n")
 		writeFile(t, root, "tools/rename/rename.go", "go-net-http-auth-base\n")
@@ -167,7 +168,7 @@ func TestRun(t *testing.T) {
 		_, err := Run(root, testOptions)
 
 		require.NoError(t, err)
-		for _, rel := range []string{"go.sum", "docs/swagger/docs.go", ".git/config", ".claude/worktrees/w/a.txt", "bin/app", "tmp/a.txt", "tools/rename/rename.go", ".env", "blob.bin"} {
+		for _, rel := range []string{"go.sum", "docs/swagger/docs.go", ".git/config", ".claude/worktrees/w/a.txt", ".claude/skills/archify/SKILL.md", "bin/app", "tmp/a.txt", "tools/rename/rename.go", ".env", "blob.bin"} {
 			assert.Contains(t, readFile(t, root, rel), "go-net-http-auth-base", rel)
 		}
 	})

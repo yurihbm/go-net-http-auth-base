@@ -44,8 +44,8 @@ conductor
 # Archify rendered diagrams (docs/adr/diagrams)
 .archify
 
-# Pinned development tools installed by the Makefile (make install-archify)
-.tools
+# Pinned Archify skill installed by the Makefile (make install-archify)
+.claude/skills/archify/
 
 # Claude Code worktrees
 .claude/worktrees/

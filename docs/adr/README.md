@@ -47,12 +47,15 @@ the JSON sources in [`diagrams/`](diagrams/). Each one has two files:
   dark theme of the page.
 
 To view a diagram interactively or change it, install the pinned Archify version
-(`make install-archify`, requires Node 18+), render the JSON from the repository
-root into `.archify/` (git-ignored) and open the resulting HTML in a browser.
-`<type>` is the JSON's `diagram_type`.
+(`make install-archify`, requires Node 18+). It is installed as a project skill
+in `.claude/skills/archify/` (git-ignored), so Claude Code offers `/archify` in
+this repository. A personal skill with the same name (`~/.claude/skills/archify`)
+takes precedence over it, so keep yours at `ARCHIFY_VERSION` (Makefile) or remove
+it. Render the JSON from the repository root into `.archify/` (git-ignored) and
+open the resulting HTML in a browser. `<type>` is the JSON's `diagram_type`.
 
 ```bash
-node .tools/archify/bin/archify.mjs finalize <type> docs/adr/diagrams/<name>.json \
+node .claude/skills/archify/bin/archify.mjs finalize <type> docs/adr/diagrams/<name>.json \
   .archify/<name>.html --repo-root . --quality showcase
 ```
 

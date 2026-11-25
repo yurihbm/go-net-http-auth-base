@@ -2,7 +2,6 @@
 .gitignore
 .github/
 .claude/
-.tools/
 .archify/
 .env*
 bin/
