@@ -10,7 +10,7 @@
       "url": "https://github.com/yurihbm/go-net-http-auth-base.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "1dea67196c033b1de646f7921ec99b40ddd8da7a"
+      "revision": "9542e7641388dfba2b9a5e38206d6abf78e83208"
     }
   },
   "participants": [
@@ -28,14 +28,14 @@
       "sources": [
         {
           "path": "internal/controllers/auth_controller.go",
-          "line": 167,
-          "end_line": 202
+          "line": 490,
+          "end_line": 514
         },
         {
-          "path": "internal/controllers/auth_controller.go",
-          "line": 415,
-          "end_line": 437,
-          "label": "setAuthCookies"
+          "path": "internal/api/cookies.go",
+          "line": 81,
+          "end_line": 101,
+          "label": "SetAuthCookies"
         }
       ]
     },
@@ -47,8 +47,8 @@
       "sources": [
         {
           "path": "internal/services/auth_service.go",
-          "line": 82,
-          "end_line": 139
+          "line": 159,
+          "end_line": 220
         }
       ]
     },
@@ -61,7 +61,7 @@
         {
           "path": "internal/services/token_service.go",
           "line": 1,
-          "end_line": 105
+          "end_line": 108
         }
       ]
     },
