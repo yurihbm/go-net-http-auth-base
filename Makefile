@@ -72,8 +72,8 @@ hooks:
 	git config core.hooksPath .githooks
 
 # Build application binary (override with make build GOOS=darwin GOARCH=arm64)
-GOOS ?= linux
-GOARCH ?= amd64
+build: GOOS ?= linux
+build: GOARCH ?= amd64
 build:
 	@echo "Building application binary..."
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o bin/app ./cmd/api
@@ -121,9 +121,6 @@ sqlc-gen:
 
 # Run every pre-PR check: build, vet, lint, full tests (Docker) and generated code drift.
 # sqlc needs a database with the schema, so the drift check uses a throwaway PostgreSQL container, like the sqlc-drift CI job.
-# The .env block exports every variable, so build's GOOS/GOARCH defaults would reach go test
-check: GOOS := $(shell go env GOHOSTOS)
-check: GOARCH := $(shell go env GOHOSTARCH)
 check:
 	go build ./...
 	go vet ./...
