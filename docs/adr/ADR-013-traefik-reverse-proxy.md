@@ -9,7 +9,8 @@ Outside development the auth cookies are `Secure` (ADR-005; the OAuth, pending
 sign-up and password reset flow cookies are also `__Host-` prefixed), so
 browsers drop them over plain HTTP and logins do not stick: production needs
 TLS. The deployment model is one project per VPS, with a known and small set of
-routes. ADR-012 needs a known proxy address to trust `X-Forwarded-For`.
+routes; services added to the same VPS later sit behind the same Traefik.
+ADR-012 needs a known proxy address to trust `X-Forwarded-For`.
 
 Traefik is the only container that faces the internet, so it must not hold
 more privileges than routing needs.
@@ -46,10 +47,13 @@ more privileges than routing needs.
   API behind it, so a compromised Traefik could start privileged containers. A
   socket proxy would reduce that at the cost of one more service. With one
   project per VPS and a small set of routes, discovery adds nothing.
-- **Caddy.** Simpler ACME, but static per-host configuration instead of
-  discovery of new services.
-- **nginx plus certbot.** More moving parts for certificate renewal and no
-  automatic discovery.
+- **Caddy, or nginx plus certbot.** They were weighed when label-based
+  discovery was the goal: Caddy has simpler ACME but static per-host
+  configuration, and nginx needs certbot for renewal (more moving parts) and has
+  no discovery. With the file provider, routing is static here as well, so Caddy
+  would be roughly equivalent. Traefik stays because it is already integrated
+  (ACME, the HTTP to HTTPS redirect and the file-provider routes are in place);
+  nginx would still add a separate certificate renewal.
 
 ## Consequences
 

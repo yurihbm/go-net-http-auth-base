@@ -436,9 +436,10 @@ Checklist after creating a repository from this template:
 
 ### Leaving the template phase
 
-While this is a template, schema changes go into `postgres/migrations/000001_init_db.*`. Once the first real deployment exists, stop editing those files and use `make migrate-create` instead. Update the "Template Phase" statements in `AGENTS.md` (`CLAUDE.md` is a symlink to it), `CONTRIBUTING.md`, this README, `.claude/rules/repositories.md` and `.claude/skills/go-migration-scaffolder`. The decision is recorded in [ADR-003](docs/adr/ADR-003-database-strategy.md): write a new ADR that supersedes it instead of editing it.
+While this is a template, ADRs are edited in place to describe its final state, and schema changes go into `postgres/migrations/000001_init_db.*`. Once the first real deployment exists, switch both rules, in this order:
 
-The ADRs describe the template's final state: during the template phase they are edited in place instead of superseded. Make them immutable from then on by updating the rule in `docs/adr/README.md` ("Writing a new ADR") and the **Immutability** bullet in `AGENTS.md`, so later changes go through new ADRs that supersede the old ones.
+1. Make the ADRs immutable: delete the template-phase point in `docs/adr/README.md` ("Writing a new ADR"), the template-phase sentence of the **Immutability** bullet in `AGENTS.md` (`CLAUDE.md` is a symlink to it) and the template-phase clause about ADRs in `CONTRIBUTING.md`.
+2. Stop editing the initial migration and use `make migrate-create` instead. Update the "Template Phase" statements in `AGENTS.md`, `CONTRIBUTING.md`, this README, `.claude/rules/repositories.md` and `.claude/skills/go-migration-scaffolder`, and record the change in a new ADR that supersedes [ADR-003](docs/adr/ADR-003-database-strategy.md).
 
 ### Recommended GitHub settings
 

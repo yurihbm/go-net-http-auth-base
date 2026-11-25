@@ -10,7 +10,7 @@
       "url": "https://github.com/yurihbm/go-net-http-auth-base.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "1dea67196c033b1de646f7921ec99b40ddd8da7a"
+      "revision": "9542e7641388dfba2b9a5e38206d6abf78e83208"
     }
   },
   "stages": [
@@ -60,9 +60,9 @@
           "end_line": 117
         },
         {
-          "path": "cmd/main.go",
-          "line": 86,
-          "end_line": 99,
+          "path": "cmd/api/main.go",
+          "line": 103,
+          "end_line": 112,
           "label": "wired when enabled"
         }
       ]
@@ -81,7 +81,7 @@
         },
         {
           "path": "internal/telemetry/telemetry.go",
-          "line": 106,
+          "line": 105,
           "label": "runtime.Start"
         }
       ]
@@ -100,9 +100,9 @@
           "end_line": 64
         },
         {
-          "path": "cmd/main.go",
-          "line": 80,
-          "end_line": 84,
+          "path": "cmd/api/main.go",
+          "line": 97,
+          "end_line": 101,
           "label": "fan-out handler"
         }
       ]
@@ -118,8 +118,8 @@
       "sources": [
         {
           "path": "internal/telemetry/telemetry.go",
-          "line": 56,
-          "end_line": 131,
+          "line": 55,
+          "end_line": 130,
           "label": "telemetry.New"
         }
       ],
@@ -135,8 +135,8 @@
       "sources": [
         {
           "path": "docker/docker-compose.dev.yaml",
-          "line": 26,
-          "end_line": 38
+          "line": 29,
+          "end_line": 41
         }
       ],
       "yOffset": 69

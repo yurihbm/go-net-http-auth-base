@@ -16,11 +16,13 @@ The counter is keyed by address only, and the address is not secret. An
 anonymous attacker can `POST /users` with a victim's address (5 sends per hour,
 5 attempts per pending sign-up), then submit wrong codes to
 `/auth/signup/verify` until the address reaches 20 failures. The victim then
-gets `429 auth.email.codeLocked` when verifying their own sign-up and when
-confirming an email change to that address, for up to 24h. The window is fixed: it opens at the first failure after the
-previous one expired, so the attacker can lock the address again right after
-it ends and sustain the denial of service by repeating the attack. It does not block
-starting a sign-up, starting OAuth or `RequestEmailChange`.
+gets `429 auth.email.codeLocked` when verifying their own sign-up (credentials
+or OAuth), when resetting their password and when confirming an email change to
+that address, for up to 24h. The window is fixed: it opens at the first failure
+after the previous one expired, so the attacker can lock the address again right
+after it ends and sustain the denial of service by repeating the attack. It does
+not block starting a sign-up, starting OAuth, requesting a password reset or
+`RequestEmailChange`.
 
 ## Decision
 
@@ -44,13 +46,14 @@ Alternatives weighed:
 ## Consequences
 
 - A targeted denial of service on one address's code verification is possible.
-  Each lockout lasts up to 24h and can be renewed by repeating the attack. The victim can still start a new sign-up or OAuth flow, but its
+  Each lockout lasts up to 24h and can be renewed by repeating the attack. The
+  victim can still start a new sign-up, OAuth flow or password reset, but its
   code is rejected with `auth.email.codeLocked` until the window ends.
 - Mitigations: the global per-IP rate limiter slows the attacker, the send
   limit (60s cooldown, 5 per hour) bounds the pendings they can create, and each
   lockout is bounded by the 24h window (the sweeper deletes the row afterwards).
   They slow the attack but do not prevent renewing it.
 - Brute force against an address stays capped at 20 wrong codes per 24h across
-  every pending sign-up and email change challenge.
+  every pending sign-up, password reset and email change challenge.
 - Revisit if the lockout is abused in practice, for example by adding a
   trusted-device or proof-of-work signal.

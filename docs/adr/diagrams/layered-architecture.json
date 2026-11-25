@@ -10,7 +10,7 @@
       "url": "https://github.com/yurihbm/go-net-http-auth-base.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "1dea67196c033b1de646f7921ec99b40ddd8da7a"
+      "revision": "9542e7641388dfba2b9a5e38206d6abf78e83208"
     }
   },
   "components": [
@@ -19,7 +19,7 @@
       "type": "backend",
       "icon": "backend",
       "label": "Composition root",
-      "sublabel": "cmd/main.go + factories",
+      "sublabel": "cmd/api + factories",
       "tag": "built once",
       "pos": [
         770,
@@ -32,14 +32,14 @@
       "sources": [
         {
           "path": "internal/factories/dependencies.go",
-          "line": 27,
-          "end_line": 77,
+          "line": 44,
+          "end_line": 153,
           "label": "NewDependencies"
         },
         {
-          "path": "cmd/main.go",
-          "line": 147,
-          "end_line": 158,
+          "path": "internal/factories/handler.go",
+          "line": 12,
+          "end_line": 19,
           "label": "factories register routes"
         }
       ]
@@ -74,9 +74,9 @@
       ],
       "sources": [
         {
-          "path": "cmd/main.go",
-          "line": 160,
-          "end_line": 178,
+          "path": "internal/factories/handler.go",
+          "line": 21,
+          "end_line": 48,
           "label": "middleware chain"
         }
       ]
@@ -97,14 +97,14 @@
       "sources": [
         {
           "path": "internal/controllers/users_controller.go",
-          "line": 32,
-          "end_line": 39,
+          "line": 50,
+          "end_line": 60,
           "label": "RegisterRoutes"
         },
         {
           "path": "internal/api/errors.go",
           "line": 12,
-          "end_line": 64,
+          "end_line": 68,
           "label": "HandleError"
         }
       ]
@@ -125,13 +125,13 @@
       "sources": [
         {
           "path": "internal/services/users_service.go",
-          "line": 15,
+          "line": 12,
           "end_line": 57
         },
         {
           "path": "internal/domain/users.go",
-          "line": 58,
-          "end_line": 76,
+          "line": 76,
+          "end_line": 98,
           "label": "domain interfaces"
         }
       ]
@@ -152,8 +152,8 @@
       "sources": [
         {
           "path": "internal/repositories/users_repository.go",
-          "line": 13,
-          "end_line": 54
+          "line": 16,
+          "end_line": 57
         },
         {
           "path": "internal/repositories/transactor.go",
@@ -207,8 +207,8 @@
         },
         {
           "path": "internal/factories/dependencies.go",
-          "line": 79,
-          "end_line": 85,
+          "line": 155,
+          "end_line": 160,
           "label": "email provider choice"
         }
       ]

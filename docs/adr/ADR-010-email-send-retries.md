@@ -9,7 +9,8 @@ Resend retries delivery once it has accepted a message, but when our API call
 fails (timeout, 5xx, 429) the message never reaches Resend. Several emails are
 sent after the database commit with the failure only logged, such as the email
 change undo notice (`SendEmailChangedNotice`, ADR-007) and the OAuth link
-notice (`SendOAuthLinkedNotice`, ADR-011). A transient API error therefore loses them silently.
+notice (`SendOAuthLinkedNotice`, ADR-011). A transient API error therefore
+loses them silently.
 
 ## Decision
 
