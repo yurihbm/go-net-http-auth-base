@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	templateName   = "go-net-http-auth-base"
-	templateGitHub = "yurihbm/go-net-http-auth-base"
-	templateTitle  = "Go net/http Auth Base"
+	templateName     = "go-net-http-auth-base"
+	templateGitHub   = "yurihbm/go-net-http-auth-base"
+	templateTitle    = "Go net/http Auth Base"
 	templateFallback = "PROJECT_NAME:-auth-base}"
 )
 
