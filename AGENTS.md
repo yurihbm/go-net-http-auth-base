@@ -34,7 +34,7 @@ Go with standard `net/http` (Go 1.22+ method patterns), PostgreSQL, `golang-migr
 Prefer these project skills (`.claude/skills/`) over writing the boilerplate by hand:
 
 - `go-resource-scaffolder`: scaffolds a vertical slice (domain, repository with integration tests, service and controller with unit tests, mocks, factory): `npx tsx .claude/skills/go-resource-scaffolder/scripts/scaffold.ts <ResourceName> [--singular]` (e.g. `Product` creates `products_controller.go`, `Auth --singular` creates `auth_controller.go`). Then follow the printed next steps (wire the service in `dependencies.go`, register the factory in `internal/factories/handler.go`, add the table and queries, implement the repository placeholders).
-- `go-migration-scaffolder`: schema and query workflow (`npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>`). During the template phase do not run its script (see below).
+- `go-migration-scaffolder`: schema and query workflow (`npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>`). During the template phase, edit the initial migration instead of running its script (see below).
 - `go-endpoint-checklist`: checklist for adding an endpoint to an existing controller (DTO, service method and mock, handler with swag annotations, route guards, docs, tests), ending with `make check`.
 
 ## Commands
@@ -61,21 +61,21 @@ make check                 # build, vet, lint, full tests and swagger/sqlc drift
 ### Workflow
 
 - TDD: new logic, bug fixes and features start with a failing test; refactors keep the existing tests green and add missing coverage. Tests live next to the code they test (`_test.go`).
-- Test Naming: one `Test<Type>_<Method>` per tested method (`TestNew<Type>` for constructors), scenarios as `t.Run` subtests (`"success"`, `"error - <description>"`); never a standalone `Test...` per scenario. E2E flows are the exception (`Test<Flow>`). Details in `.claude/rules/testing.md`.
-- Template Phase: while this repository is a template, schema changes go into `postgres/migrations/000001_init_db.up.sql`/`.down.sql`, never a new migration file. Re-apply with `make migrate-down && make migrate-up`, then `make sqlc-gen`.
+- Test Naming: one `Test<Type>_<Method>` per tested method (`TestNew<Type>` for constructors), scenarios as `t.Run` subtests (`"success"`, `"error - <description>"`). E2E flows are the exception (`Test<Flow>`). Details in `.claude/rules/testing.md`.
+- Template Phase: while this repository is a template, schema changes go into `postgres/migrations/000001_init_db.up.sql`/`.down.sql` instead of a new migration file. Re-apply with `make migrate-down && make migrate-up`, then `make sqlc-gen`.
 - Before a PR: run `make check`; it runs what the required CI checks run (build, vet, lint, full tests, swagger and sqlc drift).
 - Swagger: every handler carries swag annotations. Run `make swagger-gen` after changing a handler or a DTO it uses and commit `docs/swagger/`; CI fails on drift.
 
 ### Code
 
 - Layers: controllers decode, validate and call services; services hold business rules; repositories only persist. Program to the interfaces in `internal/domain`, so everything can be mocked.
-- Dependency Injection: every dependency comes through a constructor, never created inside the dependent struct. Shared instances are built once in `internal/factories/dependencies.go`, not per factory. Services get the clock as `now func() time.Time` and never call `time.Now()` (ADR-016).
+- Dependency Injection: every dependency comes through a constructor. Shared instances are built once in `internal/factories/dependencies.go` and handed to the per-controller factories. Services get the clock as `now func() time.Time` and read the time with `s.now()` (ADR-016).
 - Transactions: in `WithinTx(ctx, func(ctx context.Context) error { ... })` always name the closure parameter `ctx` so it shadows the outer one; the outer context silently runs queries outside the transaction.
 - IDs: always UUIDv7. Tables use a `uuid uuid DEFAULT uuidv7()` primary key; IDs generated in Go (persisted rows, request UUIDs) use `uuid.NewV7()`.
 - Errors: dot-separated keys (e.g., `"users.email.conflict"`) for i18n, documented in `docs/ERRORS.md`. Return errors as-is unless wrapping adds real context.
 - Pointers: services and repositories take DTOs and entities by value and return pointers (`*domain.User`), so a `nil` result pairs with an error.
-- Comments: code is self-documenting. Comments only for swag annotations on handlers (and the general API info above `main` in `cmd/api/main.go`) and for explaining complex business logic. No decorative godoc.
-- Telemetry Imports: `go.opentelemetry.io/otel*` may only be imported in `internal/telemetry`, `internal/middlewares`, `internal/logger`, `internal/factories`, `postgres` and `cmd`; never in `services`, `controllers`, `domain` or `repositories`.
+- Comments: code is self-documenting. Write comments only for swag annotations on handlers (and the general API info above `main` in `cmd/api/main.go`) and to explain complex business logic.
+- Telemetry Imports: import `go.opentelemetry.io/otel*` only in `internal/telemetry`, `internal/middlewares`, `internal/logger`, `internal/factories`, `postgres` and `cmd`, so `services`, `controllers`, `domain` and `repositories` stay free of telemetry.
 - Logging: use `slog.*Context(ctx, ...)` in request paths so logs carry the trace.
 - Formatting: standard Go formatting (`gofmt`), `golangci-lint` in CI.
 
@@ -88,10 +88,10 @@ Decisions live in `docs/adr/` (index and rules in `docs/adr/README.md`). Write a
 - changes the security model (tokens, sessions, authorization) or accepts a residual risk;
 - is hard to reverse, or real alternatives were weighed.
 
-Local choices (naming, a new helper, a refactor that keeps behavior) do not need one. When in doubt, ask the user.
+Local choices (naming, a new helper, a refactor that keeps behavior) go without one. When in doubt, ask the user.
 
 - Format: Nygard (Status, Date, Context, Decision, Consequences), in English, as `docs/adr/ADR-00N-short-title.md` with the next number, added to the index table.
-- Immutability: while this repository is a template, edit the affected ADRs so the set describes the final state (every ADR `Accepted`, no superseded records), so derived projects start from the final decisions. After the template phase, never rewrite the decision of an accepted ADR: write a new ADR and set the old one's status to `Superseded by ADR-00N`.
+- Immutability: while this repository is a template, edit the affected ADRs so the set describes the final state (every ADR `Accepted`, no superseded records), so derived projects start from the final decisions. After the template phase, change an accepted decision by writing a new ADR and setting the old one's status to `Superseded by ADR-00N`.
 - Diagrams (optional): only when a structure or flow is hard to explain in text. The existing ones were made with [Archify](https://github.com/tt-a1i/archify). Commit only the JSON source and the SVG export to `docs/adr/diagrams/`. If Archify is unavailable, ship the ADR without the diagram.
 - Keep docs in sync: if the ADR changes a convention, update the matching section of this file, the rule in `.claude/rules/` or `docs/AUTH.md` in the same PR.
 

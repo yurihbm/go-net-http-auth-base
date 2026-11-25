@@ -13,7 +13,7 @@ paths:
 ## Test Naming
 
 - Files: One `<name>_test.go` next to each `<name>.go`. Provider-specific tests live in `<provider>_oauth_provider_test.go`, cross-provider tests in `oauth_provider_test.go`, and shared helpers in `helpers_test.go`.
-- Functions: One `Test<Type>_<Method>` per tested method (`TestNew<Type>` for constructors). Never write a standalone `Test...` function per scenario.
+- Functions: One `Test<Type>_<Method>` per tested method (`TestNew<Type>` for constructors). Put each scenario in a `t.Run` subtest of that function.
 - Scenarios: Subtests via `t.Run` with a short description (`"success"`, `"error - <description>"`). Table-driven cases use `t.Run(tc.name, ...)`.
 
 ## Controller Tests
@@ -63,7 +63,7 @@ func TestUsersController_CreateUser(t *testing.T) {
 - Password Testing: Use `bcrypt.CompareHashAndPassword()` to verify password hashing.
 - Mock Verification: Use `.Run()` callbacks to inspect arguments passed to mocks.
 - Matcher Functions: Use `mock.MatchedBy()` for complex argument matching.
-- Fixed Clock: unit tests build services with `testClock` (`testNow`, in `internal/services/clock_test.go`) and assert timestamps with exact equality, never `WithinDuration`/`InDelta`; add boundary subtests (at the instant, one second before). `time.Now` is acceptable only in tests that don't involve time (e.g. integration and E2E tests).
+- Fixed Clock: unit tests build services with `testClock` (`testNow`, in `internal/services/clock_test.go`) and assert timestamps with exact equality; add boundary subtests (at the instant, one second before). Integration and E2E tests, which assert no timestamps, use `time.Now`.
 - Test Coverage: Test all business logic branches (authorization, validation errors, repository errors, side-effect failures).
 
 Example:
@@ -158,7 +158,7 @@ func truncateTables(ctx context.Context, db *pgxpool.Pool) {
 - Mock Location: All mocks are centralized in `internal/mocks/`.
 - Interface Compliance: Mocks verify interface compliance using `var _ InterfaceName = (*MockName)(nil)`.
 - Testify/Mock: Use `github.com/stretchr/testify/mock` for mock implementations.
-- Return Handling: Check if return value is not nil before type assertion to avoid panics.
+- Return Handling: Check the return value for nil before the type assertion, because asserting on nil panics.
 - Context Argument: Most mocks accept `ctx` but leave it out of `m.Called(...)`, so expectations match only the business arguments; follow the existing mock of the interface you extend.
 - Naming Convention: Mocks are named with the `Mock` suffix (e.g., `UsersServiceMock`, `UsersRepositoryMock`).
 - No Telemetry Mocks: There are none by design (see `.claude/rules/telemetry.md`).
