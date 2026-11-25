@@ -54,6 +54,12 @@ func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, f
 	}()
 }
 
+func warnMissingTrustedProxies(ctx context.Context, cfg *config.Config) {
+	if cfg.IsProduction() && len(cfg.TrustedProxies) == 0 {
+		slog.WarnContext(ctx, "TRUSTED_PROXIES is empty in production: behind a reverse proxy every client shares the proxy IP, so the rate limiters act as one global limit")
+	}
+}
+
 // @title			Go net/http Auth Base API
 // @version		1.0
 // @description	REST API for user authentication and user management.
@@ -127,6 +133,8 @@ func run() (runErr error) {
 		}
 		dbTracers = append(dbTracers, otelQueryTracer)
 	}
+
+	warnMissingTrustedProxies(ctx, cfg)
 
 	pool, err := postgres.NewConnectionPool(ctx, cfg.Database, dbTracers...)
 	if err != nil {

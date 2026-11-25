@@ -257,7 +257,7 @@ This method sets up the application, a PostgreSQL database and [Traefik](https:/
    # Edit .env with your configuration
    ```
 
-   Besides the usual variables, set `API_ENV=production`, `API_DOMAIN` (the domain routed to the API, e.g. `api.example.com`), `ACME_EMAIL` (Let's Encrypt contact), `API_URL=https://<API_DOMAIN>`, `OAUTH_CALLBACK_ALLOW_LIST` and `CORS_ALLOWED_ORIGINS` with `https://` URLs, and `TRUSTED_PROXIES=172.30.0.0/24`. That is the `edge` network subnet in the compose file; if you change one, change the other.
+   Besides the usual variables, set `API_ENV=production`, `API_DOMAIN` (the domain routed to the API, e.g. `api.example.com`), `ACME_EMAIL` (Let's Encrypt contact), `API_URL=https://<API_DOMAIN>`, `OAUTH_CALLBACK_ALLOW_LIST` and `CORS_ALLOWED_ORIGINS` with `https://` URLs, and, only if you change the `edge` subnet in the compose file, `TRUSTED_PROXIES` (the compose file defaults it to the current subnet, `172.30.0.0/24`). The API logs a warning at startup when `TRUSTED_PROXIES` is empty in production.
 
 3. **Run with Docker Compose**
 
