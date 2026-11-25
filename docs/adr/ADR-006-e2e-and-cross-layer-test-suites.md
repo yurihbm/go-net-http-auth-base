@@ -40,11 +40,18 @@ tests, and they must still follow the `Test<Type>_<Method>` naming.
   transaction atomicity forces a failure inside `startSession` and asserts
   nothing was persisted). A test that goes through HTTP goes to
   `internal/tests/e2e` (for example, concurrent refresh).
-- **Lean E2E scope.** Sign-up by code and login, session lifecycle (rotation and
-  per-device logout), concurrent refresh, authorization (user vs admin),
-  step-up, the email change flow, logout-others, and password reset and change.
-  Validation, 404/409 errors and rate limiting stay in unit tests, because
-  repeating them over HTTP adds no signal.
+- **Lean E2E scope, defined by criteria.** A behavior becomes an E2E test when
+  it spans several requests with state carried by the client (cookies, rotated
+  tokens, emailed codes or links), depends on the production wiring (middleware
+  chain, step-up and role guards on routes, cookie attributes), or is a security
+  invariant that only holds across the whole stack (replay rejection, session
+  revocation, concurrent refresh); for example sign-up by code, the session
+  lifecycle or the email change with its undo link. Single-request validation,
+  error mapping (404/409), rate limiting and branches a unit test reaches stay
+  in unit tests, because repeating them over HTTP adds no signal. A new flow
+  that meets the criteria gets a `Test<Flow>` in the `<area>_flow_test.go` of
+  its area. A fixed list of flows was not kept, because it goes stale as flows
+  are added.
 - **Fixtures are Go helpers.** `seedUser` and `seedAdmin` run after the tables
   are truncated, and each test seeds only what it uses. They go through the real
   users repository with a bcrypt hash. A production initial-admin bootstrap is
