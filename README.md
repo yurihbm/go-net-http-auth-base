@@ -440,8 +440,8 @@ While this is a template, schema changes go into `postgres/migrations/000001_ini
 
 ### Recommended GitHub settings
 
-- Branch protection on `main`: require a pull request, require signed commits and require these status checks, named after the jobs in `.github/workflows`: `lint`, `test`, `sqlc-drift` and `govulncheck`.
-- Do not require `docker-build`. `docker.yml` is path-filtered (`docker/**`, `go.mod`, `go.sum`, `.dockerignore`), so it does not run on pull requests that leave those files alone, and a required check that never reports blocks the merge. The image is still built on every pull request that touches its inputs.
+- Branch protection on `main`: require a pull request, require signed commits and require these status checks, named after the jobs in `.github/workflows`: `lint`, `test`, `sqlc-drift`, `govulncheck` and `docker-build`.
+- `docker-build` builds the image only when `docker/**`, `go.mod`, `go.sum`, `.dockerignore` or `docker.yml` change. Otherwise the job is skipped, which satisfies the required check. Keep that filter in the `changes` job rather than in `on.paths`: a workflow skipped by a trigger filter never reports its checks, and a required check that never reports blocks the merge.
 - Allow merge commits only. Rebase and squash merges are re-created by GitHub and produce unsigned commits on `main`.
 - Enable Dependabot alerts and security updates, and private vulnerability reporting (see [SECURITY.md](SECURITY.md)).
 
