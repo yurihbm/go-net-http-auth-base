@@ -47,7 +47,7 @@ The diagrams in [`diagrams/`](diagrams/) were made with
   dark theme of the page.
 
 To change a diagram, install Archify globally (requires Node 18+; for other
-agents see its [installation options](https://github.com/tt-a1i/archify#installation-options)):
+agents see its [installation options](https://github.com/tt-a1i/archify#quick-start)):
 
 ```bash
 npx -y skills@latest add https://archify.si --skill archify --agent claude-code --global --copy --yes
