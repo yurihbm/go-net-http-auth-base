@@ -2,6 +2,7 @@
 paths:
   - "internal/repositories/**"
   - "postgres/**"
+  - "internal/infra/**"
   - "sqlc.yaml"
 ---
 
