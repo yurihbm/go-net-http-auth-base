@@ -96,8 +96,6 @@ func (s *tokenService) tokenExpiration(audience domain.TokenAudience) int64 {
 	switch audience {
 	case domain.TokenAudienceRefresh:
 		return s.now().Add(domain.TokenExpirationRefresh).Unix()
-	case domain.TokenAudienceExchange:
-		return s.now().Add(domain.TokenExpirationExchange).Unix()
 	case domain.TokenAudienceOAuthState:
 		return s.now().Add(domain.TokenExpirationOAuthState).Unix()
 	case domain.TokenAudienceEmailChangeRevert:

@@ -877,10 +877,10 @@ func TestAuthService_GenerateToken(t *testing.T) {
 		assert.Equal(t, "user-uuid-456", verifiedToken.Subject)
 	})
 
-	t.Run("success with exchange token audience", func(t *testing.T) {
+	t.Run("success with oauth state token audience", func(t *testing.T) {
 		dto := domain.GenerateTokenDTO{
 			Subject:  "user-uuid-789",
-			Audience: domain.TokenAudienceExchange,
+			Audience: domain.TokenAudienceOAuthState,
 		}
 
 		token, err := service.(domain.TokenGenerator).GenerateToken(context.Background(), dto)
@@ -891,7 +891,7 @@ func TestAuthService_GenerateToken(t *testing.T) {
 		// Verify the token is valid
 		verifyDTO := domain.VerifyTokenDTO{
 			Token:    token,
-			Audience: domain.TokenAudienceExchange,
+			Audience: domain.TokenAudienceOAuthState,
 		}
 		verifiedToken, err := service.VerifyToken(context.Background(), verifyDTO)
 		assert.NoError(t, err)

@@ -10,7 +10,6 @@ type TokenAudience string
 const (
 	TokenAudienceAccess            TokenAudience = "access_token"
 	TokenAudienceRefresh           TokenAudience = "refresh_token"
-	TokenAudienceExchange          TokenAudience = "exchange_token"
 	TokenAudienceOAuthState        TokenAudience = "oauth_state_token" //nolint:gosec // G101 false positive: JWT audience label
 	TokenAudienceEmailChangeRevert TokenAudience = "email_change_revert_token"
 	TokenAudienceOAuthLinkRevert   TokenAudience = "oauth_link_revert_token" //nolint:gosec // G101 false positive: JWT audience label
@@ -19,7 +18,6 @@ const (
 const (
 	TokenExpirationAccess            = time.Minute * 15   // 15 minutes
 	TokenExpirationRefresh           = time.Hour * 24 * 7 // 7 days
-	TokenExpirationExchange          = time.Minute        // 1 minute
 	TokenExpirationOAuthState        = time.Minute * 5    // 5 minutes
 	TokenExpirationEmailChangeRevert = time.Hour * 72     // 72 hours
 	TokenExpirationOAuthLinkRevert   = time.Hour * 72     // 72 hours

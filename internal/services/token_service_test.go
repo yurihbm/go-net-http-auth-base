@@ -45,7 +45,6 @@ func TestTokenService_Expiration(t *testing.T) {
 	cases := map[domain.TokenAudience]time.Duration{
 		domain.TokenAudienceAccess:            domain.TokenExpirationAccess,
 		domain.TokenAudienceRefresh:           domain.TokenExpirationRefresh,
-		domain.TokenAudienceExchange:          domain.TokenExpirationExchange,
 		domain.TokenAudienceOAuthState:        domain.TokenExpirationOAuthState,
 		domain.TokenAudienceEmailChangeRevert: domain.TokenExpirationEmailChangeRevert,
 	}
@@ -108,11 +107,11 @@ func TestTokenService_VerifyToken(t *testing.T) {
 	t.Run("success - valid one second before expiration", func(t *testing.T) {
 		now := testNow
 		clocked := services.NewTokenService(tokenSecret, func() time.Time { return now })
-		token, err := clocked.GenerateToken(ctx, domain.GenerateTokenDTO{Subject: "user-uuid", Audience: domain.TokenAudienceExchange})
+		token, err := clocked.GenerateToken(ctx, domain.GenerateTokenDTO{Subject: "user-uuid", Audience: domain.TokenAudienceOAuthState})
 		require.NoError(t, err)
-		now = testNow.Add(domain.TokenExpirationExchange - time.Second)
+		now = testNow.Add(domain.TokenExpirationOAuthState - time.Second)
 
-		_, err = clocked.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceExchange})
+		_, err = clocked.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceOAuthState})
 
 		assert.NoError(t, err)
 	})
@@ -120,11 +119,11 @@ func TestTokenService_VerifyToken(t *testing.T) {
 	t.Run("error - expired at the expiration instant", func(t *testing.T) {
 		now := testNow
 		clocked := services.NewTokenService(tokenSecret, func() time.Time { return now })
-		token, err := clocked.GenerateToken(ctx, domain.GenerateTokenDTO{Subject: "user-uuid", Audience: domain.TokenAudienceExchange})
+		token, err := clocked.GenerateToken(ctx, domain.GenerateTokenDTO{Subject: "user-uuid", Audience: domain.TokenAudienceOAuthState})
 		require.NoError(t, err)
-		now = testNow.Add(domain.TokenExpirationExchange)
+		now = testNow.Add(domain.TokenExpirationOAuthState)
 
-		data, err := clocked.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceExchange})
+		data, err := clocked.VerifyToken(ctx, domain.VerifyTokenDTO{Token: token, Audience: domain.TokenAudienceOAuthState})
 
 		assert.Equal(t, services.ErrInvalidToken, err)
 		assert.Nil(t, data)
