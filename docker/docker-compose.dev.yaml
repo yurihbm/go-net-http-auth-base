@@ -27,7 +27,7 @@ services:
       - db
 
   lgtm:
-    image: grafana/otel-lgtm:0.38.1
+    image: grafana/otel-lgtm:0.41.1
     container_name: ${PROJECT_NAME:-auth-base}-lgtm-dev
     restart: always
     ports:
