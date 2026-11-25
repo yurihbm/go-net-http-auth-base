@@ -172,7 +172,7 @@ func (c *AuthController) RevertOAuthLink(w http.ResponseWriter, r *http.Request)
 		Status:       domain.AuditStatusSuccess,
 	})
 
-	api.DeleteAuthCookies(w)
+	api.DeleteAuthCookies(w, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
 		Message: "auth.oauthLink.reverted",
 	})
@@ -189,7 +189,7 @@ func (c *AuthController) RevertOAuthLink(w http.ResponseWriter, r *http.Request)
 func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
 	userUUID, sessionUUID := sessionFromRequest(r)
 	err := c.authService.Logout(r.Context(), userUUID, sessionUUID)
-	api.DeleteAuthCookies(w)
+	api.DeleteAuthCookies(w, c.isSecureCookie)
 	if err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
@@ -283,7 +283,7 @@ func (c *AuthController) VerifyStepUp(w http.ResponseWriter, r *http.Request) {
 	c.auditAuth(r, domain.AuditActionStepUpVerify, err)
 	if err != nil {
 		if errors.Is(err, domain.ErrStepUpSessionRevoked) {
-			api.DeleteAuthCookies(w)
+			api.DeleteAuthCookies(w, c.isSecureCookie)
 		}
 		api.HandleError(r.Context(), w, err)
 		return
@@ -457,7 +457,7 @@ func (c *AuthController) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	})
 
 	api.DeletePasswordResetCookie(w, c.isSecureCookie)
-	api.DeleteAuthCookies(w)
+	api.DeleteAuthCookies(w, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
 		Message: "auth.passwordReset.success",
 	})

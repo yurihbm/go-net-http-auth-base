@@ -182,7 +182,7 @@ func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	api.DeleteAuthCookies(w)
+	api.DeleteAuthCookies(w, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
 		Message: "user.emailChange.success",
@@ -258,7 +258,7 @@ func (c *UsersController) RevertEmailChange(w http.ResponseWriter, r *http.Reque
 		Status:       domain.AuditStatusSuccess,
 	})
 
-	api.DeleteAuthCookies(w)
+	api.DeleteAuthCookies(w, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
 		Message: "user.emailChange.reverted",
 	})
