@@ -38,6 +38,7 @@ var oauthProviderErrorCodes = []string{
 
 const (
 	defaultOAuthProviderErrorCode = "access_denied"
+	defaultOAuthServerErrorCode   = "server_error"
 	oauthVerificationLimitedCode  = "verification_limited"
 )
 
@@ -552,7 +553,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 }
 
 // @Summary		Finish an OAuth login
-// @Description	Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the `access_token` and `refresh_token` cookies and redirects to the redirect_uri. If the provider email is not verified, emails a one-time code, sets the `pending_signup` cookie and redirects to the redirect_uri with `?verification=required` (the frontend then posts the code to POST /auth/signup/verify); if the address hit the email send limit, redirects with `?error=verification_limited`. If the provider returned an error, redirects to the redirect_uri with `?error=<code>`.
+// @Description	Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the `access_token` and `refresh_token` cookies and redirects to the redirect_uri. If the provider email is not verified, emails a one-time code, sets the `pending_signup` cookie and redirects to the redirect_uri with `?verification=required` (the frontend then posts the code to POST /auth/signup/verify); if the address hit the email send limit, redirects with `?error=verification_limited`. If the provider returned an error, redirects to the redirect_uri with `?error=<code>`. If the login fails after the state and browser nonce verify, it also redirects with `?error=missing_code_verifier`, `account_conflict`, `invalid_user_info` or `server_error`; a state or nonce that does not verify is answered as JSON.
 // @Tags			auth
 // @Produce		json
 // @Param			provider			path	string	true	"OAuth provider"	Enums(google, microsoft, github)
@@ -561,7 +562,7 @@ func (c *AuthController) LoginWithOAuthProvider(w http.ResponseWriter, r *http.R
 // @Param			error				query	string	false	"Error code returned by the provider"
 // @Param			error_description	query	string	false	"Error description returned by the provider"
 // @Success		302					"Redirect to the redirect_uri"
-// @Header			302					{string}	Location				"redirect_uri, with ?verification=required, ?error=verification_limited or ?error=<code> on provider error"
+// @Header			302					{string}	Location				"redirect_uri, with ?verification=required, ?error=verification_limited, ?error=<code> on provider error or ?error=<code> on login failure"
 // @Failure		400					{object}	api.ResponseBody[any]	"Validation error"
 // @Failure		401					{object}	api.ResponseBody[any]	"Unauthorized"
 // @Failure		404					{object}	api.ResponseBody[any]	"Not found"
@@ -622,7 +623,7 @@ func (c *AuthController) OAuthProviderCallback(w http.ResponseWriter, r *http.Re
 			Status:        domain.AuditStatusFailure,
 			FailureReason: &reason,
 		})
-		api.HandleError(r.Context(), w, err)
+		c.redirectOAuthLoginFailure(w, r, providerName, state, nonce, err)
 		return
 	}
 
@@ -680,6 +681,58 @@ func (c *AuthController) redirectOAuthPendingSignup(w http.ResponseWriter, r *ht
 
 	c.deleteOAuthFlowCookies(w, providerName)
 	http.Redirect(w, r, target.String(), http.StatusFound)
+}
+
+// A redirect is only trusted when the state token and the browser nonce verify
+// and the redirect_uri is allow-listed; otherwise the failure is answered as JSON.
+func (c *AuthController) redirectOAuthLoginFailure(
+	w http.ResponseWriter,
+	r *http.Request,
+	providerName domain.OAuthProviderName,
+	state string,
+	nonce string,
+	loginErr error,
+) {
+	redirectURI, err := c.authService.VerifyOAuthState(r.Context(), domain.VerifyOAuthStateDTO{
+		Provider: providerName,
+		State:    state,
+		Nonce:    nonce,
+	})
+	if err != nil || !slices.Contains(c.callbackAllowList, redirectURI) {
+		api.HandleError(r.Context(), w, loginErr)
+		return
+	}
+
+	target, err := url.Parse(redirectURI)
+	if err != nil {
+		api.HandleError(r.Context(), w, loginErr)
+		return
+	}
+
+	slog.WarnContext(r.Context(), "oauth login failed", "provider", providerName, "error", loginErr)
+
+	query := target.Query()
+	query.Set("error", oauthLoginFailureCode(loginErr))
+	target.RawQuery = query.Encode()
+
+	c.deleteOAuthFlowCookies(w, providerName)
+	http.Redirect(w, r, target.String(), http.StatusFound)
+}
+
+func oauthLoginFailureCode(err error) string {
+	var conflictErr *domain.ConflictError
+	if errors.As(err, &conflictErr) {
+		return "account_conflict"
+	}
+
+	switch err.Error() {
+	case "auth.oauthLogin.missingCodeVerifier":
+		return "missing_code_verifier"
+	case "auth.providerCallback.invalidUserInfo":
+		return "invalid_user_info"
+	default:
+		return defaultOAuthServerErrorCode
+	}
 }
 
 func (c *AuthController) redirectOAuthProviderError(

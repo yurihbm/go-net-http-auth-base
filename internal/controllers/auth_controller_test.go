@@ -1072,6 +1072,7 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 			Code:     "auth-code",
 		}
 		authServiceMock.On("OAuthLogin", dto).Return(nil, domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")).Once()
+		authServiceMock.On("VerifyOAuthState", mock.Anything).Return("", domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")).Once()
 		auditMock.On("Log", mock.Anything).Return(nil).Once()
 
 		w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&code=auth-code", nil)
@@ -1082,6 +1083,59 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Empty(t, w.Result().Cookies())
 		authServiceMock.AssertExpectations(t)
+	})
+
+	t.Run("login failure - redirects to the verified redirect_uri with the error code and clears flow cookies", func(t *testing.T) {
+		for name, tc := range map[string]struct {
+			err  error
+			code string
+		}{
+			"missing code verifier": {domain.NewUnauthorizedError("auth.oauthLogin.missingCodeVerifier"), "missing_code_verifier"},
+			"account conflict":      {domain.NewConflictError("auth.oauthProvider.conflict"), "account_conflict"},
+			"invalid user info":     {domain.NewValidationError("auth.providerCallback.invalidUserInfo", nil), "invalid_user_info"},
+			"internal error":        {domain.NewInternalServerError("auth.oauthProvider.userInfoFetchFailed", errors.New("boom")), "server_error"},
+		} {
+			t.Run(name, func(t *testing.T) {
+				controller, authServiceMock, auditMock := newTestAuthControllerWithOptions(true, []string{allowedRedirectURI})
+				authServiceMock.On("OAuthLogin", mock.Anything).Return(nil, tc.err).Once()
+				authServiceMock.On("VerifyOAuthState", domain.VerifyOAuthStateDTO{
+					Provider: domain.OAuthProviderGoogle,
+					State:    "valid-state",
+					Nonce:    "nonce-123",
+				}).Return(allowedRedirectURI, nil).Once()
+				auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+					return d.Action == domain.AuditActionOAuthLogin && d.Status == domain.AuditStatusFailure
+				})).Return(nil).Once()
+
+				w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&code=auth-code", nil)
+				req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+				req.AddCookie(&http.Cookie{Name: oauthFlowCookieModes[0].cookies.nonce, Value: "nonce-123"})
+
+				controller.OAuthProviderCallback(w, req)
+
+				assert.Equal(t, http.StatusFound, w.Code)
+				assert.Equal(t, allowedRedirectURI+"?error="+tc.code, w.Header().Get("Location"))
+				assert.Nil(t, findCookie(w.Result().Cookies(), "access_token"))
+				assertOAuthFlowCookiesCleared(t, w.Result().Cookies(), oauthFlowCookieModes[0].cookies)
+				authServiceMock.AssertExpectations(t)
+				auditMock.AssertExpectations(t)
+			})
+		}
+	})
+
+	t.Run("login failure - answers JSON when the verified redirect_uri is not allowed", func(t *testing.T) {
+		controller, authServiceMock, auditMock := newTestAuthControllerWithOptions(true, []string{"http://localhost:3000/other"})
+		authServiceMock.On("OAuthLogin", mock.Anything).Return(nil, domain.NewConflictError("auth.oauthProvider.conflict")).Once()
+		authServiceMock.On("VerifyOAuthState", mock.Anything).Return(allowedRedirectURI, nil).Once()
+		auditMock.On("Log", mock.Anything).Return(nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&code=auth-code", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.Empty(t, w.Header().Get("Location"))
 	})
 
 	t.Run("provider error - redirects to verified redirect_uri and clears flow cookies", func(t *testing.T) {
@@ -1200,6 +1254,7 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		}
 
 		authServiceMock.On("OAuthLogin", dto).Return(nil, domain.NewUnauthorizedError("auth.invalidToken")).Once()
+		authServiceMock.On("VerifyOAuthState", mock.Anything).Return("", domain.NewUnauthorizedError("auth.invalidToken")).Once()
 
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionOAuthLogin &&

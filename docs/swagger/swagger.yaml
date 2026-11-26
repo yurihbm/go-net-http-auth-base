@@ -331,7 +331,10 @@ paths:
         the redirect_uri with `?verification=required` (the frontend then posts the
         code to POST /auth/signup/verify); if the address hit the email send limit,
         redirects with `?error=verification_limited`. If the provider returned an
-        error, redirects to the redirect_uri with `?error=<code>`.
+        error, redirects to the redirect_uri with `?error=<code>`. If the login fails
+        after the state and browser nonce verify, it also redirects with `?error=missing_code_verifier`,
+        `account_conflict`, `invalid_user_info` or `server_error`; a state or nonce
+        that does not verify is answered as JSON.
       parameters:
       - description: OAuth provider
         enum:
@@ -366,8 +369,8 @@ paths:
           description: Redirect to the redirect_uri
           headers:
             Location:
-              description: redirect_uri, with ?verification=required, ?error=verification_limited
-                or ?error=<code> on provider error
+              description: redirect_uri, with ?verification=required, ?error=verification_limited,
+                ?error=<code> on provider error or ?error=<code> on login failure
               type: string
         "400":
           description: Validation error

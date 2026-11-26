@@ -242,6 +242,8 @@ The `HandleError` function inspects the error type using `errors.As()` and write
 
 `error` is always a dot-separated message key. For a `500`, the body only carries the key (e.g. `users.internalServerError`), never the wrapped cause.
 
+The OAuth callback (`GET /auth/{provider}/callback`) is the exception: once the state token and browser nonce verify and the `redirect_uri` is allow-listed, failures redirect (`302`) to it with `?error=<code>` instead of a JSON body. The codes are the standard provider codes (`access_denied`, `invalid_request`, `unauthorized_client`, `unsupported_response_type`, `invalid_scope`, `server_error`, `temporarily_unavailable`), `verification_limited`, and for a failed login `missing_code_verifier`, `account_conflict`, `invalid_user_info` and `server_error`. Without a trusted redirect the error is JSON as above.
+
 ## Error Logging & Observability
 
 We use a **Canonical Log Line** pattern to ensure observability without log spam.
