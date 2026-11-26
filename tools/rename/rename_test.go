@@ -222,6 +222,9 @@ func copyRepo(t *testing.T, src, dst string) {
 		rel, _ := filepath.Rel(src, path)
 		rel = filepath.ToSlash(rel)
 		if skip[rel] {
+			if !d.IsDir() {
+				return nil
+			}
 			return filepath.SkipDir
 		}
 		target := filepath.Join(dst, rel)
