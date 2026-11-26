@@ -48,7 +48,7 @@ Refresh loads the session by `sid` + `sub`, rejects it past `expires_at`, and ro
 
 ## Step-Up
 
-Sensitive routes (`POST /users/me/email`, `DELETE /users/{uuid}` including admins) need an OTP sent to the user's current email. `domain.StepUpService` (`services.NewStepUpService`):
+Sensitive routes (`POST /users/me/email`, `POST /users/me/password`, `DELETE /users/{uuid}` including admins) need an OTP sent to the user's current email. `domain.StepUpService` (`services.NewStepUpService`):
 
 - `RequestCode` (`POST /auth/step-up`, `202`) checks the session is live, generates a 6-digit code with `crypto/rand`, stores `HMAC-SHA256(JWT_SECRET, "step-up:"+sid:code)` as the session's `step_up` row in `session_challenges` (`SessionChallengeRepository.Upsert`: 10m TTL, `429 auth.stepUp.cooldown` within 60s per session; the table holds one row per session and purpose, `step_up` or `email_change`, with `new_email`/`email_version` only on email change rows, enforced by a CHECK, and cascades with the session and the user) and mails it with `EmailVerificationService.SendStepUpCode` (a send failure deletes the challenge so the cooldown does not trap the user, and is a `500`).
 - `VerifyCode` (`POST /auth/step-up/verify`, body `CodeDTO`) counts the attempt first (`SessionChallengeRepository.Attempt`, max 5; missing, expired or exhausted challenges are all `401 auth.stepUp.noChallenge`), compares with `hmac.Equal` and, in one `WithinTx`, deletes the challenge and sets `user_sessions.step_up_until` to now + 5m; it returns `{ "step_up_until": <unix> }`.
