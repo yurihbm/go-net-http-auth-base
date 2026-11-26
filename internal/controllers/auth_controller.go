@@ -10,6 +10,7 @@ import (
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
+	"go-net-http-auth-base/internal/shared"
 )
 
 var ErrInvalidOAuthProvider = domain.NewValidationError(
@@ -710,6 +711,7 @@ func (c *AuthController) redirectOAuthLoginFailure(
 	}
 
 	slog.WarnContext(r.Context(), "oauth login failed", "provider", providerName, "error", loginErr)
+	recordRedirectedError(r, loginErr)
 
 	query := target.Query()
 	query.Set("error", oauthLoginFailureCode(loginErr))
@@ -717,6 +719,19 @@ func (c *AuthController) redirectOAuthLoginFailure(
 
 	c.deleteOAuthFlowCookies(w, providerName)
 	http.Redirect(w, r, target.String(), http.StatusFound)
+}
+
+func recordRedirectedError(r *http.Request, err error) {
+	reqCtxData, ok := r.Context().Value(shared.RequestContextDataKey).(*shared.RequestContextData)
+	if !ok {
+		return
+	}
+
+	var internalServerErr *domain.InternalServerError
+	if errors.As(err, &internalServerErr) {
+		err = internalServerErr.Unwrap()
+	}
+	reqCtxData.Error = err
 }
 
 func oauthLoginFailureCode(err error) string {

@@ -1110,11 +1110,19 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 				w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&code=auth-code", nil)
 				req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
 				req.AddCookie(&http.Cookie{Name: oauthFlowCookieModes[0].cookies.nonce, Value: "nonce-123"})
+				reqCtxData := &shared.RequestContextData{}
+				req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, reqCtxData))
 
 				controller.OAuthProviderCallback(w, req)
 
 				assert.Equal(t, http.StatusFound, w.Code)
 				assert.Equal(t, allowedRedirectURI+"?error="+tc.code, w.Header().Get("Location"))
+				var internalErr *domain.InternalServerError
+				if errors.As(tc.err, &internalErr) {
+					assert.Equal(t, internalErr.Unwrap(), reqCtxData.Error)
+				} else {
+					assert.Equal(t, tc.err, reqCtxData.Error)
+				}
 				assert.Nil(t, findCookie(w.Result().Cookies(), "access_token"))
 				assertOAuthFlowCookiesCleared(t, w.Result().Cookies(), oauthFlowCookieModes[0].cookies)
 				authServiceMock.AssertExpectations(t)
