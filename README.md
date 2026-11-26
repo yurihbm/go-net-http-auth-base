@@ -434,7 +434,7 @@ Checklist after creating a repository from this template:
    - `README.md`: the one-line description under the title, the "Rename the base module" quickstart step (and renumber the steps after it) and the `OTEL_SERVICE_NAME` default if the table is now misaligned.
    - Template wording in the ADRs and in `docs/adr/README.md` (see [Leaving the template phase](#leaving-the-template-phase)).
 3. Review the diff and commit it.
-4. Remove the rename tool, which is only needed once: delete `tools/rename/`, the `rename` target (and its `.PHONY` entry) in the `Makefile`, the `tools/` exclusion in `.golangci.yml`, the "Rename the base module" quickstart step and step 1 of this checklist. Delete `docs/TEMPLATE-READINESS.md` too, if present: it audits the template, not your project.
+4. Remove the rename tool, which is only needed once: delete `tools/rename/`, the `rename` target (and its `.PHONY` entry) in the `Makefile`, the `tools/` exclusion in `.golangci.yml`, the "Rename the base module" quickstart step and step 1 of this checklist.
 5. Update the copyright holder in `LICENSE`.
 6. Add a `CODEOWNERS` file in `.github/`.
 7. Fill in `SECURITY.md`: remove the template notice and the placeholders (contact, support policy, response times).
