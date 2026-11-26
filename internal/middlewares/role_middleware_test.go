@@ -54,7 +54,7 @@ func TestRoleMiddleware_Use(t *testing.T) {
 		rr := serve(domain.RoleUser)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "auth.forbidden")
+		assert.JSONEq(t, `{"data":null,"error":"auth.forbidden"}`, rr.Body.String())
 	})
 
 	t.Run("should deny access when the token carries no role", func(t *testing.T) {

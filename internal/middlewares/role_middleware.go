@@ -35,8 +35,7 @@ func (m *RoleMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		api.WriteJSONResponse(w, http.StatusForbidden, api.ResponseBody[any]{
-			Message: "auth.forbidden",
-			Error:   "user does not have access to this resource",
+			Error: "auth.forbidden",
 		})
 	}
 }

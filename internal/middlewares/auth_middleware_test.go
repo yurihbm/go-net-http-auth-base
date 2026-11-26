@@ -108,8 +108,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		var response api.ResponseBody[any]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
-		assert.Equal(t, "auth.unauthorized", response.Message)
-		assert.Equal(t, "missing access token cookie", response.Error)
+		assert.Equal(t, "auth.unauthorized", response.Error)
+		assert.Empty(t, response.Message)
 		serviceMock.AssertNotCalled(t, "VerifyToken", mock.Anything)
 	})
 
@@ -145,8 +145,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		var response api.ResponseBody[any]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
-		assert.Equal(t, "auth.unauthorized", response.Message)
-		assert.Equal(t, "token expired", response.Error)
+		assert.Equal(t, "auth.unauthorized", response.Error)
+		assert.Empty(t, response.Message)
 		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
@@ -184,8 +184,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		var response api.ResponseBody[any]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
-		assert.Equal(t, "auth.unauthorized", response.Message)
-		assert.Equal(t, "invalid token", response.Error)
+		assert.Equal(t, "auth.unauthorized", response.Error)
+		assert.Empty(t, response.Message)
 		// VerifyToken should still be called with empty string
 		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
 			Token:    "",

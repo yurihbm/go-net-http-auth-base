@@ -134,6 +134,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.tokenGenerationFailed` | `InternalServerError` | `TokenService.GenerateToken`: signing failed |
 | `auth.unauthorized` | `UnauthorizedError` | `AuthMiddleware`: missing or invalid access token cookie (written directly, not through `HandleError`) |
 | `auth.forbidden` | `ForbiddenError` | `RoleMiddleware`: the role is not allowed (written directly, not through `HandleError`) |
+| `rateLimit.exceeded` | `TooManyRequestsError` | `RateLimitMiddleware` and the credentials limiter: the per-IP bucket is empty (written directly, not through `HandleError`) |
 | `user.getMe.unauthorized` | `UnauthorizedError` | `UsersController.GetMe`: no user in the request context |
 | `users.forbidden` | `ForbiddenError` | `Actor.CanAccess` in `UsersService`: not self or admin |
 | `users.notFound` | `NotFoundError` | `UsersRepository` (no rows), `SessionsRepository` (foreign key): the user does not exist |

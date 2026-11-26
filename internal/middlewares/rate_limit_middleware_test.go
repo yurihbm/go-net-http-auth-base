@@ -60,8 +60,8 @@ func TestRateLimitMiddleware(t *testing.T) {
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 	var response api.ResponseBody[any]
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.Equal(t, "rateLimit.exceeded", response.Message)
-	assert.Equal(t, "too many requests", response.Error)
+	assert.Equal(t, "rateLimit.exceeded", response.Error)
+	assert.Empty(t, response.Message)
 
 	// 4. Different IP - should pass
 	req2 := httptest.NewRequest("GET", "/", nil)

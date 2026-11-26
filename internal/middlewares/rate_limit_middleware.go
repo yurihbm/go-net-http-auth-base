@@ -58,8 +58,7 @@ func (m *RateLimitMiddleware) allow(w http.ResponseWriter, r *http.Request) bool
 	m.setHeaders(w, limiter)
 	if !allowed {
 		api.WriteJSONResponse(w, http.StatusTooManyRequests, api.ResponseBody[any]{
-			Message: "rateLimit.exceeded",
-			Error:   "too many requests",
+			Error: "rateLimit.exceeded",
 		})
 	}
 	return allowed

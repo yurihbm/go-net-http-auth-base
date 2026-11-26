@@ -23,8 +23,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 		accessToken, err := r.Cookie(api.AccessTokenCookieName)
 		if err != nil {
 			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-				Message: "auth.unauthorized",
-				Error:   "missing access token cookie",
+				Error: "auth.unauthorized",
 			})
 			return
 		}
@@ -35,8 +34,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 		})
 		if err != nil {
 			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-				Message: "auth.unauthorized",
-				Error:   err.Error(),
+				Error: "auth.unauthorized",
 			})
 			return
 		}
