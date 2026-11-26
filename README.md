@@ -429,20 +429,38 @@ Checklist after creating a repository from this template:
    | `yurihbm/go-net-http-auth-base` (badges, clone URL) | `<owner>/<repo>` when `module` starts with `github.com/<owner>/<repo>`; otherwise left in place and listed as a manual step |
 
    The command fails when `module` is already the current one, so a repeated run with the same arguments changes nothing. Only the module path is read from `go.mod`; the other strings are matched literally, so after a rename a later one only updates the module path and Go imports.
-2. Set `PROJECT_NAME` in `.env`.
+2. Fix what the tool does not rewrite, which is anything that is not the literal strings above:
+   - `.env.example`: the database name (`auth-base` in `DATABASE_URL` and `POSTGRES_DB`) and the pgAdmin credentials. The tool skips `.env*`. Set `PROJECT_NAME` in your local `.env` (optional, it defaults to `name`).
+   - `README.md`: the one-line description under the title, the "Rename the base module" quickstart step (and renumber the steps after it) and the `OTEL_SERVICE_NAME` default if the table is now misaligned.
+   - Template wording in the ADRs and in `docs/adr/README.md` (see [Leaving the template phase](#leaving-the-template-phase)).
 3. Review the diff and commit it.
-4. Remove the rename tool, which is only needed once: delete `tools/rename/`, the `rename` target (and its `.PHONY` entry) in the `Makefile`, the `tools/` exclusion in `.golangci.yml` and step 1 of this checklist.
+4. Remove the rename tool, which is only needed once: delete `tools/rename/`, the `rename` target (and its `.PHONY` entry) in the `Makefile`, the `tools/` exclusion in `.golangci.yml`, the "Rename the base module" quickstart step and step 1 of this checklist. Delete `docs/TEMPLATE-READINESS.md` too, if present: it audits the template, not your project.
 5. Update the copyright holder in `LICENSE`.
 6. Add a `CODEOWNERS` file in `.github/`.
-7. Replace the placeholder contact in `SECURITY.md`.
+7. Fill in `SECURITY.md`: remove the template notice and the placeholders (contact, support policy, response times).
 8. GitHub disables scheduled workflows after 60 days without repository activity; re-enable them in the Actions tab.
+9. Finish with `make check`, then delete this whole section once every step is done. In the commit, state that the template phase is over.
 
 ### Leaving the template phase
 
-While this is a template, ADRs are edited in place to describe its final state, and schema changes go into `postgres/migrations/000001_init_db.*`. Once the first real deployment exists, switch both rules, in this order:
+While this is a template, ADRs are edited in place to describe its final state, and schema changes go into `postgres/migrations/000001_init_db.*`. Leave the phase when you bootstrap the real service, ideally in the same PR as the rename, switching both rules. `000001_init_db` becomes the baseline, and from then on applied migrations are never edited and accepted ADRs are never rewritten.
 
-1. Make the ADRs immutable: delete the template-phase point in `docs/adr/README.md` ("Writing a new ADR"), the template-phase sentence of the **Immutability** bullet in `AGENTS.md` (`CLAUDE.md` is a symlink to it) and the template-phase clause about ADRs in `CONTRIBUTING.md`.
-2. Stop editing the initial migration and use `make migrate-create` instead. Update the "Template Phase" statements in `AGENTS.md`, `CONTRIBUTING.md`, this README, `.claude/rules/repositories.md` and `.claude/skills/go-migration-scaffolder`, and record the change in a new ADR that supersedes [ADR-003](docs/adr/ADR-003-database-strategy.md).
+**ADR-003 and the other ADRs.** Before the first deployment nothing depends on the history of the decisions, so edit the ADRs in place one last time, so the set describes the initial state of the project, instead of writing a superseding ADR for [ADR-003](docs/adr/ADR-003-database-strategy.md):
+
+- `docs/adr/ADR-003-database-strategy.md`: state the versioned-migration policy directly in **Decision** (baseline never edited, every change a new pair from `make migrate-create` with a working `.down.sql`), and replace the "folding changes into the initial migration only works while there is no production data" bullet in **Consequences**.
+- Replace the template wording in the **Context** of ADR-001, ADR-003, ADR-004, ADR-005, ADR-006 (also its k6 bullet), ADR-010 and ADR-014 with the project's own.
+- `docs/adr/README.md`: drop the intro's "behind this template" and the template-phase point of "Writing a new ADR", keeping the immutability point.
+
+If the phase is left after the first real deployment instead, do not rewrite ADR-003: write a new ADR that supersedes it and set the old status to `Superseded by ADR-00N`.
+
+**Schema workflow.** Replace every "Template Phase" statement with the migration workflow (`make migrate-create`, never edit an applied migration):
+
+- `AGENTS.md` (`CLAUDE.md` is a symlink to it): the `go-migration-scaffolder` bullet under **Skills**, the `make migrate-create` line under **Commands** ("not during the template phase"), the **Template Phase** rule under **Workflow** and the template-phase sentence of the **Immutability** bullet.
+- `CONTRIBUTING.md`: the **Schema** bullet and the template-phase clause in the ADR section.
+- `README.md`: the **Schema Changes** paragraph.
+- `.claude/rules/repositories.md`: the **Schema** bullet.
+- `.claude/skills/go-migration-scaffolder/SKILL.md`: the description, and the "Choose the Workflow" and "Template Workflow" sections, keeping the migration workflow.
+- `.claude/skills/go-resource-scaffolder/SKILL.md` (step 3 of the next steps) and `scripts/scaffold.ts` (the schema step it prints): point to `make migrate-create` instead of `000001_init_db`.
 
 ### Recommended GitHub settings
 
