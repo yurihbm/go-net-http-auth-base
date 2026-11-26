@@ -122,6 +122,7 @@ func TestCORSFactory(t *testing.T) {
 
 		assert.Equal(t, origin, w.Header().Get("Access-Control-Allow-Origin"))
 		assert.Equal(t, "GET, POST", w.Header().Get("Access-Control-Allow-Methods"))
+		assert.Equal(t, "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After", w.Header().Get("Access-Control-Expose-Headers"))
 	})
 }
 

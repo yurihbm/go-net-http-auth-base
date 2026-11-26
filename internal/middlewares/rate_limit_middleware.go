@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -57,11 +58,20 @@ func (m *RateLimitMiddleware) allow(w http.ResponseWriter, r *http.Request) bool
 	allowed := limiter.AllowN(m.now(), 1)
 	m.setHeaders(w, limiter)
 	if !allowed {
+		m.setRetryAfter(w, limiter)
 		api.WriteJSONResponse(w, http.StatusTooManyRequests, api.ResponseBody[any]{
 			Error: "rateLimit.exceeded",
 		})
 	}
 	return allowed
+}
+
+func (m *RateLimitMiddleware) setRetryAfter(w http.ResponseWriter, limiter *rate.Limiter) {
+	if m.rate <= 0 {
+		return
+	}
+	secondsToToken := (1 - limiter.TokensAt(m.now())) / float64(m.rate)
+	w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(secondsToToken)))))
 }
 
 // rateLimitKey groups IPv6 clients by /64, since a single subscriber usually controls the whole prefix.

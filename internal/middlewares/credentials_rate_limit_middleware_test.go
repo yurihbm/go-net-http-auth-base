@@ -56,6 +56,7 @@ func TestCredentialsRateLimitMiddleware_Use(t *testing.T) {
 		var body api.ResponseBody[any]
 		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 		assert.Equal(t, "rateLimit.exceeded", body.Error)
+		assert.NotEmpty(t, w.Header().Get("Retry-After"))
 		assert.Equal(t, 2, called)
 	})
 

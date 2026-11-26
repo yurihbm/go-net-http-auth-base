@@ -7,7 +7,7 @@ import (
 
 func CORSFactory(corsCfg config.CORSConfig) middlewares.GlobalMiddleware {
 	allowedHeaders := []string{"Content-Type", "Authorization"}
-	exposeHeaders := []string{}
+	exposeHeaders := []string{"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After"}
 	allowCredentials := true
 	maxAge := "86400"
 
