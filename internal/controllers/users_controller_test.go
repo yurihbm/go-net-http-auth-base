@@ -555,6 +555,21 @@ func TestUsersController_DeleteUser(t *testing.T) {
 		}
 	})
 
+	t.Run("success - own account matched case-insensitively clears the auth cookies", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		upper := strings.ToUpper(actor.UUID)
+		serviceMock.On("Delete", actor, upper).Return(nil)
+		auditMock.On("Log", mock.Anything).Return(nil)
+
+		w, req := getActorControllerArgs("DELETE", "/users/", nil)
+		req.SetPathValue("uuid", upper)
+
+		controller.DeleteUser(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.NotNil(t, findCookie(w.Result().Cookies(), api.AccessTokenCookieName))
+	})
+
 	t.Run("error - failed self deletion keeps the auth cookies", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 		serviceMock.On("Delete", actor, actor.UUID).Return(domain.NewConflictError("users.emailChange.locked"))

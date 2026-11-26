@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
@@ -421,7 +422,7 @@ func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		Status:       domain.AuditStatusSuccess,
 	})
 
-	if uuid == actorFromRequest(r).UUID {
+	if strings.EqualFold(uuid, actorFromRequest(r).UUID) {
 		api.DeleteAuthCookies(w, c.isSecureCookie)
 	}
 
