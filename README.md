@@ -418,7 +418,7 @@ Checklist after creating a repository from this template:
    make rename module=github.com/acme/foo name=foo title="Foo API"
    ```
 
-   `module` is the Go module path, `name` a lowercase slug and `title` the human-readable name. The command rewrites the repository text files (it skips `.git/`, `.env*`, `go.sum`, binaries and `docs/swagger/`, which is regenerated at the end with `make swagger-gen`, so `swag` must be installed):
+   `module` is the Go module path, `name` a lowercase slug and `title` the human-readable name. The command rewrites the repository text files (it skips `.git/`, `.env*` except `.env.example`, `go.sum`, binaries and `docs/swagger/`, which is regenerated at the end with `make swagger-gen`, so `swag` must be installed):
 
    | Occurrence | Becomes |
    | --- | --- |
@@ -426,11 +426,12 @@ Checklist after creating a repository from this template:
    | `go-net-http-auth-base` as a name: default `OTEL_SERVICE_NAME`, `User-Agent`, Grafana dashboards and provisioning, the dev compose mount, Docker examples | `name` |
    | `${PROJECT_NAME:-auth-base}` in the compose files | `${PROJECT_NAME:-<name>}` |
    | `Go net/http Auth Base` (README and CONTRIBUTING headings) and the Swagger `@title` (`... API`) | `title` |
+   | `auth-base` and `authbase@` in `.env.example` (database name, pgAdmin password and email) | `name` and `<name without hyphens>@` |
    | `yurihbm/go-net-http-auth-base` (badges, clone URL) | `<owner>/<repo>` when `module` starts with `github.com/<owner>/<repo>`; otherwise left in place and listed as a manual step |
 
    The command fails when `module` is already the current one, so a repeated run with the same arguments changes nothing. Only the module path is read from `go.mod`; the other strings are matched literally, so after a rename a later one only updates the module path and Go imports.
 2. Fix what the tool does not rewrite, which is anything that is not the literal strings above:
-   - `.env.example`: the database name (`auth-base` in `DATABASE_URL` and `POSTGRES_DB`) and the pgAdmin credentials. The tool skips `.env*`. Set `PROJECT_NAME` in your local `.env` (optional, it defaults to `name`).
+   - Your local `.env`, which the tool never touches: set `PROJECT_NAME` (optional, it defaults to `name`) and the database name to match `.env.example`.
    - `README.md`: the one-line description under the title, the "Rename the base module" quickstart step (and renumber the steps after it) and the `OTEL_SERVICE_NAME` default if the table is now misaligned.
    - Template wording in the ADRs and in `docs/adr/README.md` (see [Leaving the template phase](#leaving-the-template-phase)).
 3. Review the diff and commit it.

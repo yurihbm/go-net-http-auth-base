@@ -18,6 +18,7 @@ const (
 	templateGitHub   = "yurihbm/go-net-http-auth-base"
 	templateTitle    = "Go net/http Auth Base"
 	templateFallback = "PROJECT_NAME:-auth-base}"
+	envExample       = ".env.example"
 )
 
 var (
@@ -93,6 +94,14 @@ func Rewrite(content, currentModule string, o Options) (out string, manual bool)
 	return out, manual
 }
 
+// RewriteEnvExample renames the database and the pgAdmin defaults of .env.example.
+func RewriteEnvExample(content, name string) string {
+	return strings.NewReplacer(
+		"authbase@", strings.ReplaceAll(name, "-", "")+"@",
+		"auth-base", name,
+	).Replace(content)
+}
+
 func skipped(rel string, d fs.DirEntry) bool {
 	if d.IsDir() {
 		for _, dir := range skippedDirs {
@@ -103,7 +112,7 @@ func skipped(rel string, d fs.DirEntry) bool {
 		return false
 	}
 	base := filepath.Base(rel)
-	if strings.HasPrefix(base, ".env") {
+	if strings.HasPrefix(base, ".env") && rel != envExample {
 		return true
 	}
 	for _, name := range skippedFiles {
@@ -158,6 +167,9 @@ func Run(root string, o Options) (Result, error) {
 			return nil
 		}
 		out, manual := Rewrite(string(data), current, o)
+		if rel == envExample {
+			out = RewriteEnvExample(out, o.Name)
+		}
 		if manual {
 			manualFiles[rel] = true
 		}
