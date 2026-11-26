@@ -2,12 +2,15 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
 	"go-net-http-auth-base/internal/shared"
 )
+
+const defaultUsersLimit = 20
 
 type UsersController struct {
 	userService          domain.UsersService
@@ -17,6 +20,7 @@ type UsersController struct {
 	auditService         domain.AuditService
 	authMiddleware       middlewares.HandlerMiddleware
 	stepUpMiddleware     middlewares.HandlerMiddleware
+	roleMiddleware       middlewares.HandlerMiddleware
 	credentialsLimiter   middlewares.HandlerMiddleware
 	isSecureCookie       bool
 }
@@ -31,6 +35,7 @@ func NewUsersController(
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	stepUpMiddleware middlewares.HandlerMiddleware,
+	roleMiddleware middlewares.HandlerMiddleware,
 	credentialsLimiter middlewares.HandlerMiddleware,
 	isSecureCookie bool,
 ) *UsersController {
@@ -42,6 +47,7 @@ func NewUsersController(
 		auditService:         auditService,
 		authMiddleware:       authMiddleware,
 		stepUpMiddleware:     stepUpMiddleware,
+		roleMiddleware:       roleMiddleware,
 		credentialsLimiter:   credentialsLimiter,
 		isSecureCookie:       isSecureCookie,
 	}
@@ -50,6 +56,7 @@ func NewUsersController(
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users", c.credentialsLimiter.Use(c.CreateUser))
 	router.HandleFunc("POST /users/revert-email-change", c.credentialsLimiter.Use(c.RevertEmailChange))
+	router.HandleFunc("GET /users", c.authMiddleware.Use(c.roleMiddleware.Use(c.ListUsers)))
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
 	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.RequestEmailChange)))
 	router.HandleFunc("POST /users/me/email/confirm", c.authMiddleware.Use(c.ConfirmEmailChange))
@@ -415,4 +422,79 @@ func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// @Summary		List users
+// @Description	Lists users with cursor pagination, newest first. Requires the `access_token` cookie set by POST /auth/login and the admin role.
+// @Tags			users
+// @Produce		json
+// @Param			search	query		string								false	"Case-insensitive prefix of the email or name"
+// @Param			role	query		string								false	"Filter by role"	Enums(admin, user)
+// @Param			cursor	query		string								false	"Cursor from meta.next_cursor"
+// @Param			limit	query		int									false	"Page size"			minimum(1)	maximum(100)	default(20)
+// @Success		200		{object}	api.ResponseBody[[]domain.User]	"User page"
+// @Failure		400		{object}	api.ResponseBody[any]				"Validation error (users.list.badRequest, users.invalidCursor)"
+// @Failure		401		{object}	api.ResponseBody[any]				"Unauthorized"
+// @Failure		403		{object}	api.ResponseBody[any]				"Forbidden"
+// @Failure		500		{object}	api.ResponseBody[any]				"Internal server error"
+// @Router			/users [get]
+func (c *UsersController) ListUsers(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	dto := domain.ListUsersDTO{
+		Limit: defaultUsersLimit,
+	}
+
+	if v := q.Get("search"); v != "" {
+		dto.Search = &v
+	}
+	if v := q.Get("cursor"); v != "" {
+		dto.Cursor = &v
+	}
+
+	if v := q.Get("role"); v != "" {
+		role := domain.UserRole(v)
+		if !role.IsValid() {
+			api.HandleError(r.Context(), w,
+				domain.NewValidationError("users.list.badRequest",
+					map[string]string{
+						"role": "role must be admin or user",
+					},
+				),
+			)
+			return
+		}
+		dto.Role = &role
+	}
+
+	if v := q.Get("limit"); v != "" {
+		limit, err := strconv.Atoi(v)
+		if err != nil || limit < 1 || limit > 100 {
+			api.HandleError(r.Context(), w,
+				domain.NewValidationError("users.list.badRequest",
+					map[string]string{
+						"limit": "limit must be an integer between 1 and 100",
+					},
+				),
+			)
+			return
+		}
+		dto.Limit = limit
+	}
+
+	page, err := c.userService.List(r.Context(), dto)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[[]domain.User]{
+		Data:    page.Items,
+		Message: "users.list.success",
+		Meta: &api.ResponseMeta{
+			Total:      page.Total,
+			Limit:      dto.Limit,
+			NextCursor: page.NextCursor,
+		},
+	})
 }

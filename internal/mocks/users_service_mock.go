@@ -66,3 +66,11 @@ func (m *UsersServiceMock) Delete(ctx context.Context, actor domain.Actor, uuid 
 	args := m.Called(actor, uuid)
 	return args.Error(0)
 }
+
+func (m *UsersServiceMock) List(ctx context.Context, dto domain.ListUsersDTO) (*domain.UsersPage, error) {
+	args := m.Called(dto)
+	if args.Get(0) != nil {
+		return args.Get(0).(*domain.UsersPage), args.Error(1)
+	}
+	return nil, args.Error(1)
+}

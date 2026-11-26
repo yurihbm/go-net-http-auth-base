@@ -118,3 +118,30 @@ DELETE FROM
 WHERE 
     uuid = $1;
 
+
+-- name: ListUsers :many
+SELECT
+    *
+FROM
+    users
+WHERE (sqlc.narg(role)::user_role IS NULL
+    OR role = sqlc.narg(role))
+AND (sqlc.narg(search)::text IS NULL
+    OR lower(email) LIKE lower(sqlc.narg(search)) || '%' ESCAPE '\'
+    OR lower(name) LIKE lower(sqlc.narg(search)) || '%' ESCAPE '\')
+AND (sqlc.narg(cursor)::uuid IS NULL
+    OR uuid < sqlc.narg(cursor))
+ORDER BY
+    uuid DESC
+LIMIT @page_size;
+
+-- name: CountUsers :one
+SELECT
+    COUNT(*)
+FROM
+    users
+WHERE (sqlc.narg(role)::user_role IS NULL
+    OR role = sqlc.narg(role))
+AND (sqlc.narg(search)::text IS NULL
+    OR lower(email) LIKE lower(sqlc.narg(search)) || '%' ESCAPE '\'
+    OR lower(name) LIKE lower(sqlc.narg(search)) || '%' ESCAPE '\');

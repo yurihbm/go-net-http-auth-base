@@ -31,6 +31,23 @@ definitions:
       meta:
         $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
     type: object
+  go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.User'
+        type: array
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
+    type: object
   go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User:
     properties:
       data:
@@ -806,6 +823,58 @@ paths:
       tags:
       - health
   /users:
+    get:
+      description: Lists users with cursor pagination, newest first. Requires the
+        `access_token` cookie set by POST /auth/login and the admin role.
+      parameters:
+      - description: Case-insensitive prefix of the email or name
+        in: query
+        name: search
+        type: string
+      - description: Filter by role
+        enum:
+        - admin
+        - user
+        in: query
+        name: role
+        type: string
+      - description: Cursor from meta.next_cursor
+        in: query
+        name: cursor
+        type: string
+      - default: 20
+        description: Page size
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User page
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User'
+        "400":
+          description: Validation error (users.list.badRequest, users.invalidCursor)
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: List users
+      tags:
+      - users
     post:
       consumes:
       - application/json

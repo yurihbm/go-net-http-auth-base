@@ -139,6 +139,8 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `users.notFound` | `NotFoundError` | `UsersRepository` (no rows), `SessionsRepository` (foreign key): the user does not exist |
 | `users.invalidUserUUID` | `ValidationError` | `UsersRepository`: the user UUID is malformed |
 | `users.oauthProvider.invalidUUID` | `ValidationError` | `AuthRepository`: the user UUID of a provider link is malformed |
+| `users.invalidCursor` | `ValidationError` | `UsersRepository.List`: the pagination cursor is malformed |
+| `users.list.badRequest` | `ValidationError` | `UsersController.ListUsers`: invalid `limit` or `role` query parameter |
 | `user.internalServerError` | `InternalServerError` | `UsersRepository.Delete`: unexpected failure |
 | `sessions.invalidUUID` | `ValidationError` | `SessionsRepository`, `SessionChallengeRepository`: the session UUID is malformed |
 | `auth.signup.invalidUUID` | `ValidationError` | `PendingSignupRepository`: the pending sign-up UUID is malformed |

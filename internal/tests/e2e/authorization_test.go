@@ -39,6 +39,18 @@ func TestAuthorization(t *testing.T) {
 		assert.Equal(t, userB.UUID, user.UUID)
 	})
 
+	t.Run("user list is admin only", func(t *testing.T) {
+		forbidden := clientA.do(http.MethodGet, "/users", nil)
+		assert.Equal(t, http.StatusForbidden, forbidden.Status)
+
+		resp := clientAdmin.do(http.MethodGet, "/users?role=admin", nil)
+		require.Equal(t, http.StatusOK, resp.Status)
+		var users []domain.User
+		require.NoError(t, json.Unmarshal(resp.Body.Data, &users))
+		require.Len(t, users, 1)
+		assert.Equal(t, domain.RoleAdmin, users[0].Role)
+	})
+
 	t.Run("audit logs are admin only", func(t *testing.T) {
 		forbidden := clientA.do(http.MethodGet, "/audit-logs", nil)
 		assert.Equal(t, http.StatusForbidden, forbidden.Status)

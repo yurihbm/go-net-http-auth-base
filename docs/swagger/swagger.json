@@ -803,6 +803,81 @@
             }
         },
         "/users": {
+            "get": {
+                "description": "Lists users with cursor pagination, newest first. Requires the `access_token` cookie set by POST /auth/login and the admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "List users",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Case-insensitive prefix of the email or name",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "admin",
+                            "user"
+                        ],
+                        "type": "string",
+                        "description": "Filter by role",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Cursor from meta.next_cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User page",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error (users.list.badRequest, users.invalidCursor)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            },
             "post": {
                 "description": "Emails a 6-digit code to the address and sets the HttpOnly `pending_signup` cookie (`__Host-pending_signup` outside development, valid for 1 hour). No account exists until POST /auth/signup/verify succeeds in the same browser. One email per address every 60 seconds and 5 per hour.",
                 "consumes": [
@@ -1375,6 +1450,32 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/go-net-http-auth-base_internal_domain.AuditLog"
+                    }
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseMeta"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-net-http-auth-base_internal_domain.User"
                     }
                 },
                 "details": {

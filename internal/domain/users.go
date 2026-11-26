@@ -64,6 +64,19 @@ type RevertEmailChangeDTO struct {
 	Token string `json:"token" validate:"required"`
 }
 
+type ListUsersDTO struct {
+	Search *string
+	Role   *UserRole
+	Cursor *string
+	Limit  int
+}
+
+type UsersPage struct {
+	Items      []User
+	NextCursor *string
+	Total      int64
+}
+
 type Actor struct {
 	UUID string
 	Role UserRole
@@ -81,6 +94,7 @@ type UsersService interface {
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
 	Update(context.Context, Actor, string, UserUpdateDTO) (*User, error)
 	Delete(context.Context, Actor, string) error
+	List(ctx context.Context, dto ListUsersDTO) (*UsersPage, error)
 }
 
 type UsersRepository interface {
@@ -95,4 +109,5 @@ type UsersRepository interface {
 	RefundStepUpGuess(ctx context.Context, uuid string) error
 	IsEmailReserved(ctx context.Context, email string) (bool, error)
 	Delete(context.Context, string) error
+	List(ctx context.Context, dto ListUsersDTO) ([]User, int64, error)
 }

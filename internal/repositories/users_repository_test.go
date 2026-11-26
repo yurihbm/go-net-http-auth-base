@@ -569,3 +569,101 @@ func TestUsersPostgresRepository_IsEmailReserved(t *testing.T) {
 		assert.False(t, reserved)
 	})
 }
+
+func TestUsersPostgresRepository_List(t *testing.T) {
+	repo := setupUsersRepoTest(t)
+	ctx := context.Background()
+
+	seed := func(name, email string, role domain.UserRole) *domain.User {
+		created, err := repo.Create(ctx, domain.User{Name: name, Email: email, PasswordHash: "hash", Role: domain.RoleUser})
+		require.NoError(t, err)
+		if role != domain.RoleUser {
+			created, err = repo.UpdateRole(ctx, created.UUID, role)
+			require.NoError(t, err)
+		}
+		return created
+	}
+	alice := seed("Alice Admin", "alice@example.com", domain.RoleAdmin)
+	bob := seed("Bob Builder", "bob@example.com", domain.RoleUser)
+	carol := seed("Carol 100%", "carol_x@example.com", domain.RoleUser)
+
+	t.Run("success - no filters returns newest first", func(t *testing.T) {
+		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(3), total)
+		require.Len(t, users, 3)
+		assert.Equal(t, []string{carol.UUID, bob.UUID, alice.UUID}, []string{users[0].UUID, users[1].UUID, users[2].UUID})
+		assert.Equal(t, "alice@example.com", users[2].Email)
+		assert.Equal(t, domain.RoleAdmin, users[2].Role)
+	})
+
+	t.Run("filter by role", func(t *testing.T) {
+		role := domain.RoleAdmin
+
+		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Role: &role})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		require.Len(t, users, 1)
+		assert.Equal(t, alice.UUID, users[0].UUID)
+	})
+
+	t.Run("search matches email prefix case-insensitively", func(t *testing.T) {
+		search := "BOB@"
+
+		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Search: &search})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		require.Len(t, users, 1)
+		assert.Equal(t, bob.UUID, users[0].UUID)
+	})
+
+	t.Run("search matches name prefix", func(t *testing.T) {
+		search := "alice"
+
+		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Search: &search})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		require.Len(t, users, 1)
+		assert.Equal(t, alice.UUID, users[0].UUID)
+	})
+
+	t.Run("search treats LIKE wildcards literally", func(t *testing.T) {
+		for search, want := range map[string]int{"%": 0, "_": 0, "carol_": 1, "Carol 100%": 1} {
+			users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Search: &search})
+
+			require.NoError(t, err)
+			assert.Equal(t, int64(want), total, search)
+			assert.Len(t, users, want, search)
+		}
+	})
+
+	t.Run("cursor pages through results", func(t *testing.T) {
+		first, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 2})
+		require.NoError(t, err)
+		assert.Equal(t, int64(3), total)
+		require.Len(t, first, 2)
+
+		cursor := first[1].UUID
+		second, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 2, Cursor: &cursor})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(3), total)
+		require.Len(t, second, 1)
+		assert.Equal(t, alice.UUID, second[0].UUID)
+	})
+
+	t.Run("error - invalid cursor", func(t *testing.T) {
+		cursor := "not-a-uuid"
+
+		users, _, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Cursor: &cursor})
+
+		assert.Nil(t, users)
+		var validationErr *domain.ValidationError
+		require.ErrorAs(t, err, &validationErr)
+		assert.Equal(t, "users.invalidCursor", validationErr.Error())
+	})
+}

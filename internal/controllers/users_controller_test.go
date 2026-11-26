@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestUsersController() (*controllers.UsersController, *mocks.UsersServiceMock, *mocks.AuditServiceMock, *mocks.AuthMiddlewareMock) {
@@ -29,7 +31,7 @@ func newTestEmailChangeController() (*controllers.UsersController, *mocks.EmailC
 	emailChangeMock := new(mocks.EmailChangeServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, true)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, passthroughMiddleware{}, true)
 
 	return controller, emailChangeMock, auditMock, middlewareMock
 }
@@ -39,7 +41,7 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
 	stepUpMiddlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, passthroughMiddleware{}, true)
+	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, passthroughMiddleware{}, passthroughMiddleware{}, true)
 
 	return controller, serviceMock, auditMock, middlewareMock, stepUpMiddlewareMock
 }
@@ -47,7 +49,7 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, *mocks.PendingSignupServiceMock, *mocks.AuditServiceMock) {
 	pendingMock := new(mocks.PendingSignupServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, isSecure)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, passthroughMiddleware{}, isSecure)
 
 	return controller, pendingMock, auditMock
 }
@@ -55,7 +57,7 @@ func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, 
 func newTestPasswordUsersController() (*controllers.UsersController, *mocks.PasswordServiceMock, *mocks.AuditServiceMock) {
 	passwordMock := new(mocks.PasswordServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, true)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, passthroughMiddleware{}, true)
 
 	return controller, passwordMock, auditMock
 }
@@ -78,11 +80,11 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes with auth middleware", func(t *testing.T) {
 		router := http.NewServeMux()
 		controller, _, _, authMiddleware := newTestUsersController()
-		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(7)
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(8)
 
 		controller.RegisterRoutes(router)
 
-		authMiddleware.AssertNumberOfCalls(t, "Use", 7)
+		authMiddleware.AssertNumberOfCalls(t, "Use", 8)
 		for _, path := range []string{"/users", "/users/revert-email-change"} {
 			_, pattern := router.Handler(httptest.NewRequest("POST", path, nil))
 			assert.Equal(t, "POST "+path, pattern)
@@ -98,7 +100,8 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 		_, serviceMock, _, authMiddleware, _ := newTestUsersControllerWithStepUp()
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
 		serviceMock.On("GetByUUID", mock.Anything, mock.Anything).Return(nil, errors.New("stop")).Maybe()
-		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, passthroughMiddleware{}, true)
+		serviceMock.On("List", mock.Anything).Return(nil, errors.New("stop")).Maybe()
+		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, passthroughMiddleware{}, passthroughMiddleware{}, true)
 
 		controller.RegisterRoutes(router)
 
@@ -112,6 +115,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			{"POST", "/users/me/email", true},
 			{"POST", "/users/me/email/confirm", false},
 			{"POST", "/users/me/password", true},
+			{"GET", "/users", false},
 			{"GET", "/users/some-uuid", false},
 			{"PUT", "/users/some-uuid", false},
 			{"DELETE", "/users/some-uuid", true},
@@ -127,7 +131,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 	t.Run("success - credential routes are wrapped by the limiter", func(t *testing.T) {
 		router := http.NewServeMux()
 		authMiddleware := rejectingMiddleware{http.StatusUnauthorized}
-		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, limiterMarker{}, true)
+		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, passthroughMiddleware{}, limiterMarker{}, true)
 		controller.RegisterRoutes(router)
 
 		for route, limited := range map[string]bool{
@@ -816,5 +820,77 @@ func TestUsersController_ChangePassword(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		auditMock.AssertExpectations(t)
+	})
+}
+
+func TestUsersController_ListUsers(t *testing.T) {
+	items := []domain.User{{UUID: "019623b0-0000-7000-8000-000000000001", Name: "Jane Doe", Email: "jane@example.com", Role: domain.RoleUser}}
+	nextCursor := "019623b0-0000-7000-8000-000000000001"
+
+	t.Run("success with defaults", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
+			return dto.Limit == 20 && dto.Search == nil && dto.Role == nil && dto.Cursor == nil
+		})).Return(&domain.UsersPage{Items: items, NextCursor: &nextCursor, Total: 1}, nil)
+		w, req := getControllerArgs("GET", "/users", nil)
+
+		controller.ListUsers(w, req)
+
+		var response api.ResponseBody[[]domain.User]
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, items, response.Data)
+		assert.Equal(t, "users.list.success", response.Message)
+		require.NotNil(t, response.Meta)
+		assert.Equal(t, int64(1), response.Meta.Total)
+		assert.Equal(t, 20, response.Meta.Limit)
+		assert.Equal(t, &nextCursor, response.Meta.NextCursor)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("success with all filters", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
+			return dto.Limit == 10 &&
+				dto.Search != nil && *dto.Search == "jan" &&
+				dto.Role != nil && *dto.Role == domain.RoleAdmin &&
+				dto.Cursor != nil && *dto.Cursor == nextCursor
+		})).Return(&domain.UsersPage{Items: items, Total: 1}, nil)
+		w, req := getControllerArgs("GET", "/users", nil)
+		req.URL.RawQuery = url.Values{"search": {"jan"}, "role": {"admin"}, "cursor": {nextCursor}, "limit": {"10"}}.Encode()
+
+		controller.ListUsers(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertExpectations(t)
+	})
+
+	for name, query := range map[string]url.Values{
+		"invalid limit - not a number":     {"limit": {"abc"}},
+		"invalid limit - out of range 0":   {"limit": {"0"}},
+		"invalid limit - out of range 101": {"limit": {"101"}},
+		"invalid role":                     {"role": {"root"}},
+	} {
+		t.Run("error - "+name, func(t *testing.T) {
+			controller, serviceMock, _, _ := newTestUsersController()
+			w, req := getControllerArgs("GET", "/users", nil)
+			req.URL.RawQuery = query.Encode()
+
+			controller.ListUsers(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "users.list.badRequest")
+			serviceMock.AssertNotCalled(t, "List")
+		})
+	}
+
+	t.Run("error - service error", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.Anything).Return(nil, domain.NewInternalServerError("users.internalServerError", errors.New("boom")))
+		w, req := getControllerArgs("GET", "/users", nil)
+
+		controller.ListUsers(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }

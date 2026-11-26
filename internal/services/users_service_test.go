@@ -509,3 +509,60 @@ func TestUsersService_CreateOAuth(t *testing.T) {
 		repo.AssertCalled(t, "Create", mock.Anything)
 	})
 }
+
+func TestUsersService_List(t *testing.T) {
+	makeUser := func(id string) domain.User { return domain.User{UUID: id, Name: "Test User"} }
+	dto := domain.ListUsersDTO{Limit: 2}
+
+	t.Run("no results - NextCursor is nil", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		repo.On("List", dto).Return([]domain.User{}, int64(0), nil)
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
+
+		page, err := service.List(context.Background(), dto)
+
+		require.NoError(t, err)
+		assert.Empty(t, page.Items)
+		assert.Nil(t, page.NextCursor)
+		assert.Equal(t, int64(0), page.Total)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("exactly limit results - NextCursor is last UUID", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		repo.On("List", dto).Return([]domain.User{makeUser("uuid-1"), makeUser("uuid-2")}, int64(5), nil)
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
+
+		page, err := service.List(context.Background(), dto)
+
+		require.NoError(t, err)
+		require.NotNil(t, page.NextCursor)
+		assert.Equal(t, "uuid-2", *page.NextCursor)
+		assert.Equal(t, int64(5), page.Total)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("exactly limit results but total matches - NextCursor is nil", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		repo.On("List", dto).Return([]domain.User{makeUser("uuid-1"), makeUser("uuid-2")}, int64(2), nil)
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
+
+		page, err := service.List(context.Background(), dto)
+
+		require.NoError(t, err)
+		assert.Nil(t, page.NextCursor)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("error - repository error is propagated", func(t *testing.T) {
+		repo := new(mocks.UsersRepositoryMock)
+		repo.On("List", dto).Return(nil, int64(0), assert.AnError)
+		service := services.NewUserService(repo, newTransactorMock(), testClock)
+
+		page, err := service.List(context.Background(), dto)
+
+		assert.Nil(t, page)
+		assert.ErrorIs(t, err, assert.AnError)
+		repo.AssertExpectations(t)
+	})
+}

@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"go-net-http-auth-base/internal/domain"
@@ -12,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 type UsersPostgresRepository struct {
 	q *postgres.Queries
@@ -224,6 +227,49 @@ func (r *UsersPostgresRepository) Delete(ctx context.Context, uuidStr string) er
 	return nil
 }
 
+func (r *UsersPostgresRepository) List(ctx context.Context, dto domain.ListUsersDTO) ([]domain.User, int64, error) {
+	var role postgres.NullUserRole
+	if dto.Role != nil {
+		role = postgres.NullUserRole{UserRole: postgres.UserRole(*dto.Role), Valid: true}
+	}
+
+	var search pgtype.Text
+	if dto.Search != nil {
+		search = pgtype.Text{String: likeEscaper.Replace(*dto.Search), Valid: true}
+	}
+
+	var cursor pgtype.UUID
+	if dto.Cursor != nil {
+		parsed, err := parseUsersCursorUUID(*dto.Cursor)
+		if err != nil {
+			return nil, 0, err
+		}
+		cursor = *parsed
+	}
+
+	total, err := r.q.CountUsers(ctx, postgres.CountUsersParams{Role: role, Search: search})
+	if err != nil {
+		return nil, 0, domain.NewInternalServerError("users.internalServerError", err)
+	}
+
+	rows, err := r.q.ListUsers(ctx, postgres.ListUsersParams{
+		Role:     role,
+		Search:   search,
+		Cursor:   cursor,
+		PageSize: int64(dto.Limit),
+	})
+	if err != nil {
+		return nil, 0, domain.NewInternalServerError("users.internalServerError", err)
+	}
+
+	users := make([]domain.User, 0, len(rows))
+	for _, row := range rows {
+		users = append(users, toDomainUser(row))
+	}
+
+	return users, total, nil
+}
+
 func toDomainUser(user postgres.User) domain.User {
 	var uuidBytes = user.Uuid.Bytes
 	return domain.User{
@@ -243,6 +289,10 @@ func toDomainUser(user postgres.User) domain.User {
 
 func parseUsersUUID(uuidStr string) (*pgtype.UUID, error) {
 	return parseUUID(uuidStr, "users.invalidUserUUID")
+}
+
+func parseUsersCursorUUID(uuidStr string) (*pgtype.UUID, error) {
+	return parseUUID(uuidStr, "users.invalidCursor")
 }
 
 func (r *UsersPostgresRepository) IsEmailReserved(ctx context.Context, email string) (bool, error) {

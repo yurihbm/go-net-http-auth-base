@@ -11,6 +11,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countUsers = `-- name: CountUsers :one
+SELECT
+    COUNT(*)
+FROM
+    users
+WHERE ($1::user_role IS NULL
+    OR role = $1)
+AND ($2::text IS NULL
+    OR lower(email) LIKE lower($2) || '%' ESCAPE '\'
+    OR lower(name) LIKE lower($2) || '%' ESCAPE '\')
+`
+
+type CountUsersParams struct {
+	Role   NullUserRole
+	Search pgtype.Text
+}
+
+func (q *Queries) CountUsers(ctx context.Context, arg CountUsersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsers, arg.Role, arg.Search)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email, password_hash)
     VALUES ($1, $2, $3)
@@ -137,6 +161,68 @@ func (q *Queries) IsEmailReserved(ctx context.Context, arg IsEmailReservedParams
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT
+    uuid, name, email, password_hash, role, email_version, email_changed_at, step_up_failures, step_up_failures_window_start, previous_email, created_at, updated_at
+FROM
+    users
+WHERE ($1::user_role IS NULL
+    OR role = $1)
+AND ($2::text IS NULL
+    OR lower(email) LIKE lower($2) || '%' ESCAPE '\'
+    OR lower(name) LIKE lower($2) || '%' ESCAPE '\')
+AND ($3::uuid IS NULL
+    OR uuid < $3)
+ORDER BY
+    uuid DESC
+LIMIT $4
+`
+
+type ListUsersParams struct {
+	Role     NullUserRole
+	Search   pgtype.Text
+	Cursor   pgtype.UUID
+	PageSize int64
+}
+
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers,
+		arg.Role,
+		arg.Search,
+		arg.Cursor,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.Name,
+			&i.Email,
+			&i.PasswordHash,
+			&i.Role,
+			&i.EmailVersion,
+			&i.EmailChangedAt,
+			&i.StepUpFailures,
+			&i.StepUpFailuresWindowStart,
+			&i.PreviousEmail,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const refundUserStepUpGuess = `-- name: RefundUserStepUpGuess :exec
