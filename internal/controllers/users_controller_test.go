@@ -531,8 +531,42 @@ func TestUsersController_DeleteUser(t *testing.T) {
 		controller.DeleteUser(w, req)
 
 		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Empty(t, w.Result().Cookies())
 		serviceMock.AssertCalled(t, "Delete", actor, "test-uuid")
 		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("success - deleting own account clears the auth cookies", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("Delete", actor, actor.UUID).Return(nil)
+		auditMock.On("Log", mock.Anything).Return(nil)
+
+		w, req := getActorControllerArgs("DELETE", "/users/", nil)
+		req.SetPathValue("uuid", actor.UUID)
+
+		controller.DeleteUser(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		cookies := w.Result().Cookies()
+		for _, name := range []string{api.AccessTokenCookieName, api.RefreshTokenCookieName} {
+			cookie := findCookie(cookies, name)
+			require.NotNil(t, cookie, name)
+			assert.Equal(t, -1, cookie.MaxAge, name)
+		}
+	})
+
+	t.Run("error - failed self deletion keeps the auth cookies", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("Delete", actor, actor.UUID).Return(domain.NewConflictError("users.emailChange.locked"))
+		auditMock.On("Log", mock.Anything).Return(nil)
+
+		w, req := getActorControllerArgs("DELETE", "/users/", nil)
+		req.SetPathValue("uuid", actor.UUID)
+
+		controller.DeleteUser(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.Empty(t, w.Result().Cookies())
 	})
 
 	t.Run("service error", func(t *testing.T) {

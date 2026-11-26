@@ -385,11 +385,11 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // @Summary		Delete a user
-// @Description	Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins.
+// @Description	Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins. Deleting your own account also clears the `access_token` and `refresh_token` cookies, like POST /auth/logout.
 // @Tags			users
 // @Produce		json
 // @Param			uuid	path	string	true	"User UUID"
-// @Success		204		"User deleted"
+// @Success		204		"User deleted; deleting your own account also clears the auth cookies"
 // @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]	"Unauthorized"
 // @Failure		403		{object}	api.ResponseBody[any]	"Forbidden, or step-up required (auth.stepUp.required)"
@@ -420,6 +420,10 @@ func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		ResourceUUID: uuid,
 		Status:       domain.AuditStatusSuccess,
 	})
+
+	if uuid == actorFromRequest(r).UUID {
+		api.DeleteAuthCookies(w, c.isSecureCookie)
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }

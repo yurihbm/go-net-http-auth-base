@@ -1367,7 +1367,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins.",
+                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins. Deleting your own account also clears the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies, like POST /auth/logout.",
                 "produces": [
                     "application/json"
                 ],
@@ -1386,7 +1386,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": "User deleted"
+                        "description": "User deleted; deleting your own account also clears the auth cookies"
                     },
                     "400": {
                         "description": "Validation error",

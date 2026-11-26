@@ -96,6 +96,12 @@ func TestSignupAndLogin(t *testing.T) {
 
 		deleted := c.do(http.MethodDelete, "/users/"+user.UUID, nil)
 		assert.Equal(t, http.StatusNoContent, deleted.Status)
+		cleared := map[string]bool{}
+		for _, cookie := range deleted.Cookies {
+			cleared[cookie.Name] = cookie.MaxAge < 0
+		}
+		assert.True(t, cleared["access_token"])
+		assert.True(t, cleared["refresh_token"])
 
 		resp := newClient(t).login(dto.Email, dto.Password)
 		assert.Equal(t, http.StatusUnauthorized, resp.Status)
