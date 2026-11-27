@@ -59,7 +59,7 @@ Sensitive routes (`POST /users/me/email`, `POST /users/me/password`, `DELETE /us
 
 ## Email Change
 
-`PUT /users/{uuid}` never changes the email (`UserUpdateDTO` has only `name`). The flow lives in `EmailChangeService` (`services/email_change_service.go`), separate from `UsersService`; both share the `ensureEmailNotReserved` and `isEmailChangeLocked` helpers.
+`PATCH /users/{uuid}` never changes the email (`UserUpdateDTO` has only `name`). The flow lives in `EmailChangeService` (`services/email_change_service.go`), separate from `UsersService`; both share the `ensureEmailNotReserved` and `isEmailChangeLocked` helpers.
 
 **Request.** `EmailChangeService.RequestEmailChange` backs `POST /users/me/email` (self only, behind step-up; `409` if taken, reserved or `users.emailChange.locked`). In one `WithinTx` it upserts the session's `email_change` row in `session_challenges` (`SessionChallengeRepository.Upsert`: `new_email`, the user's `email_version`, `HMAC-SHA256(JWT_SECRET, "email-change:"+sid:code)`, 10m TTL, one row per session, a new request replaces it, `429 users.emailChange.cooldown` within 60s) and reserves a send for the new address (`EmailSendLimiter.ReserveSend`, `429 auth.email.sendLimit`), then mails the 6-digit code to the new address with `EmailVerificationService.SendEmailChangeCode` (a send failure deletes the challenge and is a `500 users.emailChange.sendFailed`).
 

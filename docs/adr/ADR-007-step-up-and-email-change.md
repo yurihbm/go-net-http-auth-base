@@ -9,7 +9,7 @@ An OAuth login is linked into an existing account when the provider reports a
 verified email that matches it (ADR-005). Two paths would turn that rule, or a
 stolen session, into a permanent account takeover:
 
-- If `PUT /users/{uuid}` accepted an `email` field and kept the account
+- If `PATCH /users/{uuid}` accepted an `email` field and kept the account
   verified, a user could switch the account to an address they do not own. The
   next OAuth login of the real owner of that address would then be linked into
   the attacker's account (account pre-hijacking), and anyone could claim an

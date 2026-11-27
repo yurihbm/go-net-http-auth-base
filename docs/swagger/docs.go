@@ -1758,7 +1758,67 @@ const docTemplate = `{
                     }
                 }
             },
-            "put": {
+            "delete": {
+                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins. Deleting your own account also clears the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies, like POST /auth/logout.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Delete a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "User deleted; deleting your own account also clears the auth cookies"
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden, or step-up required (auth.stepUp.required)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Self deletion blocked during the email change lock (users.emailChange.locked)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            },
+            "patch": {
                 "description": "Partially updates a user. The email changes through POST /users/me/email. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login.",
                 "consumes": [
                     "application/json"
@@ -1815,66 +1875,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not found",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins. Deleting your own account also clears the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies, like POST /auth/logout.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Delete a user",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User UUID",
-                        "name": "uuid",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "User deleted; deleting your own account also clears the auth cookies"
-                    },
-                    "400": {
-                        "description": "Validation error",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden, or step-up required (auth.stepUp.required)",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "404": {
-                        "description": "Not found",
-                        "schema": {
-                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
-                        }
-                    },
-                    "409": {
-                        "description": "Self deletion blocked during the email change lock (users.emailChange.locked)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }

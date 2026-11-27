@@ -1442,7 +1442,7 @@ paths:
       summary: Get a user by UUID
       tags:
       - users
-    put:
+    patch:
       consumes:
       - application/json
       description: Partially updates a user. The email changes through POST /users/me/email.

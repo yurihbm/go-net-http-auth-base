@@ -63,7 +63,7 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users/me/email/confirm", c.authMiddleware.Use(c.ConfirmEmailChange))
 	router.HandleFunc("POST /users/me/password", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.ChangePassword)))
 	router.HandleFunc("GET /users/{uuid}", c.authMiddleware.Use(c.GetUserByUUID))
-	router.HandleFunc("PUT /users/{uuid}", c.authMiddleware.Use(c.UpdateUser))
+	router.HandleFunc("PATCH /users/{uuid}", c.authMiddleware.Use(c.UpdateUser))
 	router.HandleFunc("DELETE /users/{uuid}", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.DeleteUser)))
 }
 
@@ -347,7 +347,7 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 // @Failure		403		{object}	api.ResponseBody[any]			"Forbidden"
 // @Failure		404		{object}	api.ResponseBody[any]			"Not found"
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
-// @Router			/users/{uuid} [put]
+// @Router			/users/{uuid} [patch]
 func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	uuid, err := pathUUID(r, "uuid", "users.invalidUserUUID")
 	if err != nil {
