@@ -25,7 +25,7 @@ func TestSignupAndLogin(t *testing.T) {
 
 	pending := c.do(http.MethodPost, "/users", dto)
 	require.Equal(t, http.StatusAccepted, pending.Status)
-	assert.Equal(t, "user.create.pending", pending.Body.Message)
+	assert.Equal(t, "users.create.pending", pending.Body.Message)
 	pendingCookie := c.cookie(api.OAuthFlowCookieName(api.PendingSignupCookieName, false))
 	require.NotNil(t, pendingCookie)
 	code := mailbox.otpCode(t, dto.Email)
@@ -96,6 +96,12 @@ func TestSignupAndLogin(t *testing.T) {
 
 		deleted := c.do(http.MethodDelete, "/users/"+user.UUID, nil)
 		assert.Equal(t, http.StatusNoContent, deleted.Status)
+		cleared := map[string]bool{}
+		for _, cookie := range deleted.Cookies {
+			cleared[cookie.Name] = cookie.MaxAge < 0
+		}
+		assert.True(t, cleared["access_token"])
+		assert.True(t, cleared["refresh_token"])
 
 		resp := newClient(t).login(dto.Email, dto.Password)
 		assert.Equal(t, http.StatusUnauthorized, resp.Status)

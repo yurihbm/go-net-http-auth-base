@@ -75,7 +75,13 @@ func (c *{{Resources}}Controller) Create(w http.ResponseWriter, r *http.Request)
 // @Failure		500		{object}	api.ResponseBody[any]				"Internal server error"
 // @Router			/{{resources}}/{uuid} [get]
 func (c *{{Resources}}Controller) GetByUUID(w http.ResponseWriter, r *http.Request) {
-	entity, err := c.service.GetByUUID(r.Context(), r.PathValue("uuid"))
+	uuid, err := pathUUID(r, "uuid", "{{resources}}.invalidUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	entity, err := c.service.GetByUUID(r.Context(), uuid)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
@@ -102,13 +108,19 @@ func (c *{{Resources}}Controller) GetByUUID(w http.ResponseWriter, r *http.Reque
 // @Failure		500		{object}	api.ResponseBody[any]				"Internal server error"
 // @Router			/{{resources}}/{uuid} [put]
 func (c *{{Resources}}Controller) Update(w http.ResponseWriter, r *http.Request) {
+	uuid, err := pathUUID(r, "uuid", "{{resources}}.invalidUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
 	dto, err := api.DecodeAndValidate[domain.{{Resource}}UpdateDTO](r)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
 	}
 
-	updated, err := c.service.Update(r.Context(), r.PathValue("uuid"), dto)
+	updated, err := c.service.Update(r.Context(), uuid, dto)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
@@ -132,7 +144,13 @@ func (c *{{Resources}}Controller) Update(w http.ResponseWriter, r *http.Request)
 // @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
 // @Router			/{{resources}}/{uuid} [delete]
 func (c *{{Resources}}Controller) Delete(w http.ResponseWriter, r *http.Request) {
-	if err := c.service.Delete(r.Context(), r.PathValue("uuid")); err != nil {
+	uuid, err := pathUUID(r, "uuid", "{{resources}}.invalidUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	if err := c.service.Delete(r.Context(), uuid); err != nil {
 		api.HandleError(r.Context(), w, err)
 		return
 	}

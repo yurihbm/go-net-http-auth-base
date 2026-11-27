@@ -114,7 +114,7 @@ The domain package defines type-safe constants for common values:
 | `limit`                                                | Page size, 1 to 100 (default 20)                               |
 | `cursor`                                               | `meta.next_cursor` from the previous page                      |
 
-Pagination is keyset-based on the UUIDv7 `uuid` (`uuid < cursor ORDER BY uuid DESC`), so pages stay stable while new entries arrive. `meta.total` is the number of entries matching the filters (the cursor is ignored), and `meta.next_cursor` is set while a full page is returned and more entries match. Invalid `limit` or dates return `400` with `audit.list.badRequest`.
+Pagination is keyset-based on the UUIDv7 `uuid` (`uuid < cursor ORDER BY uuid DESC`), so pages stay stable while new entries arrive. `meta.total` is the number of entries matching the filters (the cursor is ignored), and `meta.next_cursor` is set only when at least one more entry follows the page. Invalid `limit` or dates return `400` with `audit.list.badRequest`.
 
 ## Database Schema
 

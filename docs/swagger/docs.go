@@ -618,7 +618,7 @@ const docTemplate = `{
         },
         "/auth/{provider}/callback": {
             "get": {
-                "description": "Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies and redirects to the redirect_uri. If the provider email is not verified, emails a one-time code, sets the ` + "`" + `pending_signup` + "`" + ` cookie and redirects to the redirect_uri with ` + "`" + `?verification=required` + "`" + ` (the frontend then posts the code to POST /auth/signup/verify); if the address hit the email send limit, redirects with ` + "`" + `?error=verification_limited` + "`" + `. If the provider returned an error, redirects to the redirect_uri with ` + "`" + `?error=\u003ccode\u003e` + "`" + `.",
+                "description": "Handles the provider callback and requires the OAuth flow cookies set by the login step. On success sets the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies and redirects to the redirect_uri. If the provider email is not verified, emails a one-time code, sets the ` + "`" + `pending_signup` + "`" + ` cookie and redirects to the redirect_uri with ` + "`" + `?verification=required` + "`" + ` (the frontend then posts the code to POST /auth/signup/verify); if the address hit the email send limit, redirects with ` + "`" + `?error=verification_limited` + "`" + `. If the provider returned an error, redirects to the redirect_uri with ` + "`" + `?error=\u003ccode\u003e` + "`" + `. If the login fails after the state and browser nonce verify, it also redirects with ` + "`" + `?error=missing_code_verifier` + "`" + `, ` + "`" + `account_conflict` + "`" + `, ` + "`" + `invalid_user_info` + "`" + ` or ` + "`" + `server_error` + "`" + `; a state or nonce that does not verify is answered as JSON.",
                 "produces": [
                     "application/json"
                 ],
@@ -671,7 +671,7 @@ const docTemplate = `{
                         "headers": {
                             "Location": {
                                 "type": "string",
-                                "description": "redirect_uri, with ?verification=required, ?error=verification_limited or ?error=\u003ccode\u003e on provider error"
+                                "description": "redirect_uri, with ?verification=required, ?error=verification_limited, ?error=\u003ccode\u003e on provider error or ?error=\u003ccode\u003e on login failure"
                             }
                         }
                     },
@@ -810,6 +810,81 @@ const docTemplate = `{
             }
         },
         "/users": {
+            "get": {
+                "description": "Lists users with cursor pagination, newest first. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "List users",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Case-insensitive prefix of the email or name",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "admin",
+                            "user"
+                        ],
+                        "type": "string",
+                        "description": "Filter by role",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Cursor from meta.next_cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User page",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error (users.list.badRequest, users.invalidCursor)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            },
             "post": {
                 "description": "Emails a 6-digit code to the address and sets the HttpOnly ` + "`" + `pending_signup` + "`" + ` cookie (` + "`" + `__Host-pending_signup` + "`" + ` outside development, valid for 1 hour). No account exists until POST /auth/signup/verify succeeds in the same browser. One email per address every 60 seconds and 5 per hour.",
                 "consumes": [
@@ -835,7 +910,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "202": {
-                        "description": "Code sent (user.create.pending)",
+                        "description": "Code sent (users.create.pending)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }
@@ -1292,7 +1367,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins.",
+                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins. Deleting your own account also clears the ` + "`" + `access_token` + "`" + ` and ` + "`" + `refresh_token` + "`" + ` cookies, like POST /auth/logout.",
                 "produces": [
                     "application/json"
                 ],
@@ -1311,7 +1386,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": "User deleted"
+                        "description": "User deleted; deleting your own account also clears the auth cookies"
                     },
                     "400": {
                         "description": "Validation error",
@@ -1382,6 +1457,32 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/go-net-http-auth-base_internal_domain.AuditLog"
+                    }
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseMeta"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-net-http-auth-base_internal_domain.User"
                     }
                 },
                 "details": {

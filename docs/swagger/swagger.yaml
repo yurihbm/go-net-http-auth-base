@@ -31,6 +31,23 @@ definitions:
       meta:
         $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
     type: object
+  go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/go-net-http-auth-base_internal_domain.User'
+        type: array
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
+    type: object
   go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_User:
     properties:
       data:
@@ -314,7 +331,10 @@ paths:
         the redirect_uri with `?verification=required` (the frontend then posts the
         code to POST /auth/signup/verify); if the address hit the email send limit,
         redirects with `?error=verification_limited`. If the provider returned an
-        error, redirects to the redirect_uri with `?error=<code>`.
+        error, redirects to the redirect_uri with `?error=<code>`. If the login fails
+        after the state and browser nonce verify, it also redirects with `?error=missing_code_verifier`,
+        `account_conflict`, `invalid_user_info` or `server_error`; a state or nonce
+        that does not verify is answered as JSON.
       parameters:
       - description: OAuth provider
         enum:
@@ -349,8 +369,8 @@ paths:
           description: Redirect to the redirect_uri
           headers:
             Location:
-              description: redirect_uri, with ?verification=required, ?error=verification_limited
-                or ?error=<code> on provider error
+              description: redirect_uri, with ?verification=required, ?error=verification_limited,
+                ?error=<code> on provider error or ?error=<code> on login failure
               type: string
         "400":
           description: Validation error
@@ -806,6 +826,58 @@ paths:
       tags:
       - health
   /users:
+    get:
+      description: Lists users with cursor pagination, newest first. Requires the
+        `access_token` cookie set by POST /auth/login and the admin role.
+      parameters:
+      - description: Case-insensitive prefix of the email or name
+        in: query
+        name: search
+        type: string
+      - description: Filter by role
+        enum:
+        - admin
+        - user
+        in: query
+        name: role
+        type: string
+      - description: Cursor from meta.next_cursor
+        in: query
+        name: cursor
+        type: string
+      - default: 20
+        description: Page size
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User page
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User'
+        "400":
+          description: Validation error (users.list.badRequest, users.invalidCursor)
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: List users
+      tags:
+      - users
     post:
       consumes:
       - application/json
@@ -824,7 +896,7 @@ paths:
       - application/json
       responses:
         "202":
-          description: Code sent (user.create.pending)
+          description: Code sent (users.create.pending)
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
         "400":
@@ -850,7 +922,8 @@ paths:
     delete:
       description: Requires the `access_token` cookie set by POST /auth/login and
         a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also
-        for admins.
+        for admins. Deleting your own account also clears the `access_token` and `refresh_token`
+        cookies, like POST /auth/logout.
       parameters:
       - description: User UUID
         in: path
@@ -861,7 +934,8 @@ paths:
       - application/json
       responses:
         "204":
-          description: User deleted
+          description: User deleted; deleting your own account also clears the auth
+            cookies
         "400":
           description: Validation error
           schema:

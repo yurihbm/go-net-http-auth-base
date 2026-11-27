@@ -22,10 +22,10 @@ func (m *AuditServiceMock) Log(ctx context.Context, dto domain.CreateAuditLogDTO
 	return nil
 }
 
-func (m *AuditServiceMock) List(ctx context.Context, dto domain.ListAuditLogsDTO) (*domain.AuditLogPage, error) {
+func (m *AuditServiceMock) List(ctx context.Context, dto domain.ListAuditLogsDTO) (*domain.Page[domain.AuditLog], error) {
 	args := m.Called(dto)
 	if args.Get(0) != nil {
-		return args.Get(0).(*domain.AuditLogPage), args.Error(1)
+		return args.Get(0).(*domain.Page[domain.AuditLog]), args.Error(1)
 	}
 	return nil, args.Error(1)
 }

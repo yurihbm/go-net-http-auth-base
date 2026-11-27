@@ -15,6 +15,7 @@ func UsersFactory(deps *Dependencies, cfg *config.Config, credentialsLimiter mid
 		deps.AuditService,
 		deps.AuthMiddleware,
 		deps.StepUpMiddleware,
+		deps.AdminRoleMiddleware,
 		credentialsLimiter,
 		!cfg.IsDevelopment(),
 	)

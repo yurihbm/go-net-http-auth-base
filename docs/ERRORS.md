@@ -132,23 +132,26 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.invalidToken` | `UnauthorizedError` | `AuthService`/`TokenService`: the token is malformed, expired, has the wrong audience or no longer matches its session |
 | `auth.verifyToken.invalidTokenSigningMethod` | `UnauthorizedError` | `TokenService.VerifyToken`: the token is not signed with HMAC |
 | `auth.tokenGenerationFailed` | `InternalServerError` | `TokenService.GenerateToken`: signing failed |
-| `auth.unauthorized` | `UnauthorizedError` | `AuthMiddleware`: missing or invalid access token cookie (written directly, not through `HandleError`) |
-| `auth.forbidden` | `ForbiddenError` | `RoleMiddleware`: the role is not allowed (written directly, not through `HandleError`) |
-| `user.getMe.unauthorized` | `UnauthorizedError` | `UsersController.GetMe`: no user in the request context |
+| `auth.unauthorized` | `UnauthorizedError` | `AuthMiddleware`: missing or invalid access token cookie (the cause is wrapped for the log line) |
+| `auth.forbidden` | `ForbiddenError` | `RoleMiddleware`: the role is not allowed |
+| `rateLimit.exceeded` | `TooManyRequestsError` | `RateLimitMiddleware` and the credentials limiter: the per-IP bucket is empty |
+| `users.getMe.unauthorized` | `UnauthorizedError` | `UsersController.GetMe`: no user in the request context |
 | `users.forbidden` | `ForbiddenError` | `Actor.CanAccess` in `UsersService`: not self or admin |
 | `users.notFound` | `NotFoundError` | `UsersRepository` (no rows), `SessionsRepository` (foreign key): the user does not exist |
-| `users.invalidUserUUID` | `ValidationError` | `UsersRepository`: the user UUID is malformed |
+| `users.invalidUserUUID` | `ValidationError` | `UsersRepository`, `UsersController` (via `pathUUID`): the user UUID is malformed |
 | `users.oauthProvider.invalidUUID` | `ValidationError` | `AuthRepository`: the user UUID of a provider link is malformed |
-| `user.internalServerError` | `InternalServerError` | `UsersRepository.Delete`: unexpected failure |
+| `users.invalidCursor` | `ValidationError` | `UsersRepository.List`: the pagination cursor is malformed |
+| `users.list.badRequest` | `ValidationError` | `UsersController.ListUsers`: invalid `limit`, `role` or `search` (invalid UTF-8 or NUL byte) query parameter |
+| `users.internalServerError` | `InternalServerError` | `UsersRepository.Delete` and `UsersRepository.List`: unexpected failure |
 | `sessions.invalidUUID` | `ValidationError` | `SessionsRepository`, `SessionChallengeRepository`: the session UUID is malformed |
 | `auth.signup.invalidUUID` | `ValidationError` | `PendingSignupRepository`: the pending sign-up UUID is malformed |
 | `auth.passwordReset.invalidUUID` | `ValidationError` | `PasswordResetRepository.Create`: the reset UUID is malformed |
-| `auditLogs.invalidActorUUID` | `ValidationError` | `AuditRepository`: the actor UUID filter is malformed |
-| `auditLogs.invalidCursor` | `ValidationError` | `AuditRepository`: the pagination cursor is malformed |
-| `auditLogs.internalServerError` | `InternalServerError` | Unexpected `AuditRepository` failures |
+| `audit.invalidActorUUID` | `ValidationError` | `AuditRepository`: the actor UUID filter is malformed |
+| `audit.invalidCursor` | `ValidationError` | `AuditRepository`: the pagination cursor is malformed |
+| `audit.internalServerError` | `InternalServerError` | Unexpected `AuditRepository` failures |
 | `audit.list.badRequest` | `ValidationError` | `AuditController.List`: invalid `limit`, date or cursor query parameter |
 | `request.invalid` | `ValidationError` | `api.DecodeAndValidate`: the body is not valid JSON of the expected shape |
-| `request.validation_failed` | `ValidationError` | `api.DecodeAndValidate`: a field failed validation (details per field) |
+| `request.validationFailed` | `ValidationError` | `api.DecodeAndValidate`: a field failed validation (details per field) |
 
 ## Implementation Details
 
@@ -230,7 +233,7 @@ The `HandleError` function inspects the error type using `errors.As()` and write
 ```json
 {
   "data": null,
-  "error": "request.validation_failed",
+  "error": "request.validationFailed",
   "details": {
     "field_name": "error description"
   }
@@ -238,6 +241,8 @@ The `HandleError` function inspects the error type using `errors.As()` and write
 ```
 
 `error` is always a dot-separated message key. For a `500`, the body only carries the key (e.g. `users.internalServerError`), never the wrapped cause.
+
+The OAuth callback (`GET /auth/{provider}/callback`) is the exception: once the state token and browser nonce verify and the `redirect_uri` is allow-listed, failures redirect (`302`) to it with `?error=<code>` instead of a JSON body. The codes are the standard provider codes (`access_denied`, `invalid_request`, `unauthorized_client`, `unsupported_response_type`, `invalid_scope`, `server_error`, `temporarily_unavailable`), `verification_limited`, and for a failed login `missing_code_verifier`, `account_conflict`, `invalid_user_info` and `server_error`. Without a trusted redirect the error is JSON as above.
 
 ## Error Logging & Observability
 

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -56,7 +57,7 @@ func ReadModule(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "module "); ok {
 			return strings.Trim(strings.TrimSpace(rest), `"`), nil
 		}
@@ -104,23 +105,13 @@ func RewriteEnvExample(content, name string) string {
 
 func skipped(rel string, d fs.DirEntry) bool {
 	if d.IsDir() {
-		for _, dir := range skippedDirs {
-			if rel == dir {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(skippedDirs, rel)
 	}
 	base := filepath.Base(rel)
 	if strings.HasPrefix(base, ".env") && rel != envExample {
 		return true
 	}
-	for _, name := range skippedFiles {
-		if rel == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(skippedFiles, rel)
 }
 
 func Run(root string, o Options) (Result, error) {

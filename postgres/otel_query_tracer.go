@@ -176,7 +176,7 @@ func sqlcQueryName(sql string) string {
 }
 
 func sqlOperation(sql string) string {
-	for _, line := range strings.Split(sql, "\n") {
+	for line := range strings.SplitSeq(sql, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "--") {
 			continue
 		}

@@ -71,15 +71,9 @@ type ListAuditLogsDTO struct {
 	EndDate      *int64
 }
 
-type AuditLogPage struct {
-	Items      []AuditLog
-	NextCursor *string
-	Total      int64
-}
-
 type AuditService interface {
 	Log(ctx context.Context, dto CreateAuditLogDTO) error
-	List(ctx context.Context, dto ListAuditLogsDTO) (*AuditLogPage, error)
+	List(ctx context.Context, dto ListAuditLogsDTO) (*Page[AuditLog], error)
 }
 
 type AuditRepository interface {

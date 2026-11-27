@@ -50,6 +50,9 @@ defaults must be safe. The main threats considered:
   browser that started the flow. PKCE (`S256`) is used on every provider.
 - `redirect_uri` must exactly match `OAUTH_CALLBACK_ALLOW_LIST`, which is
   required in production. This is checked before the state is minted.
+  Callback failures (provider errors and failed logins) redirect to it with
+  `?error=<code>` only after the state token and the browser nonce verify and
+  the `redirect_uri` is still allow-listed; otherwise they are answered as JSON.
 - An account is created from a provider identity, or the provider is linked
   into the account that owns the email, right away only when the provider says
   the email is verified. Every local account is verified, so linking needs no

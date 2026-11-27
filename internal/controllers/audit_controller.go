@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"go-net-http-auth-base/internal/api"
@@ -13,9 +12,9 @@ import (
 const defaultAuditLogLimit = 20
 
 type AuditController struct {
-	auditService   domain.AuditService
-	authMiddleware middlewares.HandlerMiddleware
-	roleMiddleware middlewares.HandlerMiddleware
+	auditService        domain.AuditService
+	authMiddleware      middlewares.HandlerMiddleware
+	adminRoleMiddleware middlewares.HandlerMiddleware
 }
 
 var _ Controller = (*AuditController)(nil)
@@ -23,17 +22,17 @@ var _ Controller = (*AuditController)(nil)
 func NewAuditController(
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
-	roleMiddleware middlewares.HandlerMiddleware,
+	adminRoleMiddleware middlewares.HandlerMiddleware,
 ) *AuditController {
 	return &AuditController{
-		auditService:   auditService,
-		authMiddleware: authMiddleware,
-		roleMiddleware: roleMiddleware,
+		auditService:        auditService,
+		authMiddleware:      authMiddleware,
+		adminRoleMiddleware: adminRoleMiddleware,
 	}
 }
 
 func (c *AuditController) RegisterRoutes(router *http.ServeMux) {
-	router.HandleFunc("GET /audit-logs", c.authMiddleware.Use(c.roleMiddleware.Use(c.ListAuditLogs)))
+	router.HandleFunc("GET /audit-logs", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.ListAuditLogs)))
 }
 
 // @Summary		List audit logs
@@ -57,9 +56,7 @@ func (c *AuditController) RegisterRoutes(router *http.ServeMux) {
 func (c *AuditController) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
-	dto := domain.ListAuditLogsDTO{
-		Limit: defaultAuditLogLimit,
-	}
+	var dto domain.ListAuditLogsDTO
 
 	if v := q.Get("action"); v != "" {
 		dto.Action = &v
@@ -77,20 +74,12 @@ func (c *AuditController) ListAuditLogs(w http.ResponseWriter, r *http.Request) 
 		dto.Cursor = &v
 	}
 
-	if v := q.Get("limit"); v != "" {
-		limit, err := strconv.Atoi(v)
-		if err != nil || limit < 1 || limit > 100 {
-			api.HandleError(r.Context(), w,
-				domain.NewValidationError("audit.list.badRequest",
-					map[string]string{
-						"limit": "limit must be an integer between 1 and 100",
-					},
-				),
-			)
-			return
-		}
-		dto.Limit = limit
+	limit, err := parseLimit(q, defaultAuditLogLimit, "audit.list.badRequest")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
 	}
+	dto.Limit = limit
 
 	if v := q.Get("start_date"); v != "" {
 		parsed, err := time.Parse(time.RFC3339, v)

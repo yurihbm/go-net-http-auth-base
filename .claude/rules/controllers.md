@@ -14,13 +14,15 @@ Controllers handle HTTP requests and responses. Key patterns:
 - Middleware Integration: Controllers receive middleware instances and apply them using the `Use()` method on protected routes.
 - Request Handling:
   - Use `api.DecodeAndValidate[T](r)` to decode (strict JSON parsing, single-object body) and validate DTOs against their `validate` struct tags in one step.
-  - Extract path parameters using `r.PathValue("param")`.
+  - Extract path parameters using `r.PathValue("param")`. UUID path parameters go through `pathUUID(r, name, errorKey)` (`path_helpers.go`), which returns the canonical lowercase hyphenated form (so services can compare UUIDs with `==`) or a `400` `ValidationError` when malformed.
+  - The list `limit` query parameter goes through `parseLimit` (`query_helpers.go`).
+  - Error responses go through `api.HandleError` (wrap the cause with `%w` when the response key must stay generic, as `AuthMiddleware` does). Only responses that are not a JSON error, such as the OAuth failure redirect, call `api.RecordError(ctx, err)` so the log line and span carry the error.
   - Read the caller with `actorFromRequest(r)` and the session with `sessionFromRequest(r)` (`actor_helpers.go`).
 - Validation: `internal/api/request.go` wires a single `go-playground/validator` instance used by `DecodeAndValidate`. Decode or validation failures return a `domain.ValidationError` with per-field `details`, mapped to `400` by `internal/api/errors.go`. DTOs declare rules via `validate:"..."` tags (e.g., `validate:"required,email"`) in `internal/domain/*.go`.
 - Response Handling:
   - Use `api.WriteJSONResponse()` helper for consistent JSON responses (format defined in `internal/api/response.go`).
   - Include appropriate HTTP status codes (201 for creation, 204 for deletion, etc.).
-  - Use message keys (e.g., `"user.create.success"`) for i18n support.
+  - Use message keys (e.g., `"users.create.success"`) for i18n support.
   - Return error details in the `Error` field of the response body.
 - Error Handling: Map service errors to appropriate HTTP status codes (400 for bad request, 404 for not found, 500 for internal errors).
 - Thin Handlers: Decode input, call one service method, then handle the HTTP concerns (cookies, redirect, audit log).

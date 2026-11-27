@@ -48,7 +48,7 @@ func (m *ClientIPMiddleware) resolve(r *http.Request) string {
 	// client-supplied header costs nothing.
 	values := r.Header.Values("X-Forwarded-For")
 	current := ""
-	for hops := 0; hops < maxForwardedHops; hops++ {
+	for range maxForwardedHops {
 		for current == "" && len(values) > 0 {
 			current = values[len(values)-1]
 			values = values[:len(values)-1]

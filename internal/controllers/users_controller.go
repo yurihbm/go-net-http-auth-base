@@ -2,12 +2,16 @@ package controllers
 
 import (
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
 	"go-net-http-auth-base/internal/shared"
 )
+
+const defaultUsersLimit = 20
 
 type UsersController struct {
 	userService          domain.UsersService
@@ -17,6 +21,7 @@ type UsersController struct {
 	auditService         domain.AuditService
 	authMiddleware       middlewares.HandlerMiddleware
 	stepUpMiddleware     middlewares.HandlerMiddleware
+	adminRoleMiddleware  middlewares.HandlerMiddleware
 	credentialsLimiter   middlewares.HandlerMiddleware
 	isSecureCookie       bool
 }
@@ -31,6 +36,7 @@ func NewUsersController(
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	stepUpMiddleware middlewares.HandlerMiddleware,
+	adminRoleMiddleware middlewares.HandlerMiddleware,
 	credentialsLimiter middlewares.HandlerMiddleware,
 	isSecureCookie bool,
 ) *UsersController {
@@ -42,6 +48,7 @@ func NewUsersController(
 		auditService:         auditService,
 		authMiddleware:       authMiddleware,
 		stepUpMiddleware:     stepUpMiddleware,
+		adminRoleMiddleware:  adminRoleMiddleware,
 		credentialsLimiter:   credentialsLimiter,
 		isSecureCookie:       isSecureCookie,
 	}
@@ -50,6 +57,7 @@ func NewUsersController(
 func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /users", c.credentialsLimiter.Use(c.CreateUser))
 	router.HandleFunc("POST /users/revert-email-change", c.credentialsLimiter.Use(c.RevertEmailChange))
+	router.HandleFunc("GET /users", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.ListUsers)))
 	router.HandleFunc("GET /users/me", c.authMiddleware.Use(c.GetMe))
 	router.HandleFunc("POST /users/me/email", c.authMiddleware.Use(c.stepUpMiddleware.Use(c.RequestEmailChange)))
 	router.HandleFunc("POST /users/me/email/confirm", c.authMiddleware.Use(c.ConfirmEmailChange))
@@ -65,7 +73,7 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 // @Accept			json
 // @Produce		json
 // @Param			body	body		domain.CreateUserDTO	true	"User data"
-// @Success		202		{object}	api.ResponseBody[any]	"Code sent (user.create.pending)"
+// @Success		202		{object}	api.ResponseBody[any]	"Code sent (users.create.pending)"
 // @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
 // @Failure		409		{object}	api.ResponseBody[any]	"Email already in use (users.email.conflict)"
 // @Failure		429		{object}	api.ResponseBody[any]	"Too many emails to this address (auth.email.sendLimit)"
@@ -103,7 +111,7 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	api.SetPendingSignupCookie(w, pendingUUID, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
-		Message: "user.create.pending",
+		Message: "users.create.pending",
 	})
 }
 
@@ -143,7 +151,7 @@ func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Requ
 	}
 
 	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
-		Message: "user.emailChange.requested",
+		Message: "users.emailChange.requested",
 	})
 }
 
@@ -185,7 +193,7 @@ func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Requ
 	api.DeleteAuthCookies(w, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
-		Message: "user.emailChange.success",
+		Message: "users.emailChange.success",
 	})
 }
 
@@ -260,7 +268,7 @@ func (c *UsersController) RevertEmailChange(w http.ResponseWriter, r *http.Reque
 
 	api.DeleteAuthCookies(w, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
-		Message: "user.emailChange.reverted",
+		Message: "users.emailChange.reverted",
 	})
 }
 
@@ -278,7 +286,7 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 	if !ok || reqContextData.UserUUID == "" {
 		api.HandleError(r.Context(), w,
 			domain.NewUnauthorizedError(
-				"user.getMe.unauthorized",
+				"users.getMe.unauthorized",
 			),
 		)
 		return
@@ -292,7 +300,7 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
-		Message: "user.getMe.success",
+		Message: "users.getMe.success",
 	})
 }
 
@@ -309,7 +317,11 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
 // @Router			/users/{uuid} [get]
 func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
+	uuid, err := pathUUID(r, "uuid", "users.invalidUserUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 	user, err := c.userService.GetByUUID(r.Context(), actorFromRequest(r), uuid)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
@@ -318,7 +330,7 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
-		Message: "user.get.success",
+		Message: "users.get.success",
 	})
 }
 
@@ -337,7 +349,11 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
 // @Router			/users/{uuid} [put]
 func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
+	uuid, err := pathUUID(r, "uuid", "users.invalidUserUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 
 	dto, err := api.DecodeAndValidate[domain.UserUpdateDTO](r)
 	if err != nil {
@@ -372,17 +388,17 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	api.WriteJSONResponse(w, http.StatusOK,
 		api.ResponseBody[domain.User]{
 			Data:    *updatedUser,
-			Message: "user.update.success",
+			Message: "users.update.success",
 		},
 	)
 }
 
 // @Summary		Delete a user
-// @Description	Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins.
+// @Description	Requires the `access_token` cookie set by POST /auth/login and a recent step-up (POST /auth/step-up, then POST /auth/step-up/verify), also for admins. Deleting your own account also clears the `access_token` and `refresh_token` cookies, like POST /auth/logout.
 // @Tags			users
 // @Produce		json
 // @Param			uuid	path	string	true	"User UUID"
-// @Success		204		"User deleted"
+// @Success		204		"User deleted; deleting your own account also clears the auth cookies"
 // @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
 // @Failure		401		{object}	api.ResponseBody[any]	"Unauthorized"
 // @Failure		403		{object}	api.ResponseBody[any]	"Forbidden, or step-up required (auth.stepUp.required)"
@@ -391,7 +407,11 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 // @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
 // @Router			/users/{uuid} [delete]
 func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
+	uuid, err := pathUUID(r, "uuid", "users.invalidUserUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 	if err := c.userService.Delete(r.Context(), actorFromRequest(r), uuid); err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
@@ -414,5 +434,84 @@ func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		Status:       domain.AuditStatusSuccess,
 	})
 
+	if uuid == actorFromRequest(r).UUID {
+		api.DeleteAuthCookies(w, c.isSecureCookie)
+	}
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// @Summary		List users
+// @Description	Lists users with cursor pagination, newest first. Requires the `access_token` cookie set by POST /auth/login and the admin role.
+// @Tags			users
+// @Produce		json
+// @Param			search	query		string								false	"Case-insensitive prefix of the email or name"
+// @Param			role	query		string								false	"Filter by role"	Enums(admin, user)
+// @Param			cursor	query		string								false	"Cursor from meta.next_cursor"
+// @Param			limit	query		int									false	"Page size"			minimum(1)	maximum(100)	default(20)
+// @Success		200		{object}	api.ResponseBody[[]domain.User]	"User page"
+// @Failure		400		{object}	api.ResponseBody[any]				"Validation error (users.list.badRequest, users.invalidCursor)"
+// @Failure		401		{object}	api.ResponseBody[any]				"Unauthorized"
+// @Failure		403		{object}	api.ResponseBody[any]				"Forbidden"
+// @Failure		500		{object}	api.ResponseBody[any]				"Internal server error"
+// @Router			/users [get]
+func (c *UsersController) ListUsers(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	var dto domain.ListUsersDTO
+
+	if v := strings.TrimSpace(q.Get("search")); v != "" {
+		if !utf8.ValidString(v) || strings.ContainsRune(v, 0) {
+			api.HandleError(r.Context(), w,
+				domain.NewValidationError("users.list.badRequest",
+					map[string]string{
+						"search": "search must be valid UTF-8 without NUL bytes",
+					},
+				),
+			)
+			return
+		}
+		dto.Search = &v
+	}
+	if v := q.Get("cursor"); v != "" {
+		dto.Cursor = &v
+	}
+
+	if v := q.Get("role"); v != "" {
+		role := domain.UserRole(v)
+		if !role.IsValid() {
+			api.HandleError(r.Context(), w,
+				domain.NewValidationError("users.list.badRequest",
+					map[string]string{
+						"role": "role must be admin or user",
+					},
+				),
+			)
+			return
+		}
+		dto.Role = &role
+	}
+
+	limit, err := parseLimit(q, defaultUsersLimit, "users.list.badRequest")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+	dto.Limit = limit
+
+	page, err := c.userService.List(r.Context(), dto)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[[]domain.User]{
+		Data:    page.Items,
+		Message: "users.list.success",
+		Meta: &api.ResponseMeta{
+			Total:      page.Total,
+			Limit:      dto.Limit,
+			NextCursor: page.NextCursor,
+		},
+	})
 }

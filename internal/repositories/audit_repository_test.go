@@ -291,6 +291,29 @@ func TestAuditPostgresRepository_List(t *testing.T) {
 		}
 	})
 
+	t.Run("success - filter combined with cursor", func(t *testing.T) {
+		action := domain.AuditActionLogin
+		logins, _, err := repo.List(ctx, domain.ListAuditLogsDTO{Limit: 10, Action: &action})
+		require.NoError(t, err)
+		require.Len(t, logins, 2)
+		cursor := logins[0].UUID
+
+		logs, total, err := repo.List(ctx, domain.ListAuditLogsDTO{Limit: 10, Action: &action, Cursor: &cursor})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), total)
+		require.Len(t, logs, 1)
+		assert.Equal(t, logins[1].UUID, logs[0].UUID)
+	})
+
+	t.Run("success - limit larger than the row count returns every row", func(t *testing.T) {
+		logs, total, err := repo.List(ctx, domain.ListAuditLogsDTO{Limit: 4})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(3), total)
+		assert.Len(t, logs, 3)
+	})
+
 	t.Run("invalid actor_uuid returns validation error", func(t *testing.T) {
 		invalid := "not-a-uuid"
 		logs, total, err := repo.List(ctx, domain.ListAuditLogsDTO{

@@ -524,16 +524,14 @@ func TestCORSMiddleware_Use(t *testing.T) {
 		wrappedHandler := middleware.Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 		var wg sync.WaitGroup
-		for i := 0; i < 50; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 50 {
+			wg.Go(func() {
 				req := httptest.NewRequest("GET", "/test", nil)
 				req.Header.Set("Origin", "http://localhost:3000")
 				w := httptest.NewRecorder()
 				wrappedHandler.ServeHTTP(w, req)
 				assert.Equal(t, "86400", w.Header().Get("Access-Control-Max-Age"))
-			}()
+			})
 		}
 		wg.Wait()
 	})

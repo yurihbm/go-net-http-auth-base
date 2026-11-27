@@ -40,7 +40,7 @@ For new queries, follow the `go-migration-scaffolder` skill and `.claude/rules/r
 
 ## 5. Handler
 
-- One handler method on the controller: `api.DecodeAndValidate[T](r)`, one service call, `api.HandleError(r.Context(), w, err)` on error, `api.WriteJSONResponse` with a message key (`user.emailChange.requested`) on success. Read the caller with `actorFromRequest(r)` and `sessionFromRequest(r)`.
+- One handler method on the controller: `api.DecodeAndValidate[T](r)`, one service call, `api.HandleError(r.Context(), w, err)` on error, `api.WriteJSONResponse` with a message key (`users.emailChange.requested`) on success. Read the caller with `actorFromRequest(r)` and `sessionFromRequest(r)`.
 - Audited actions call `auditResult` (or `auditLog`) from `audit_helpers.go` with a new or existing `domain.AuditAction...` constant from `internal/domain/audit.go`.
 - Swag annotations above the handler, like `RequestEmailChange` in `users_controller.go`: `@Summary`, `@Description` (state the required cookies and step-up), `@Tags`, `@Accept`/`@Produce`, `@Param`, one `@Success` and one `@Failure` per status with its error keys, `@Router`.
 - Controller tests in `<resource>_controller_test.go` (`package controllers_test`) build requests with `getControllerArgs` and cover success, validation error and each service error.
@@ -51,7 +51,7 @@ Register the route in the controller's `RegisterRoutes` with a Go 1.22 method pa
 
 1. `c.credentialsLimiter.Use(...)` when the route takes credentials, verifies a code or a token from an email, or sends an email (`POST /auth/login`, `POST /users`, `POST /auth/step-up`, the password reset routes). Refresh, logout and the OAuth redirects stay outside it (ADR-015). List the new route in the credential limiter paragraph of `docs/AUTH.md`.
 2. `c.authMiddleware.Use(...)` for any signed-in route.
-3. `c.stepUpMiddleware.Use(...)` for sensitive actions (email or password change, account deletion), or `c.roleMiddleware.Use(...)` for admin-only routes.
+3. `c.stepUpMiddleware.Use(...)` for sensitive actions (email or password change, account deletion), or `c.adminRoleMiddleware.Use(...)` for admin-only routes.
 
 Example: `router.HandleFunc("POST /auth/step-up/verify", c.credentialsLimiter.Use(c.authMiddleware.Use(c.VerifyStepUp)))`.
 

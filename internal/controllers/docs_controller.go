@@ -23,25 +23,25 @@ var swaggerLogoutScript string
 var swaggerResponseInterceptor string
 
 type DocsController struct {
-	authMiddleware middlewares.HandlerMiddleware
-	roleMiddleware middlewares.HandlerMiddleware
+	authMiddleware      middlewares.HandlerMiddleware
+	adminRoleMiddleware middlewares.HandlerMiddleware
 }
 
 var _ Controller = (*DocsController)(nil)
 
 func NewDocsController(
 	authMiddleware middlewares.HandlerMiddleware,
-	roleMiddleware middlewares.HandlerMiddleware,
+	adminRoleMiddleware middlewares.HandlerMiddleware,
 ) *DocsController {
 	return &DocsController{
-		authMiddleware: authMiddleware,
-		roleMiddleware: roleMiddleware,
+		authMiddleware:      authMiddleware,
+		adminRoleMiddleware: adminRoleMiddleware,
 	}
 }
 
 func (c *DocsController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("GET /swagger/{$}", c.LoginGate)
-	router.HandleFunc("GET /swagger/", c.authMiddleware.Use(c.roleMiddleware.Use(c.swaggerUI())))
+	router.HandleFunc("GET /swagger/", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.swaggerUI())))
 }
 
 func (c *DocsController) LoginGate(w http.ResponseWriter, r *http.Request) {

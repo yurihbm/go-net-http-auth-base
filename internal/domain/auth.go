@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+const OAuthInvalidUserInfoKey = "auth.providerCallback.invalidUserInfo"
+
+var ErrOAuthMissingCodeVerifier = NewUnauthorizedError("auth.oauthLogin.missingCodeVerifier")
+
 type TokenAudience string
 
 const (

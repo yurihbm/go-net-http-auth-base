@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/shared"
 
 	"golang.org/x/time/rate"
@@ -57,12 +59,18 @@ func (m *RateLimitMiddleware) allow(w http.ResponseWriter, r *http.Request) bool
 	allowed := limiter.AllowN(m.now(), 1)
 	m.setHeaders(w, limiter)
 	if !allowed {
-		api.WriteJSONResponse(w, http.StatusTooManyRequests, api.ResponseBody[any]{
-			Message: "rateLimit.exceeded",
-			Error:   "too many requests",
-		})
+		m.setRetryAfter(w, limiter)
+		api.HandleError(r.Context(), w, domain.NewTooManyRequestsError("rateLimit.exceeded"))
 	}
 	return allowed
+}
+
+func (m *RateLimitMiddleware) setRetryAfter(w http.ResponseWriter, limiter *rate.Limiter) {
+	if m.rate <= 0 {
+		return
+	}
+	secondsToToken := (1 - limiter.TokensAt(m.now())) / float64(m.rate)
+	w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(secondsToToken)))))
 }
 
 // rateLimitKey groups IPv6 clients by /64, since a single subscriber usually controls the whole prefix.

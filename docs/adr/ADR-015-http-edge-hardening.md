@@ -41,7 +41,7 @@ subscriber usually controls a whole /64 and can rotate through 2^64 addresses.
   `HandlerMiddleware` reusing the same limiter implementation with its own
   visitor map, so the buckets are independent), answers the same
   `429 rateLimit.exceeded` and sets the same `X-RateLimit-*` headers (on credential routes the inner limiter's
-  headers overwrite the global ones). It is built
+  headers overwrite the global ones). A `429` also carries `Retry-After` (whole seconds), and CORS exposes `Retry-After` and the `X-RateLimit-*` headers so browser clients can read them. It is built
   once in `NewHandler` (it needs the context that stops its cleanup goroutine)
   and injected into the auth and users controllers.
   Refresh, logout and the OAuth login and callback are excluded: refresh is

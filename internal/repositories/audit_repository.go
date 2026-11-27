@@ -118,7 +118,7 @@ func (r *AuditPostgresRepository) List(ctx context.Context, dto domain.ListAudit
 
 	total, err := r.q.CountAuditLogs(ctx, countParams)
 	if err != nil {
-		return nil, 0, domain.NewInternalServerError("auditLogs.internalServerError", err)
+		return nil, 0, domain.NewInternalServerError("audit.internalServerError", err)
 	}
 
 	listParams := postgres.ListAuditLogsParams{
@@ -134,7 +134,7 @@ func (r *AuditPostgresRepository) List(ctx context.Context, dto domain.ListAudit
 
 	rows, err := r.q.ListAuditLogs(ctx, listParams)
 	if err != nil {
-		return nil, 0, domain.NewInternalServerError("auditLogs.internalServerError", err)
+		return nil, 0, domain.NewInternalServerError("audit.internalServerError", err)
 	}
 
 	logs := make([]domain.AuditLog, 0, len(rows))
@@ -188,9 +188,9 @@ func toDomainAuditLog(row postgres.AuditLog) domain.AuditLog {
 }
 
 func parseAuditActorUUID(uuidStr string) (*pgtype.UUID, error) {
-	return parseUUID(uuidStr, "auditLogs.invalidActorUUID")
+	return parseUUID(uuidStr, "audit.invalidActorUUID")
 }
 
 func parseAuditCursorUUID(uuidStr string) (*pgtype.UUID, error) {
-	return parseUUID(uuidStr, "auditLogs.invalidCursor")
+	return parseUUID(uuidStr, "audit.invalidCursor")
 }

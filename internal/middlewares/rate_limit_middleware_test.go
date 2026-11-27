@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/middlewares"
 	"go-net-http-auth-base/internal/shared"
 	"net/http"
@@ -60,8 +61,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 	var response api.ResponseBody[any]
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.Equal(t, "rateLimit.exceeded", response.Message)
-	assert.Equal(t, "too many requests", response.Error)
+	assert.Equal(t, "rateLimit.exceeded", response.Error)
+	assert.Empty(t, response.Message)
+	assert.Equal(t, "1", w.Header().Get("Retry-After"))
 
 	// 4. Different IP - should pass
 	req2 := httptest.NewRequest("GET", "/", nil)
@@ -141,6 +143,47 @@ func TestRateLimitMiddleware(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, serveFrom(handler, "10.0.0.3"))
 		assert.Equal(t, http.StatusTooManyRequests, serveFrom(handler, "10.0.0.3"))
+	})
+
+	t.Run("error - records the too many requests error when the limit is exceeded", func(t *testing.T) {
+		now := time.Now()
+		handler := middlewares.NewRateLimitMiddlewareWithClock(t.Context(), rate.Limit(1), 1, func() time.Time { return now }).
+			Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		data := &shared.RequestContextData{}
+		serve := func() int {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = "192.168.1.1:1234"
+			req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, data))
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			return w.Code
+		}
+
+		assert.Equal(t, http.StatusOK, serve())
+		assert.Nil(t, data.Error)
+		assert.Equal(t, http.StatusTooManyRequests, serve())
+
+		var tooManyErr *domain.TooManyRequestsError
+		assert.ErrorAs(t, data.Error, &tooManyErr)
+		assert.EqualError(t, data.Error, "rateLimit.exceeded")
+	})
+
+	t.Run("error - rounds Retry-After up to the next whole second", func(t *testing.T) {
+		now := time.Now()
+		handler := middlewares.NewRateLimitMiddlewareWithClock(t.Context(), rate.Limit(0.5), 1, func() time.Time { return now }).
+			Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		serve := func() *httptest.ResponseRecorder {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = "192.168.1.1:1234"
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			return w
+		}
+
+		assert.Equal(t, http.StatusOK, serve().Code)
+		w := serve()
+		assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		assert.Equal(t, "2", w.Header().Get("Retry-After"))
 	})
 }
 

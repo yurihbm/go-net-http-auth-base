@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestUsersController() (*controllers.UsersController, *mocks.UsersServiceMock, *mocks.AuditServiceMock, *mocks.AuthMiddlewareMock) {
@@ -29,7 +31,7 @@ func newTestEmailChangeController() (*controllers.UsersController, *mocks.EmailC
 	emailChangeMock := new(mocks.EmailChangeServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, true)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), emailChangeMock, new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, passthroughMiddleware{}, true)
 
 	return controller, emailChangeMock, auditMock, middlewareMock
 }
@@ -39,7 +41,7 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 	auditMock := new(mocks.AuditServiceMock)
 	middlewareMock := new(mocks.AuthMiddlewareMock)
 	stepUpMiddlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, passthroughMiddleware{}, true)
+	controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), auditMock, middlewareMock, stepUpMiddlewareMock, passthroughMiddleware{}, passthroughMiddleware{}, true)
 
 	return controller, serviceMock, auditMock, middlewareMock, stepUpMiddlewareMock
 }
@@ -47,7 +49,7 @@ func newTestUsersControllerWithStepUp() (*controllers.UsersController, *mocks.Us
 func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, *mocks.PendingSignupServiceMock, *mocks.AuditServiceMock) {
 	pendingMock := new(mocks.PendingSignupServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, isSecure)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), pendingMock, new(mocks.PasswordServiceMock), auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, passthroughMiddleware{}, isSecure)
 
 	return controller, pendingMock, auditMock
 }
@@ -55,7 +57,7 @@ func newTestSignupUsersController(isSecure bool) (*controllers.UsersController, 
 func newTestPasswordUsersController() (*controllers.UsersController, *mocks.PasswordServiceMock, *mocks.AuditServiceMock) {
 	passwordMock := new(mocks.PasswordServiceMock)
 	auditMock := new(mocks.AuditServiceMock)
-	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, true)
+	controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), passwordMock, auditMock, new(mocks.AuthMiddlewareMock), new(mocks.AuthMiddlewareMock), passthroughMiddleware{}, passthroughMiddleware{}, true)
 
 	return controller, passwordMock, auditMock
 }
@@ -75,14 +77,27 @@ func getActorControllerArgs(method string, endpoint string, body any) (*httptest
 }
 
 func TestUsersController_RegisterRoutes(t *testing.T) {
-	t.Run("should register routes with auth middleware", func(t *testing.T) {
+	t.Run("success - wraps GET /users with auth and role middlewares", func(t *testing.T) {
 		router := http.NewServeMux()
-		controller, _, _, authMiddleware := newTestUsersController()
-		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(7)
+		authMiddleware := new(mocks.AuthMiddlewareMock)
+		adminRoleMiddleware := new(mocks.AuthMiddlewareMock)
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(1)
+		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, adminRoleMiddleware, passthroughMiddleware{}, true)
 
 		controller.RegisterRoutes(router)
 
-		authMiddleware.AssertNumberOfCalls(t, "Use", 7)
+		adminRoleMiddleware.AssertNumberOfCalls(t, "Use", 1)
+	})
+
+	t.Run("should register routes with auth middleware", func(t *testing.T) {
+		router := http.NewServeMux()
+		controller, _, _, authMiddleware := newTestUsersController()
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(8)
+
+		controller.RegisterRoutes(router)
+
+		authMiddleware.AssertNumberOfCalls(t, "Use", 8)
 		for _, path := range []string{"/users", "/users/revert-email-change"} {
 			_, pattern := router.Handler(httptest.NewRequest("POST", path, nil))
 			assert.Equal(t, "POST "+path, pattern)
@@ -98,7 +113,8 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 		_, serviceMock, _, authMiddleware, _ := newTestUsersControllerWithStepUp()
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
 		serviceMock.On("GetByUUID", mock.Anything, mock.Anything).Return(nil, errors.New("stop")).Maybe()
-		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, passthroughMiddleware{}, true)
+		serviceMock.On("List", mock.Anything).Return(nil, errors.New("stop")).Maybe()
+		controller := controllers.NewUsersController(serviceMock, new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, stepUpMarker{}, passthroughMiddleware{}, passthroughMiddleware{}, true)
 
 		controller.RegisterRoutes(router)
 
@@ -112,6 +128,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			{"POST", "/users/me/email", true},
 			{"POST", "/users/me/email/confirm", false},
 			{"POST", "/users/me/password", true},
+			{"GET", "/users", false},
 			{"GET", "/users/some-uuid", false},
 			{"PUT", "/users/some-uuid", false},
 			{"DELETE", "/users/some-uuid", true},
@@ -127,7 +144,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 	t.Run("success - credential routes are wrapped by the limiter", func(t *testing.T) {
 		router := http.NewServeMux()
 		authMiddleware := rejectingMiddleware{http.StatusUnauthorized}
-		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, limiterMarker{}, true)
+		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, passthroughMiddleware{}, limiterMarker{}, true)
 		controller.RegisterRoutes(router)
 
 		for route, limited := range map[string]bool{
@@ -190,7 +207,7 @@ func TestUsersController_CreateUser(t *testing.T) {
 			var response api.ResponseBody[any]
 			assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
 			assert.Equal(t, http.StatusAccepted, w.Code)
-			assert.Equal(t, "user.create.pending", response.Message)
+			assert.Equal(t, "users.create.pending", response.Message)
 			assert.Nil(t, response.Data)
 			cookie := findCookie(w.Result().Cookies(), mode.cookieName)
 			if assert.NotNil(t, cookie) {
@@ -324,7 +341,7 @@ func TestUsersController_GetMe(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
 		serviceMock.On("GetByUUID", domain.Actor{UUID: "test-uuid"}, "test-uuid").Return(nil,
 			domain.NewNotFoundError(
-				"user.notFound",
+				"users.notFound",
 			),
 		)
 
@@ -349,9 +366,9 @@ func TestUsersController_GetMe(t *testing.T) {
 }
 
 func TestUsersController_GetUserByUUID(t *testing.T) {
-	uuid := "test-uuid"
+	uuid := "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
 	user := &domain.User{
-		UUID:  "test-uuid",
+		UUID:  uuid,
 		Name:  "John Doe",
 		Email: "john.doe@example.com",
 		Role:  domain.RoleUser,
@@ -376,12 +393,40 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 		serviceMock.AssertCalled(t, "GetByUUID", actor, uuid)
 	})
 
+	t.Run("success - uppercase UUID is passed in canonical form", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("GetByUUID", actor, uuid).Return(user, nil)
+
+		w, req := getActorControllerArgs("GET", "/users/", nil)
+		req.SetPathValue("uuid", strings.ToUpper(uuid))
+
+		controller.GetUserByUUID(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertCalled(t, "GetByUUID", actor, uuid)
+	})
+
+	t.Run("error - invalid UUID", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+
+		w, req := getActorControllerArgs("GET", "/users/", nil)
+		req.SetPathValue("uuid", "not-a-uuid")
+
+		controller.GetUserByUUID(w, req)
+
+		var response api.ResponseBody[any]
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, "users.invalidUserUUID", response.Error)
+		serviceMock.AssertNotCalled(t, "GetByUUID", mock.Anything, mock.Anything)
+	})
+
 	t.Run("not found", func(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
 
 		serviceMock.On("GetByUUID", actor, uuid).Return(
 			nil,
-			domain.NewNotFoundError("user.notFound"),
+			domain.NewNotFoundError("users.notFound"),
 		)
 
 		w, req := getActorControllerArgs("GET", "/users/", nil)
@@ -413,7 +458,7 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 }
 
 func TestUsersController_UpdateUser(t *testing.T) {
-	uuid := "test-uuid"
+	uuid := "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
 	name := "John Updated"
 	dto := domain.UserUpdateDTO{Name: &name}
 
@@ -442,6 +487,39 @@ func TestUsersController_UpdateUser(t *testing.T) {
 		assert.Equal(t, *updatedUser, response.Data)
 		serviceMock.AssertCalled(t, "Update", actor, uuid, dto)
 		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("success - uppercase UUID is passed in canonical form", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("Update", actor, uuid, dto).Return(&domain.User{UUID: uuid, Name: name}, nil)
+		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+			return d.ResourceUUID == uuid && d.Status == domain.AuditStatusSuccess
+		})).Return(nil)
+
+		w, req := getActorControllerArgs("PUT", "/users/", dto)
+		req.SetPathValue("uuid", strings.ToUpper(uuid))
+
+		controller.UpdateUser(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertCalled(t, "Update", actor, uuid, dto)
+		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("error - invalid UUID", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+
+		w, req := getActorControllerArgs("PUT", "/users/", dto)
+		req.SetPathValue("uuid", "not-a-uuid")
+
+		controller.UpdateUser(w, req)
+
+		var response api.ResponseBody[any]
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, "users.invalidUserUUID", response.Error)
+		serviceMock.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
 	})
 
 	t.Run("bad request", func(t *testing.T) {
@@ -507,57 +585,138 @@ func TestUsersController_UpdateUser(t *testing.T) {
 }
 
 func TestUsersController_DeleteUser(t *testing.T) {
-	uuid := "test-uuid"
+	const otherUUID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+	const selfUUID = "0190f1e2-d3c4-7b5a-8978-6f5e4d3c2b1a"
+	self := domain.Actor{UUID: selfUUID, Role: domain.RoleUser}
 	forbidden := domain.NewForbiddenError("users.forbidden")
+
+	newRequest := func(pathUUID string) (*httptest.ResponseRecorder, *http.Request) {
+		w, req := getControllerArgs("DELETE", "/users/", nil)
+		ctx := context.WithValue(req.Context(), shared.RequestContextDataKey, &shared.RequestContextData{
+			UserUUID:    self.UUID,
+			UserRole:    self.Role,
+			SessionUUID: actorSessionUUID,
+		})
+		req = req.WithContext(ctx)
+		req.SetPathValue("uuid", pathUUID)
+		return w, req
+	}
 
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		serviceMock.On("Delete", actor, "test-uuid").Return(nil)
+		serviceMock.On("Delete", self, otherUUID).Return(nil)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionUserDelete &&
 				d.ResourceType == domain.AuditResourceUser &&
-				d.ResourceUUID == uuid &&
+				d.ResourceUUID == otherUUID &&
 				d.Status == domain.AuditStatusSuccess
 		})).Return(nil)
 
-		w, req := getActorControllerArgs("DELETE", "/users/", nil)
-		req.SetPathValue("uuid", uuid)
+		w, req := newRequest(otherUUID)
 
 		controller.DeleteUser(w, req)
 
 		assert.Equal(t, http.StatusNoContent, w.Code)
-		serviceMock.AssertCalled(t, "Delete", actor, "test-uuid")
+		assert.Empty(t, w.Result().Cookies())
+		serviceMock.AssertCalled(t, "Delete", self, otherUUID)
 		auditMock.AssertExpectations(t)
+	})
+
+	t.Run("success - deleting own account clears the auth cookies", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("Delete", self, selfUUID).Return(nil)
+		auditMock.On("Log", mock.Anything).Return(nil)
+
+		w, req := newRequest(selfUUID)
+
+		controller.DeleteUser(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		cookies := w.Result().Cookies()
+		for _, name := range []string{api.AccessTokenCookieName, api.RefreshTokenCookieName} {
+			cookie := findCookie(cookies, name)
+			require.NotNil(t, cookie, name)
+			assert.Equal(t, -1, cookie.MaxAge, name)
+		}
+	})
+
+	for name, pathUUID := range map[string]string{
+		"uppercase":      strings.ToUpper(selfUUID),
+		"without hyphen": strings.ReplaceAll(selfUUID, "-", ""),
+		"braced":         "{" + selfUUID + "}",
+		"urn":            "urn:uuid:" + selfUUID,
+	} {
+		t.Run("success - own account as "+name+" clears the auth cookies and passes the canonical UUID", func(t *testing.T) {
+			controller, serviceMock, auditMock, _ := newTestUsersController()
+			serviceMock.On("Delete", self, selfUUID).Return(nil)
+			auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
+				return d.ResourceUUID == selfUUID
+			})).Return(nil)
+
+			w, req := newRequest(pathUUID)
+
+			controller.DeleteUser(w, req)
+
+			assert.Equal(t, http.StatusNoContent, w.Code)
+			assert.NotNil(t, findCookie(w.Result().Cookies(), api.AccessTokenCookieName))
+			assert.NotNil(t, findCookie(w.Result().Cookies(), api.RefreshTokenCookieName))
+			serviceMock.AssertCalled(t, "Delete", self, selfUUID)
+			auditMock.AssertExpectations(t)
+		})
+	}
+
+	t.Run("error - invalid UUID", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+
+		w, req := newRequest("not-a-uuid")
+
+		controller.DeleteUser(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Empty(t, w.Result().Cookies())
+		serviceMock.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
+		auditMock.AssertNotCalled(t, "Log", mock.Anything)
+	})
+
+	t.Run("error - failed self deletion keeps the auth cookies", func(t *testing.T) {
+		controller, serviceMock, auditMock, _ := newTestUsersController()
+		serviceMock.On("Delete", self, selfUUID).Return(domain.NewConflictError("users.emailChange.locked"))
+		auditMock.On("Log", mock.Anything).Return(nil)
+
+		w, req := newRequest(selfUUID)
+
+		controller.DeleteUser(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+		assert.Empty(t, w.Result().Cookies())
 	})
 
 	t.Run("service error", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		serviceMock.On("Delete", actor, "test-uuid").Return(assert.AnError)
+		serviceMock.On("Delete", self, otherUUID).Return(assert.AnError)
 		auditMock.On("Log", mock.MatchedBy(func(d domain.CreateAuditLogDTO) bool {
 			return d.Action == domain.AuditActionUserDelete &&
 				d.Status == domain.AuditStatusFailure &&
 				d.FailureReason != nil
 		})).Return(nil)
 
-		w, req := getActorControllerArgs("DELETE", "/users/", nil)
-		req.SetPathValue("uuid", uuid)
+		w, req := newRequest(otherUUID)
 
 		controller.DeleteUser(w, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		serviceMock.AssertCalled(t, "Delete", actor, "test-uuid")
+		serviceMock.AssertCalled(t, "Delete", self, otherUUID)
 		auditMock.AssertExpectations(t)
 	})
 
 	t.Run("forbidden", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
-		serviceMock.On("Delete", actor, uuid).Return(forbidden)
+		serviceMock.On("Delete", self, otherUUID).Return(forbidden)
 		auditMock.On("Log", mock.Anything).Return(nil)
 
-		w, req := getActorControllerArgs("DELETE", "/users/", nil)
-		req.SetPathValue("uuid", uuid)
+		w, req := newRequest(otherUUID)
 
 		controller.DeleteUser(w, req)
 
@@ -585,7 +744,7 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 		var response api.ResponseBody[any]
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.Equal(t, http.StatusAccepted, w.Code)
-		assert.Equal(t, "user.emailChange.requested", response.Message)
+		assert.Equal(t, "users.emailChange.requested", response.Message)
 		serviceMock.AssertExpectations(t)
 		auditMock.AssertExpectations(t)
 	})
@@ -641,7 +800,7 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 		var response api.ResponseBody[domain.User]
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "user.emailChange.success", response.Message)
+		assert.Equal(t, "users.emailChange.success", response.Message)
 		assert.Equal(t, *user, response.Data)
 		assertAuthCookiesCleared(t, w)
 		auditMock.AssertExpectations(t)
@@ -723,7 +882,7 @@ func TestUsersController_RevertEmailChange(t *testing.T) {
 		var response api.ResponseBody[any]
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "user.emailChange.reverted", response.Message)
+		assert.Equal(t, "users.emailChange.reverted", response.Message)
 		assertAuthCookiesCleared(t, w)
 		serviceMock.AssertCalled(t, "RevertEmailChange", dto.Token)
 		auditMock.AssertExpectations(t)
@@ -816,5 +975,107 @@ func TestUsersController_ChangePassword(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		auditMock.AssertExpectations(t)
+	})
+}
+
+func TestUsersController_ListUsers(t *testing.T) {
+	items := []domain.User{{UUID: "019623b0-0000-7000-8000-000000000001", Name: "Jane Doe", Email: "jane@example.com", Role: domain.RoleUser}}
+	nextCursor := "019623b0-0000-7000-8000-000000000001"
+
+	t.Run("success - defaults", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
+			return dto.Limit == 20 && dto.Search == nil && dto.Role == nil && dto.Cursor == nil
+		})).Return(&domain.Page[domain.User]{Items: items, NextCursor: &nextCursor, Total: 1}, nil)
+		w, req := getControllerArgs("GET", "/users", nil)
+
+		controller.ListUsers(w, req)
+
+		var response api.ResponseBody[[]domain.User]
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, items, response.Data)
+		assert.Equal(t, "users.list.success", response.Message)
+		require.NotNil(t, response.Meta)
+		assert.Equal(t, int64(1), response.Meta.Total)
+		assert.Equal(t, 20, response.Meta.Limit)
+		assert.Equal(t, &nextCursor, response.Meta.NextCursor)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("success - all filters", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
+			return dto.Limit == 10 &&
+				dto.Search != nil && *dto.Search == "jan" &&
+				dto.Role != nil && *dto.Role == domain.RoleAdmin &&
+				dto.Cursor != nil && *dto.Cursor == nextCursor
+		})).Return(&domain.Page[domain.User]{Items: items, Total: 1}, nil)
+		w, req := getControllerArgs("GET", "/users", nil)
+		req.URL.RawQuery = url.Values{"search": {"jan"}, "role": {"admin"}, "cursor": {nextCursor}, "limit": {"10"}}.Encode()
+
+		controller.ListUsers(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("success - search is trimmed", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
+			return dto.Search != nil && *dto.Search == "jan"
+		})).Return(&domain.Page[domain.User]{Items: items, Total: 1}, nil)
+		w, req := getControllerArgs("GET", "/users", nil)
+		req.URL.RawQuery = url.Values{"search": {"  jan "}}.Encode()
+
+		controller.ListUsers(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("success - blank search means no search", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
+			return dto.Search == nil
+		})).Return(&domain.Page[domain.User]{Items: items, Total: 1}, nil)
+		w, req := getControllerArgs("GET", "/users", nil)
+		req.URL.RawQuery = url.Values{"search": {"   "}}.Encode()
+
+		controller.ListUsers(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertExpectations(t)
+	})
+
+	for name, query := range map[string]url.Values{
+		"invalid limit - not a number":     {"limit": {"abc"}},
+		"invalid limit - out of range 0":   {"limit": {"0"}},
+		"invalid limit - out of range 101": {"limit": {"101"}},
+		"invalid role":                     {"role": {"root"}},
+		"search with NUL byte":             {"search": {"ja\x00n"}},
+		"search with invalid UTF-8":        {"search": {"ja\xffn"}},
+	} {
+		t.Run("error - "+name, func(t *testing.T) {
+			controller, serviceMock, _, _ := newTestUsersController()
+			w, req := getControllerArgs("GET", "/users", nil)
+			req.URL.RawQuery = query.Encode()
+
+			controller.ListUsers(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "users.list.badRequest")
+			serviceMock.AssertNotCalled(t, "List")
+		})
+	}
+
+	t.Run("error - service error", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.Anything).Return(nil, domain.NewInternalServerError("users.internalServerError", errors.New("boom")))
+		w, req := getControllerArgs("GET", "/users", nil)
+
+		controller.ListUsers(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
 	})
 }

@@ -27,7 +27,7 @@ func testOAuthLoginResolveUser(t *testing.T) {
 	)
 
 	providerNotFound := domain.NewNotFoundError("auth.oauthProvider.notFound")
-	userNotFound := domain.NewNotFoundError("user.notFound")
+	userNotFound := domain.NewNotFoundError("users.notFound")
 
 	type fixture struct {
 		service      domain.AuthService

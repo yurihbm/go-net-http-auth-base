@@ -366,7 +366,7 @@ All API responses follow a standardized format defined in `internal/api/response
 ```jsonc
 {
   "data": { ... },      // Success response data (null on errors)
-  "message": "...",     // Message key (e.g. "user.create.success")
+  "message": "...",     // Message key (e.g. "users.create.success")
   "error": "...",       // Error message key (if any)
   "details": { ... },   // Per-field validation errors (if any)
   "meta": { ... }       // Pagination: total, limit, next_cursor

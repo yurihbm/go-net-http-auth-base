@@ -16,9 +16,8 @@ import (
 )
 
 var (
-	ErrInvalidToken             = domain.NewUnauthorizedError("auth.invalidToken")
-	ErrOAuthNonceMismatch       = domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")
-	ErrOAuthMissingCodeVerifier = domain.NewUnauthorizedError("auth.oauthLogin.missingCodeVerifier")
+	ErrInvalidToken       = domain.NewUnauthorizedError("auth.invalidToken")
+	ErrOAuthNonceMismatch = domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")
 
 	errOAuthEmailUnverified = errors.New("oauth provider email is not verified")
 	errOAuthLinkStaleToken  = domain.NewUnauthorizedError("auth.oauthLink.staleToken")
@@ -226,8 +225,7 @@ func (s *authService) Logout(ctx context.Context, userUUID string, sessionUUID s
 func (s *authService) LogoutOthers(ctx context.Context, userUUID string, sessionUUID string) error {
 	session, err := s.sessionsRepository.FindByUUID(ctx, userUUID, sessionUUID)
 	if err != nil {
-		var notFoundErr *domain.NotFoundError
-		if errors.As(err, &notFoundErr) {
+		if _, ok := errors.AsType[*domain.NotFoundError](err); ok {
 			return ErrInvalidToken
 		}
 		return err
@@ -424,7 +422,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 	}
 
 	if dto.CodeVerifier == "" {
-		return nil, ErrOAuthMissingCodeVerifier
+		return nil, domain.ErrOAuthMissingCodeVerifier
 	}
 
 	providerUserInfo, err := s.GetOAuthProviderUserInfo(ctx, dto.Provider, dto.Code, dto.CodeVerifier)
@@ -443,7 +441,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		if userInfo.Email == "" {
 			details["email"] = "user email is required"
 		}
-		return nil, domain.NewValidationError("auth.providerCallback.invalidUserInfo", details)
+		return nil, domain.NewValidationError(domain.OAuthInvalidUserInfoKey, details)
 	}
 
 	authenticatedUser, linked, err := s.resolveOAuthUser(ctx, dto.Provider, &userInfo)
@@ -518,8 +516,7 @@ func (s *authService) startOAuthSignup(ctx context.Context, provider domain.OAut
 		ProviderUserID: userInfo.ID,
 	})
 
-	var tooManyErr *domain.TooManyRequestsError
-	if errors.As(err, &tooManyErr) {
+	if _, ok := errors.AsType[*domain.TooManyRequestsError](err); ok {
 		return &domain.OAuthLoginResult{RedirectURI: redirectURI, VerificationLimited: true}, nil
 	}
 	if err != nil {
@@ -534,8 +531,7 @@ func (s *authService) resolveOAuthUser(ctx context.Context, provider domain.OAut
 
 	// A concurrent or replayed callback may have created the user or link first;
 	// its transaction has committed, so resolving again finds the existing records.
-	var conflictErr *domain.ConflictError
-	if errors.As(err, &conflictErr) {
+	if _, ok := errors.AsType[*domain.ConflictError](err); ok {
 		return s.resolveOAuthUserWithinTx(ctx, provider, userInfo)
 	}
 

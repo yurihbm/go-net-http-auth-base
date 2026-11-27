@@ -50,7 +50,7 @@ func TestUsersController_CreateUser(t *testing.T) {
 
         assert.Nil(t, err)
         assert.Equal(t, http.StatusAccepted, w.Code)
-        assert.Equal(t, "user.create.pending", response.Message)
+        assert.Equal(t, "users.create.pending", response.Message)
         assert.Equal(t, "pending-uuid", findCookie(w.Result().Cookies(), "__Host-pending_signup").Value)
         pendingMock.AssertExpectations(t)
     })

@@ -35,7 +35,7 @@ func Test{{Resources}}Controller_RegisterRoutes(t *testing.T) {
 }
 
 func Test{{Resources}}Controller_Create(t *testing.T) {
-	entity := &domain.{{Resource}}{UUID: "test-uuid"}
+	entity := &domain.{{Resource}}{UUID: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"}
 	dto := domain.Create{{Resource}}DTO{}
 
 	t.Run("success", func(t *testing.T) {
@@ -81,7 +81,7 @@ func Test{{Resources}}Controller_Create(t *testing.T) {
 }
 
 func Test{{Resources}}Controller_GetByUUID(t *testing.T) {
-	uuid := "test-uuid"
+	uuid := "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
 	entity := &domain.{{Resource}}{UUID: uuid}
 
 	t.Run("success", func(t *testing.T) {
@@ -100,6 +100,22 @@ func Test{{Resources}}Controller_GetByUUID(t *testing.T) {
 		assert.Equal(t, *entity, response.Data)
 	})
 
+	t.Run("error - invalid UUID", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		w, req := getControllerArgs("GET", "/{{resources}}/not-a-uuid", nil)
+		req.SetPathValue("uuid", "not-a-uuid")
+		controller.GetByUUID(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, "{{resources}}.invalidUUID", response.Error)
+		serviceMock.AssertNotCalled(t, "GetByUUID", mock.Anything)
+	})
+
 	t.Run("error - not found", func(t *testing.T) {
 		controller, serviceMock, _ := newTest{{Resources}}Controller()
 		serviceMock.On("GetByUUID", uuid).Return(nil, domain.NewNotFoundError("{{resources}}.notFound"))
@@ -113,7 +129,7 @@ func Test{{Resources}}Controller_GetByUUID(t *testing.T) {
 }
 
 func Test{{Resources}}Controller_Update(t *testing.T) {
-	uuid := "test-uuid"
+	uuid := "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
 	dto := domain.{{Resource}}UpdateDTO{}
 	updated := &domain.{{Resource}}{UUID: uuid}
 
@@ -131,6 +147,22 @@ func Test{{Resources}}Controller_Update(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, *updated, response.Data)
+	})
+
+	t.Run("error - invalid UUID", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		w, req := getControllerArgs("PUT", "/{{resources}}/not-a-uuid", dto)
+		req.SetPathValue("uuid", "not-a-uuid")
+		controller.Update(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, "{{resources}}.invalidUUID", response.Error)
+		serviceMock.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 	})
 
 	t.Run("error - invalid body", func(t *testing.T) {
@@ -157,7 +189,7 @@ func Test{{Resources}}Controller_Update(t *testing.T) {
 }
 
 func Test{{Resources}}Controller_Delete(t *testing.T) {
-	uuid := "test-uuid"
+	uuid := "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
 
 	t.Run("success", func(t *testing.T) {
 		controller, serviceMock, _ := newTest{{Resources}}Controller()
@@ -169,6 +201,22 @@ func Test{{Resources}}Controller_Delete(t *testing.T) {
 
 		assert.Equal(t, http.StatusNoContent, w.Code)
 		serviceMock.AssertCalled(t, "Delete", uuid)
+	})
+
+	t.Run("error - invalid UUID", func(t *testing.T) {
+		controller, serviceMock, _ := newTest{{Resources}}Controller()
+
+		w, req := getControllerArgs("DELETE", "/{{resources}}/not-a-uuid", nil)
+		req.SetPathValue("uuid", "not-a-uuid")
+		controller.Delete(w, req)
+
+		var response api.ResponseBody[any]
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+
+		assert.Nil(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, "{{resources}}.invalidUUID", response.Error)
+		serviceMock.AssertNotCalled(t, "Delete", mock.Anything)
 	})
 
 	t.Run("error - service fails", func(t *testing.T) {

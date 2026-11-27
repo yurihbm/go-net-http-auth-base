@@ -108,8 +108,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		var response api.ResponseBody[any]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
-		assert.Equal(t, "auth.unauthorized", response.Message)
-		assert.Equal(t, "missing access token cookie", response.Error)
+		assert.Equal(t, "auth.unauthorized", response.Error)
+		assert.Empty(t, response.Message)
 		serviceMock.AssertNotCalled(t, "VerifyToken", mock.Anything)
 	})
 
@@ -145,8 +145,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		var response api.ResponseBody[any]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
-		assert.Equal(t, "auth.unauthorized", response.Message)
-		assert.Equal(t, "token expired", response.Error)
+		assert.Equal(t, "auth.unauthorized", response.Error)
+		assert.Empty(t, response.Message)
 		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
@@ -184,8 +184,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		var response api.ResponseBody[any]
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
-		assert.Equal(t, "auth.unauthorized", response.Message)
-		assert.Equal(t, "invalid token", response.Error)
+		assert.Equal(t, "auth.unauthorized", response.Error)
+		assert.Empty(t, response.Message)
 		// VerifyToken should still be called with empty string
 		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
 			Token:    "",
@@ -283,6 +283,45 @@ func TestAuthMiddleware_Use(t *testing.T) {
 		serviceMock.AssertCalled(t, "VerifyToken", domain.VerifyTokenDTO{
 			Token:    token,
 			Audience: domain.TokenAudienceAccess,
+		})
+	})
+
+	t.Run("success - records the error in the request context", func(t *testing.T) {
+		serve := func(middleware middlewares.HandlerMiddleware, req *http.Request) (*shared.RequestContextData, int) {
+			data := &shared.RequestContextData{}
+			req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, data))
+			w := httptest.NewRecorder()
+			middleware.Use(func(http.ResponseWriter, *http.Request) {}).ServeHTTP(w, req)
+			return data, w.Code
+		}
+
+		t.Run("error - missing cookie is recorded", func(t *testing.T) {
+			middleware, _ := getTestAuthMiddleware()
+
+			data, code := serve(middleware, httptest.NewRequest("GET", "/test", nil))
+
+			assert.Equal(t, http.StatusUnauthorized, code)
+			var unauthorizedErr *domain.UnauthorizedError
+			assert.ErrorAs(t, data.Error, &unauthorizedErr)
+			assert.ErrorIs(t, data.Error, http.ErrNoCookie)
+		})
+
+		t.Run("error - token verification failure is recorded", func(t *testing.T) {
+			middleware, serviceMock := getTestAuthMiddleware()
+			errTokenExpired := errors.New("token expired")
+			serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+				Token:    "invalid-token",
+				Audience: domain.TokenAudienceAccess,
+			}).Return(nil, errTokenExpired)
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.AddCookie(&http.Cookie{Name: "access_token", Value: "invalid-token"})
+
+			data, code := serve(middleware, req)
+
+			assert.Equal(t, http.StatusUnauthorized, code)
+			var unauthorizedErr *domain.UnauthorizedError
+			assert.ErrorAs(t, data.Error, &unauthorizedErr)
+			assert.ErrorIs(t, data.Error, errTokenExpired)
 		})
 	})
 }

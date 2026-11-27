@@ -38,9 +38,7 @@ const (
 // runEvery runs fn on every interval tick until ctx is cancelled.
 // It increments wg before starting and decrements it when done.
 func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, fn func()) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -51,7 +49,7 @@ func runEvery(ctx context.Context, wg *sync.WaitGroup, interval time.Duration, f
 				fn()
 			}
 		}
-	}()
+	})
 }
 
 func warnMissingTrustedProxies(ctx context.Context, cfg *config.Config) {

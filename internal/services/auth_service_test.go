@@ -171,7 +171,7 @@ func TestAuthService_CredentialsLogin(t *testing.T) {
 			Password: "password123",
 		}
 
-		usersService.On("GetByEmail", dto.Email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+		usersService.On("GetByEmail", dto.Email).Return(nil, domain.NewNotFoundError("users.notFound")).Once()
 
 		tokens, err := service.CredentialsLogin(context.Background(), dto)
 
@@ -1345,7 +1345,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
-		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("users.notFound")).Once()
 		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(newUser, nil).Once()
 		authRepo.On("CreateUserOAuthProvider", mock.MatchedBy(func(p domain.UserOAuthProvider) bool {
 			return p.UserUUID == newUserUUID && p.Provider == provider
@@ -1379,7 +1379,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
-		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("users.notFound")).Once()
 		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(nil, errors.New("db error")).Once()
 
 		state := newState(t, service, string(provider))
@@ -1409,7 +1409,7 @@ func TestAuthService_OAuthLogin(t *testing.T) {
 		oauthProviderRegistry.On("Get", provider).Return(providerMock, nil).Once()
 		providerMock.On("GetUserInfo", mock.MatchedBy(func(ctx any) bool { return true }), code, codeVerifier).Return(userInfo, nil).Once()
 		authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, domain.NewNotFoundError("auth.oauthProvider.notFound")).Once()
-		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+		usersService.On("GetByEmail", email).Return(nil, domain.NewNotFoundError("users.notFound")).Once()
 		usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: name, Email: email}).Return(newUser, nil).Once()
 		linkErr := errors.New("db error")
 		authRepo.On("CreateUserOAuthProvider", mock.MatchedBy(func(p domain.UserOAuthProvider) bool {
@@ -1950,7 +1950,7 @@ func TestAuthService_CompleteSignup(t *testing.T) {
 			user := &domain.User{UUID: userUUID, Email: "new@example.com"}
 			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Once()
 			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Once()
-			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("users.notFound")).Once()
 			f.usersService.On("CreateOAuth", domain.CreateOAuthUserDTO{Name: "OAuth User", Email: "new@example.com"}).Return(user, nil).Once()
 			f.authRepo.On("CreateUserOAuthProvider", link).Return(&domain.UserOAuthProvider{}, nil).Once()
 			expectStartSession(f.sessionsRepo, userUUID, sessionUUID)
@@ -1969,7 +1969,7 @@ func TestAuthService_CompleteSignup(t *testing.T) {
 			user := &domain.User{UUID: userUUID, Email: "new@example.com"}
 			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Twice()
 			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Once()
-			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("users.notFound")).Once()
 			f.usersService.On("CreateOAuth", mock.Anything).Return(nil, domain.NewConflictError("users.email.conflict")).Once()
 			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(&domain.UserOAuthProvider{UserUUID: userUUID}, nil).Once()
 			f.usersService.On("GetByUUID", domain.Actor{UUID: userUUID}, userUUID).Return(user, nil).Once()
@@ -1987,7 +1987,7 @@ func TestAuthService_CompleteSignup(t *testing.T) {
 			f := newOAuthFixture()
 			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Twice()
 			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Twice()
-			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("user.notFound")).Twice()
+			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("users.notFound")).Twice()
 			f.usersService.On("CreateOAuth", mock.Anything).Return(nil, domain.NewConflictError("users.email.conflict")).Twice()
 
 			result, err := f.service.CompleteSignup(context.Background(), pendingUUID, code)
@@ -2005,7 +2005,7 @@ func TestAuthService_CompleteSignup(t *testing.T) {
 			linkErr := errors.New("link failed")
 			f.pendingSignups.On("Consume", pendingUUID, code).Return(oauthPending, nil).Once()
 			f.authRepo.On("GetUserOAuthProviderByProviderAndProviderUserID", provider, providerUserID).Return(nil, linkNotFound).Once()
-			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("user.notFound")).Once()
+			f.usersService.On("GetByEmail", "new@example.com").Return(nil, domain.NewNotFoundError("users.notFound")).Once()
 			f.usersService.On("CreateOAuth", mock.Anything).Return(&domain.User{UUID: userUUID}, nil).Once()
 			f.authRepo.On("CreateUserOAuthProvider", mock.Anything).Return(nil, linkErr).Once()
 

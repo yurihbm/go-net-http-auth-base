@@ -12,11 +12,9 @@ import (
 func TestWaitGroupWithContext(t *testing.T) {
 	t.Run("success - returns nil when the group finishes before the context ends", func(t *testing.T) {
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			time.Sleep(10 * time.Millisecond)
-		}()
+		})
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()

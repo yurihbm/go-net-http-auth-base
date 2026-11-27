@@ -136,3 +136,14 @@ func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid stri
 
 	return s.repo.Delete(ctx, uuid)
 }
+
+func (s *usersService) List(ctx context.Context, dto domain.ListUsersDTO) (*domain.Page[domain.User], error) {
+	limit := dto.Limit
+	dto.Limit++
+	users, total, err := s.repo.List(ctx, dto)
+	if err != nil {
+		return nil, err
+	}
+
+	return domain.NewPage(users, total, limit, func(u domain.User) string { return u.UUID }), nil
+}

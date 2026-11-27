@@ -90,3 +90,11 @@ func (m *UsersRepositoryMock) UpdatePassword(ctx context.Context, uuid string, p
 	}
 	return nil, args.Error(1)
 }
+
+func (m *UsersRepositoryMock) List(ctx context.Context, dto domain.ListUsersDTO) ([]domain.User, int64, error) {
+	args := m.Called(dto)
+	if args.Get(0) != nil {
+		return args.Get(0).([]domain.User), args.Get(1).(int64), args.Error(2)
+	}
+	return nil, 0, args.Error(2)
+}
