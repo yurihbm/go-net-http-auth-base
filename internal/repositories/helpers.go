@@ -31,8 +31,7 @@ func isNoRowsError(err error, notFoundMessage string) error {
 }
 
 func isConflictError(err error, conflictMessage string) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		if pgErr.Code == "23505" {
 			return domain.NewConflictError(conflictMessage)
 		}
@@ -42,8 +41,7 @@ func isConflictError(err error, conflictMessage string) error {
 }
 
 func isForeignKeyViolationError(err error, message string) error {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		if pgErr.Code == "23503" {
 			return domain.NewNotFoundError(message)
 		}

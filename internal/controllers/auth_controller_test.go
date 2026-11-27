@@ -1117,8 +1117,7 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 
 				assert.Equal(t, http.StatusFound, w.Code)
 				assert.Equal(t, allowedRedirectURI+"?error="+tc.code, w.Header().Get("Location"))
-				var internalErr *domain.InternalServerError
-				if errors.As(tc.err, &internalErr) {
+				if internalErr, ok := errors.AsType[*domain.InternalServerError](tc.err); ok {
 					assert.Equal(t, internalErr.Unwrap(), reqCtxData.Error)
 				} else {
 					assert.Equal(t, tc.err, reqCtxData.Error)

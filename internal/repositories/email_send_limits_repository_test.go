@@ -124,9 +124,7 @@ func TestEmailSendLimitsPostgresRepository_ReserveCodeGuess(t *testing.T) {
 
 		var wg sync.WaitGroup
 		for range 30 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				switch err := limiter.ReserveCodeGuess(ctx, limitedEmail, domain.EmailCodeFailureWindow); {
 				case err == nil:
 					granted.Add(1)
@@ -135,7 +133,7 @@ func TestEmailSendLimitsPostgresRepository_ReserveCodeGuess(t *testing.T) {
 				default:
 					t.Errorf("unexpected error: %v", err)
 				}
-			}()
+			})
 		}
 		wg.Wait()
 

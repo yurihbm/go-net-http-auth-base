@@ -76,9 +76,7 @@ func TestConcurrentRefresh(t *testing.T) {
 		winners  = make([]*http.Cookie, attempts)
 	)
 	for i := range attempts {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			req, err := http.NewRequest(http.MethodPost, serverURL+"/auth/refresh", nil)
 			if !assert.NoError(t, err) {
@@ -96,7 +94,7 @@ func TestConcurrentRefresh(t *testing.T) {
 					winners[i] = cookie
 				}
 			}
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

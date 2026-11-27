@@ -113,8 +113,7 @@ func (s *stepUpService) VerifyCode(ctx context.Context, userUUID string, session
 func (s *stepUpService) IsElevated(ctx context.Context, userUUID string, sessionUUID string) (bool, error) {
 	session, err := s.sessions.FindByUUID(ctx, userUUID, sessionUUID)
 	if err != nil {
-		var notFound *domain.NotFoundError
-		if errors.As(err, &notFound) {
+		if _, ok := errors.AsType[*domain.NotFoundError](err); ok {
 			return false, nil
 		}
 		return false, err

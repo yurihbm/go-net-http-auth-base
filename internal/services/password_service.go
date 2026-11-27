@@ -60,8 +60,7 @@ func (s *passwordService) RequestReset(ctx context.Context, email string) (strin
 	}
 
 	user, err := s.users.FindByEmail(ctx, email)
-	var notFoundErr *domain.NotFoundError
-	if errors.As(err, &notFoundErr) {
+	if _, ok := errors.AsType[*domain.NotFoundError](err); ok {
 		return resetUUID.String(), nil
 	}
 	if err != nil {

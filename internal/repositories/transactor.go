@@ -69,14 +69,14 @@ func (d *TxAwareDB) executor(ctx context.Context) postgres.DBTX {
 	return d.pool
 }
 
-func (d *TxAwareDB) Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error) {
+func (d *TxAwareDB) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	return d.executor(ctx).Exec(ctx, sql, args...)
 }
 
-func (d *TxAwareDB) Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error) {
+func (d *TxAwareDB) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	return d.executor(ctx).Query(ctx, sql, args...)
 }
 
-func (d *TxAwareDB) QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row {
+func (d *TxAwareDB) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
 	return d.executor(ctx).QueryRow(ctx, sql, args...)
 }

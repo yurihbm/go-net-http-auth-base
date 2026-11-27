@@ -39,8 +39,7 @@ func DecodeAndValidate[T any](r *http.Request) (T, error) {
 	dec := json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxRequestBodyBytes))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&v); err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			return v, domain.NewValidationError("request.invalid",
 				map[string]string{"body": "request body too large"})
 		}

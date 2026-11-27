@@ -720,8 +720,7 @@ func (c *AuthController) redirectOAuthLoginFailure(
 }
 
 func oauthLoginFailureCode(err error) string {
-	var conflictErr *domain.ConflictError
-	if errors.As(err, &conflictErr) {
+	if _, ok := errors.AsType[*domain.ConflictError](err); ok {
 		return "account_conflict"
 	}
 

@@ -407,9 +407,7 @@ func TestUsersPostgresRepository_ReserveStepUpGuess(t *testing.T) {
 		var mu sync.Mutex
 		reserved := 0
 		for range domain.StepUpMaxUserFailures + 10 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				if err := repo.ReserveStepUpGuess(ctx, user.UUID, window); err == nil {
 					mu.Lock()
 					reserved++
@@ -417,7 +415,7 @@ func TestUsersPostgresRepository_ReserveStepUpGuess(t *testing.T) {
 				} else {
 					assert.ErrorIs(t, err, domain.ErrStepUpUserLocked)
 				}
-			}()
+			})
 		}
 		wg.Wait()
 
