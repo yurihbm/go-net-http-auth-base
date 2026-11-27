@@ -725,10 +725,11 @@ func oauthLoginFailureCode(err error) string {
 		return "account_conflict"
 	}
 
-	switch err.Error() {
-	case "auth.oauthLogin.missingCodeVerifier":
+	var validationErr *domain.ValidationError
+	switch {
+	case errors.Is(err, domain.ErrOAuthMissingCodeVerifier):
 		return "missing_code_verifier"
-	case "auth.providerCallback.invalidUserInfo":
+	case errors.As(err, &validationErr) && validationErr.Error() == domain.OAuthInvalidUserInfoKey:
 		return "invalid_user_info"
 	default:
 		return defaultOAuthServerErrorCode

@@ -16,9 +16,8 @@ import (
 )
 
 var (
-	ErrInvalidToken             = domain.NewUnauthorizedError("auth.invalidToken")
-	ErrOAuthNonceMismatch       = domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")
-	ErrOAuthMissingCodeVerifier = domain.NewUnauthorizedError("auth.oauthLogin.missingCodeVerifier")
+	ErrInvalidToken       = domain.NewUnauthorizedError("auth.invalidToken")
+	ErrOAuthNonceMismatch = domain.NewUnauthorizedError("auth.oauthLogin.nonceMismatch")
 
 	errOAuthEmailUnverified = errors.New("oauth provider email is not verified")
 	errOAuthLinkStaleToken  = domain.NewUnauthorizedError("auth.oauthLink.staleToken")
@@ -424,7 +423,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 	}
 
 	if dto.CodeVerifier == "" {
-		return nil, ErrOAuthMissingCodeVerifier
+		return nil, domain.ErrOAuthMissingCodeVerifier
 	}
 
 	providerUserInfo, err := s.GetOAuthProviderUserInfo(ctx, dto.Provider, dto.Code, dto.CodeVerifier)
@@ -443,7 +442,7 @@ func (s *authService) OAuthLogin(ctx context.Context, dto domain.OAuthLoginDTO) 
 		if userInfo.Email == "" {
 			details["email"] = "user email is required"
 		}
-		return nil, domain.NewValidationError("auth.providerCallback.invalidUserInfo", details)
+		return nil, domain.NewValidationError(domain.OAuthInvalidUserInfoKey, details)
 	}
 
 	authenticatedUser, linked, err := s.resolveOAuthUser(ctx, dto.Provider, &userInfo)

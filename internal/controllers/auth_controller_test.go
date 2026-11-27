@@ -1085,14 +1085,14 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		authServiceMock.AssertExpectations(t)
 	})
 
-	t.Run("login failure - redirects to the verified redirect_uri with the error code and clears flow cookies", func(t *testing.T) {
+	t.Run("error - login failure redirects to the verified redirect_uri with the error code and clears flow cookies", func(t *testing.T) {
 		for name, tc := range map[string]struct {
 			err  error
 			code string
 		}{
-			"missing code verifier": {domain.NewUnauthorizedError("auth.oauthLogin.missingCodeVerifier"), "missing_code_verifier"},
+			"missing code verifier": {domain.ErrOAuthMissingCodeVerifier, "missing_code_verifier"},
 			"account conflict":      {domain.NewConflictError("auth.oauthProvider.conflict"), "account_conflict"},
-			"invalid user info":     {domain.NewValidationError("auth.providerCallback.invalidUserInfo", nil), "invalid_user_info"},
+			"invalid user info":     {domain.NewValidationError("auth.providerCallback.invalidUserInfo", map[string]string{"email": "user email is required"}), "invalid_user_info"},
 			"internal error":        {domain.NewInternalServerError("auth.oauthProvider.userInfoFetchFailed", errors.New("boom")), "server_error"},
 		} {
 			t.Run(name, func(t *testing.T) {
@@ -1131,7 +1131,24 @@ func TestAuthController_OAuthProviderCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("login failure - answers JSON when the verified redirect_uri is not allowed", func(t *testing.T) {
+	t.Run("error - login failure keeps the query string of the verified redirect_uri", func(t *testing.T) {
+		redirectURIWithQuery := allowedRedirectURI + "?foo=bar"
+		controller, authServiceMock, auditMock := newTestAuthControllerWithOptions(true, []string{redirectURIWithQuery})
+		authServiceMock.On("OAuthLogin", mock.Anything).Return(nil, domain.NewConflictError("auth.oauthProvider.conflict")).Once()
+		authServiceMock.On("VerifyOAuthState", mock.Anything).Return(redirectURIWithQuery, nil).Once()
+		auditMock.On("Log", mock.Anything).Return(nil).Once()
+
+		w, req := getControllerArgs("GET", "/auth/google/callback?state=valid-state&code=auth-code", nil)
+		req.SetPathValue("provider", string(domain.OAuthProviderGoogle))
+		req.AddCookie(&http.Cookie{Name: oauthFlowCookieModes[0].cookies.nonce, Value: "nonce-123"})
+
+		controller.OAuthProviderCallback(w, req)
+
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, allowedRedirectURI+"?error=account_conflict&foo=bar", w.Header().Get("Location"))
+	})
+
+	t.Run("error - login failure answers JSON when the verified redirect_uri is not allowed", func(t *testing.T) {
 		controller, authServiceMock, auditMock := newTestAuthControllerWithOptions(true, []string{"http://localhost:3000/other"})
 		authServiceMock.On("OAuthLogin", mock.Anything).Return(nil, domain.NewConflictError("auth.oauthProvider.conflict")).Once()
 		authServiceMock.On("VerifyOAuthState", mock.Anything).Return(allowedRedirectURI, nil).Once()
