@@ -143,6 +143,8 @@ func TestRun(t *testing.T) {
 		writeFile(t, root, "tmp/a.txt", "go-net-http-auth-base\n")
 		writeFile(t, root, "tools/rename/rename.go", "go-net-http-auth-base\n")
 		writeFile(t, root, ".env", "go-net-http-auth-base\n")
+		writeFile(t, root, ".env.local", "go-net-http-auth-base\n")
+		writeFile(t, root, ".env.example", "DATABASE_URL=\"postgresql://u:p@localhost:5432/auth-base?sslmode=disable\"\nPOSTGRES_DB=\"auth-base\"\nPGADMIN_DEFAULT_EMAIL=\"authbase@mail.com\"\nPGADMIN_DEFAULT_PASSWORD=\"auth-base123\"\n")
 		writeFile(t, root, "blob.bin", "go-net-http-auth-base\x00\x01")
 		return root
 	}
@@ -157,8 +159,17 @@ func TestRun(t *testing.T) {
 		assert.Equal(t, "package main\n\nimport _ \"github.com/acme/foo/internal/x\"\n", readFile(t, root, "main.go"))
 		assert.Contains(t, readFile(t, root, "internal/x/x.go"), "\"foo\"")
 		assert.Equal(t, "# Foo API\n[b](https://github.com/acme/foo/x)\n", readFile(t, root, "README.md"))
-		assert.ElementsMatch(t, []string{"README.md", "go.mod", "internal/x/x.go", "main.go"}, res.Changed)
+		assert.ElementsMatch(t, []string{".env.example", "README.md", "go.mod", "internal/x/x.go", "main.go"}, res.Changed)
 		assert.Empty(t, res.Manual)
+	})
+
+	t.Run("success - .env.example gets the database name and pgAdmin defaults", func(t *testing.T) {
+		root := newFixture(t)
+
+		_, err := Run(root, testOptions)
+
+		require.NoError(t, err)
+		assert.Equal(t, "DATABASE_URL=\"postgresql://u:p@localhost:5432/foo?sslmode=disable\"\nPOSTGRES_DB=\"foo\"\nPGADMIN_DEFAULT_EMAIL=\"foo@mail.com\"\nPGADMIN_DEFAULT_PASSWORD=\"foo123\"\n", readFile(t, root, ".env.example"))
 	})
 
 	t.Run("success - skipped paths are untouched", func(t *testing.T) {
@@ -167,7 +178,7 @@ func TestRun(t *testing.T) {
 		_, err := Run(root, testOptions)
 
 		require.NoError(t, err)
-		for _, rel := range []string{"go.sum", "docs/swagger/docs.go", ".git/config", ".claude/worktrees/w/a.txt", "bin/app", "tmp/a.txt", "tools/rename/rename.go", ".env", "blob.bin"} {
+		for _, rel := range []string{"go.sum", "docs/swagger/docs.go", ".git/config", ".claude/worktrees/w/a.txt", "bin/app", "tmp/a.txt", "tools/rename/rename.go", ".env", ".env.local", "blob.bin"} {
 			assert.Contains(t, readFile(t, root, rel), "go-net-http-auth-base", rel)
 		}
 	})

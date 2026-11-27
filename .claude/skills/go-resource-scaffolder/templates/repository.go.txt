@@ -11,7 +11,7 @@ import (
 )
 
 // TODO: Replace every errNotImplemented{{Resources}} with the sqlc queries of
-// postgres/queries/{{resources}}.sql (see users_repository.go): map no rows with
+// postgres/queries/{{resources}}_queries.sql (see users_repository.go): map no rows with
 // isNoRowsError, unique violations with isConflictError, anything else with
 // domain.NewInternalServerError("{{resources}}.internalServerError", err), and
 // rows with a to{{Resource}} mapper.

@@ -41,7 +41,7 @@ try {
     }
 
     // 3. Create query file
-    // Convention: If migration is "add_products_table", query file should be "products.sql"
+    // Convention: If migration is "add_products_table", query file should be "products_queries.sql"
     
     let queryFileName = migrationName;
     
@@ -52,7 +52,7 @@ try {
         queryFileName = queryFileName.replace('create_', '').replace('_table', '');
     }
     
-    const queryFilePath = path.join('postgres', 'queries', `${queryFileName}.sql`);
+    const queryFilePath = path.join('postgres', 'queries', `${queryFileName}_queries.sql`);
     
     if (fs.existsSync(queryFilePath)) {
         console.log(`Query file already exists: ${queryFilePath}`);
@@ -66,6 +66,7 @@ try {
     console.log("2. Add SQL DDL to the new DOWN migration file in postgres/migrations/ (to revert changes)");
     console.log(`3. Add SQL queries to ${queryFilePath}`);
     console.log("4. Run 'make migrate-up && make sqlc-gen'");
+    console.log("5. New table: add it to every truncateTables (see .claude/rules/repositories.md)");
 
 } catch (error: any) {
     console.error("Error executing command:", error.message);

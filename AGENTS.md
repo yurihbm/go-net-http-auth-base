@@ -62,7 +62,7 @@ make check                 # build, vet, lint, full tests and swagger/sqlc drift
 
 - TDD: new logic, bug fixes and features start with a failing test; refactors keep the existing tests green and add missing coverage. Tests live next to the code they test (`_test.go`).
 - Test Naming: one `Test<Type>_<Method>` per tested method (`TestNew<Type>` for constructors), scenarios as `t.Run` subtests (`"success"`, `"error - <description>"`). E2E flows are the exception (`Test<Flow>`). Details in `.claude/rules/testing.md`.
-- Template Phase: while this repository is a template, schema changes go into `postgres/migrations/000001_init_db.up.sql`/`.down.sql` instead of a new migration file. Re-apply with `make migrate-down && make migrate-up`, then `make sqlc-gen`.
+- Template Phase: while this repository is a template, schema changes go into `postgres/migrations/000001_init_db.up.sql`/`.down.sql` instead of a new migration file. Re-apply with `make migrate-down && make migrate-up`, then `make sqlc-gen`. To leave the template phase, follow "Leaving the template phase" in `README.md`.
 - Before a PR: run `make check`; it runs what the required CI checks run (build, vet, lint, full tests, swagger and sqlc drift).
 - Swagger: every handler carries swag annotations. Run `make swagger-gen` after changing a handler or a DTO it uses and commit `docs/swagger/`; CI fails on drift.
 
@@ -91,7 +91,7 @@ Decisions live in `docs/adr/` (index and rules in `docs/adr/README.md`). Write a
 Local choices (naming, a new helper, a refactor that keeps behavior) go without one. When in doubt, ask the user.
 
 - Format: Nygard (Status, Date, Context, Decision, Consequences), in English, as `docs/adr/ADR-00N-short-title.md` with the next number, added to the index table.
-- Immutability: while this repository is a template, edit the affected ADRs so the set describes the final state (every ADR `Accepted`, no superseded records), so derived projects start from the final decisions. After the template phase, change an accepted decision by writing a new ADR and setting the old one's status to `Superseded by ADR-00N`.
+- Immutability: while this repository is a template, edit the affected ADRs so the set describes the final state (every ADR `Accepted`, no superseded records), so derived projects start from the final decisions. After the template phase, change an accepted decision by writing a new ADR and setting the old one's status to `Superseded by ADR-00N`. The README describes the one-time switch ("Leaving the template phase").
 - Diagrams (optional): only when a structure or flow is hard to explain in text. The existing ones were made with [Archify](https://github.com/tt-a1i/archify). Commit only the JSON source and the SVG export to `docs/adr/diagrams/`. If Archify is unavailable, ship the ADR without the diagram.
 - Keep docs in sync: if the ADR changes a convention, update the matching section of this file, the rule in `.claude/rules/` or `docs/AUTH.md` in the same PR.
 

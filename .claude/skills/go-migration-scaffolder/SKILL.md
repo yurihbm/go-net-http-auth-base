@@ -33,7 +33,7 @@ Scaffold the migration and an empty query file:
 npx tsx .claude/skills/go-migration-scaffolder/scripts/create-migration.ts <migration_name>
 ```
 
-For `add_products_table` it runs `make migrate-create name=add_products_table`, creates `postgres/queries/products.sql` if missing and prints the created paths. Then:
+For `add_products_table` it runs `make migrate-create name=add_products_table`, creates `postgres/queries/products_queries.sql` if missing and prints the created paths. Then:
 
 ```
 - [ ] 1. Write the DDL in the new .up.sql

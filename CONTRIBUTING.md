@@ -88,7 +88,7 @@ The reasoning behind these choices is recorded in the [Architecture Decision Rec
 - **Context**: `context.Context` is the first argument of every service and repository method, from `r.Context()` down to the database.
 - **Comments**: Only swag annotations on handlers and comments that explain complex business logic.
 - **API Docs**: After changing handler annotations, run `make swagger-gen` and commit `docs/swagger/` (CI fails on drift).
-- **Schema**: While this is still a template, schema changes go into `000001_init_db.up.sql`/`.down.sql` instead of new migration files.
+- **Schema**: While this is still a template, schema changes go into `000001_init_db.up.sql`/`.down.sql` instead of new migration files (see "Leaving the template phase" in the README for when this changes).
 
 ## 🧭 Architecture Decision Records
 
