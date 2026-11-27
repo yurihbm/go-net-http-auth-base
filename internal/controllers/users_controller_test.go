@@ -927,11 +927,41 @@ func TestUsersController_ListUsers(t *testing.T) {
 		serviceMock.AssertExpectations(t)
 	})
 
+	t.Run("success - search is trimmed", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
+			return dto.Search != nil && *dto.Search == "jan"
+		})).Return(&domain.Page[domain.User]{Items: items, Total: 1}, nil)
+		w, req := getControllerArgs("GET", "/users", nil)
+		req.URL.RawQuery = url.Values{"search": {"  jan "}}.Encode()
+
+		controller.ListUsers(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertExpectations(t)
+	})
+
+	t.Run("success - blank search means no search", func(t *testing.T) {
+		controller, serviceMock, _, _ := newTestUsersController()
+		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
+			return dto.Search == nil
+		})).Return(&domain.Page[domain.User]{Items: items, Total: 1}, nil)
+		w, req := getControllerArgs("GET", "/users", nil)
+		req.URL.RawQuery = url.Values{"search": {"   "}}.Encode()
+
+		controller.ListUsers(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		serviceMock.AssertExpectations(t)
+	})
+
 	for name, query := range map[string]url.Values{
 		"invalid limit - not a number":     {"limit": {"abc"}},
 		"invalid limit - out of range 0":   {"limit": {"0"}},
 		"invalid limit - out of range 101": {"limit": {"101"}},
 		"invalid role":                     {"role": {"root"}},
+		"search with NUL byte":             {"search": {"ja\x00n"}},
+		"search with invalid UTF-8":        {"search": {"ja\xffn"}},
 	} {
 		t.Run("error - "+name, func(t *testing.T) {
 			controller, serviceMock, _, _ := newTestUsersController()

@@ -141,7 +141,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `users.invalidUserUUID` | `ValidationError` | `UsersRepository`: the user UUID is malformed |
 | `users.oauthProvider.invalidUUID` | `ValidationError` | `AuthRepository`: the user UUID of a provider link is malformed |
 | `users.invalidCursor` | `ValidationError` | `UsersRepository.List`: the pagination cursor is malformed |
-| `users.list.badRequest` | `ValidationError` | `UsersController.ListUsers`: invalid `limit` or `role` query parameter |
+| `users.list.badRequest` | `ValidationError` | `UsersController.ListUsers`: invalid `limit`, `role` or `search` (invalid UTF-8 or NUL byte) query parameter |
 | `user.internalServerError` | `InternalServerError` | `UsersRepository.Delete`: unexpected failure |
 | `sessions.invalidUUID` | `ValidationError` | `SessionsRepository`, `SessionChallengeRepository`: the session UUID is malformed |
 | `auth.signup.invalidUUID` | `ValidationError` | `PendingSignupRepository`: the pending sign-up UUID is malformed |

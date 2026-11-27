@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
@@ -447,7 +448,17 @@ func (c *UsersController) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	var dto domain.ListUsersDTO
 
-	if v := q.Get("search"); v != "" {
+	if v := strings.TrimSpace(q.Get("search")); v != "" {
+		if !utf8.ValidString(v) || strings.ContainsRune(v, 0) {
+			api.HandleError(r.Context(), w,
+				domain.NewValidationError("users.list.badRequest",
+					map[string]string{
+						"search": "search must be valid UTF-8 without NUL bytes",
+					},
+				),
+			)
+			return
+		}
 		dto.Search = &v
 	}
 	if v := q.Get("cursor"); v != "" {
