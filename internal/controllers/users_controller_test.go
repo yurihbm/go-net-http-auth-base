@@ -80,14 +80,14 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 	t.Run("success - wraps GET /users with auth and role middlewares", func(t *testing.T) {
 		router := http.NewServeMux()
 		authMiddleware := new(mocks.AuthMiddlewareMock)
-		roleMiddleware := new(mocks.AuthMiddlewareMock)
+		adminRoleMiddleware := new(mocks.AuthMiddlewareMock)
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(1)
-		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, roleMiddleware, passthroughMiddleware{}, true)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(1)
+		controller := controllers.NewUsersController(new(mocks.UsersServiceMock), new(mocks.EmailChangeServiceMock), new(mocks.PendingSignupServiceMock), new(mocks.PasswordServiceMock), new(mocks.AuditServiceMock), authMiddleware, authMiddleware, adminRoleMiddleware, passthroughMiddleware{}, true)
 
 		controller.RegisterRoutes(router)
 
-		roleMiddleware.AssertNumberOfCalls(t, "Use", 1)
+		adminRoleMiddleware.AssertNumberOfCalls(t, "Use", 1)
 	})
 
 	t.Run("should register routes with auth middleware", func(t *testing.T) {
