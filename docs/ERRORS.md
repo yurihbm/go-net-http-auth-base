@@ -132,7 +132,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.invalidToken` | `UnauthorizedError` | `AuthService`/`TokenService`: the token is malformed, expired, has the wrong audience or no longer matches its session |
 | `auth.verifyToken.invalidTokenSigningMethod` | `UnauthorizedError` | `TokenService.VerifyToken`: the token is not signed with HMAC |
 | `auth.tokenGenerationFailed` | `InternalServerError` | `TokenService.GenerateToken`: signing failed |
-| `auth.unauthorized` | `UnauthorizedError` | `AuthMiddleware`: missing or invalid access token cookie (written directly after `api.RecordError`, not through `HandleError`) |
+| `auth.unauthorized` | `UnauthorizedError` | `AuthMiddleware`: missing or invalid access token cookie (the cause is wrapped for the log line) |
 | `auth.forbidden` | `ForbiddenError` | `RoleMiddleware`: the role is not allowed |
 | `rateLimit.exceeded` | `TooManyRequestsError` | `RateLimitMiddleware` and the credentials limiter: the per-IP bucket is empty |
 | `user.getMe.unauthorized` | `UnauthorizedError` | `UsersController.GetMe`: no user in the request context |

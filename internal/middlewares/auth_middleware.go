@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"fmt"
 	"net/http"
 
 	"go-net-http-auth-base/internal/api"
@@ -22,10 +23,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accessToken, err := r.Cookie(api.AccessTokenCookieName)
 		if err != nil {
-			api.RecordError(r.Context(), err)
-			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-				Error: "auth.unauthorized",
-			})
+			api.HandleError(r.Context(), w, errUnauthorized(err))
 			return
 		}
 
@@ -34,10 +32,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			Audience: domain.TokenAudienceAccess,
 		})
 		if err != nil {
-			api.RecordError(r.Context(), err)
-			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
-				Error: "auth.unauthorized",
-			})
+			api.HandleError(r.Context(), w, errUnauthorized(err))
 			return
 		}
 
@@ -51,4 +46,8 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 
 		next.ServeHTTP(w, r)
 	}
+}
+
+func errUnauthorized(cause error) error {
+	return fmt.Errorf("%w: %w", domain.NewUnauthorizedError("auth.unauthorized"), cause)
 }

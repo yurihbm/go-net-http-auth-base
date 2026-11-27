@@ -301,6 +301,8 @@ func TestAuthMiddleware_Use(t *testing.T) {
 			data, code := serve(middleware, httptest.NewRequest("GET", "/test", nil))
 
 			assert.Equal(t, http.StatusUnauthorized, code)
+			var unauthorizedErr *domain.UnauthorizedError
+			assert.ErrorAs(t, data.Error, &unauthorizedErr)
 			assert.ErrorIs(t, data.Error, http.ErrNoCookie)
 		})
 
@@ -317,7 +319,9 @@ func TestAuthMiddleware_Use(t *testing.T) {
 			data, code := serve(middleware, req)
 
 			assert.Equal(t, http.StatusUnauthorized, code)
-			assert.Same(t, errTokenExpired, data.Error)
+			var unauthorizedErr *domain.UnauthorizedError
+			assert.ErrorAs(t, data.Error, &unauthorizedErr)
+			assert.ErrorIs(t, data.Error, errTokenExpired)
 		})
 	})
 }
