@@ -285,4 +285,39 @@ func TestAuthMiddleware_Use(t *testing.T) {
 			Audience: domain.TokenAudienceAccess,
 		})
 	})
+
+	t.Run("success - records the error in the request context", func(t *testing.T) {
+		serve := func(middleware middlewares.HandlerMiddleware, req *http.Request) (*shared.RequestContextData, int) {
+			data := &shared.RequestContextData{}
+			req = req.WithContext(context.WithValue(req.Context(), shared.RequestContextDataKey, data))
+			w := httptest.NewRecorder()
+			middleware.Use(func(http.ResponseWriter, *http.Request) {}).ServeHTTP(w, req)
+			return data, w.Code
+		}
+
+		t.Run("error - missing cookie is recorded", func(t *testing.T) {
+			middleware, _ := getTestAuthMiddleware()
+
+			data, code := serve(middleware, httptest.NewRequest("GET", "/test", nil))
+
+			assert.Equal(t, http.StatusUnauthorized, code)
+			assert.ErrorIs(t, data.Error, http.ErrNoCookie)
+		})
+
+		t.Run("error - token verification failure is recorded", func(t *testing.T) {
+			middleware, serviceMock := getTestAuthMiddleware()
+			errTokenExpired := errors.New("token expired")
+			serviceMock.On("VerifyToken", domain.VerifyTokenDTO{
+				Token:    "invalid-token",
+				Audience: domain.TokenAudienceAccess,
+			}).Return(nil, errTokenExpired)
+			req := httptest.NewRequest("GET", "/test", nil)
+			req.AddCookie(&http.Cookie{Name: "access_token", Value: "invalid-token"})
+
+			data, code := serve(middleware, req)
+
+			assert.Equal(t, http.StatusUnauthorized, code)
+			assert.Same(t, errTokenExpired, data.Error)
+		})
+	})
 }

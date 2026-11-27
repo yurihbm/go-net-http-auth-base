@@ -22,6 +22,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		accessToken, err := r.Cookie(api.AccessTokenCookieName)
 		if err != nil {
+			api.RecordError(r.Context(), err)
 			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 				Error: "auth.unauthorized",
 			})
@@ -33,6 +34,7 @@ func (m *AuthMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			Audience: domain.TokenAudienceAccess,
 		})
 		if err != nil {
+			api.RecordError(r.Context(), err)
 			api.WriteJSONResponse(w, http.StatusUnauthorized, api.ResponseBody[any]{
 				Error: "auth.unauthorized",
 			})

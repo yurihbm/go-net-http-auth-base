@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go-net-http-auth-base/internal/api"
+	"go-net-http-auth-base/internal/domain"
 	"go-net-http-auth-base/internal/shared"
 
 	"golang.org/x/time/rate"
@@ -59,9 +60,7 @@ func (m *RateLimitMiddleware) allow(w http.ResponseWriter, r *http.Request) bool
 	m.setHeaders(w, limiter)
 	if !allowed {
 		m.setRetryAfter(w, limiter)
-		api.WriteJSONResponse(w, http.StatusTooManyRequests, api.ResponseBody[any]{
-			Error: "rateLimit.exceeded",
-		})
+		api.HandleError(r.Context(), w, domain.NewTooManyRequestsError("rateLimit.exceeded"))
 	}
 	return allowed
 }

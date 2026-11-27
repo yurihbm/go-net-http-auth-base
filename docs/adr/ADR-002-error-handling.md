@@ -37,7 +37,8 @@ and map them to HTTP in exactly one place.
 - **Input validation** goes through `api.DecodeAndValidate[T]`: strict JSON
   (unknown fields rejected, exactly one object) plus `validate` struct tags, and
   any failure returns a `ValidationError` with field details.
-- **Canonical log line.** `HandleError` stores the error (for a 500, its
+- **Canonical log line.** `HandleError` (or `api.RecordError`, for code paths that write their own
+  response, such as the auth middleware) stores the error (for a 500, its
   unwrapped cause) in `RequestContextData`. The logger middleware writes it with
   the request log line, and the telemetry middleware records it on the span (see
   [ADR-004](ADR-004-logging-observability.md)).

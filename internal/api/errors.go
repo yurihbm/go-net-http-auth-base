@@ -15,10 +15,7 @@ func HandleError(ctx context.Context, w http.ResponseWriter, err error) {
 		return
 	}
 
-	reqContextData, hasReqContextData := ctx.Value(shared.RequestContextDataKey).(*shared.RequestContextData)
-	if hasReqContextData {
-		reqContextData.Error = err
-	}
+	RecordError(ctx, err)
 
 	var (
 		statusCode = http.StatusInternalServerError
@@ -56,13 +53,23 @@ func HandleError(ctx context.Context, w http.ResponseWriter, err error) {
 	} else if errors.As(err, &internalServerErr) {
 		statusCode = http.StatusInternalServerError
 		message = internalServerErr.Error()
-		if hasReqContextData {
-			reqContextData.Error = internalServerErr.Unwrap()
-		}
 	}
 
 	WriteJSONResponse(w, statusCode, ResponseBody[any]{
 		Error:   message,
 		Details: details,
 	})
+}
+
+func RecordError(ctx context.Context, err error) {
+	reqContextData, ok := ctx.Value(shared.RequestContextDataKey).(*shared.RequestContextData)
+	if !ok {
+		return
+	}
+
+	var internalServerErr *domain.InternalServerError
+	if errors.As(err, &internalServerErr) {
+		err = internalServerErr.Unwrap()
+	}
+	reqContextData.Error = err
 }

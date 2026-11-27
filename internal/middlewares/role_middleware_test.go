@@ -25,22 +25,26 @@ func TestNewRoleMiddleware(t *testing.T) {
 }
 
 func TestRoleMiddleware_Use(t *testing.T) {
+	var serveWithData func(role domain.UserRole) (*httptest.ResponseRecorder, *shared.RequestContextData)
 	serve := func(role domain.UserRole) *httptest.ResponseRecorder {
+		rr, _ := serveWithData(role)
+		return rr
+	}
+
+	serveWithData = func(role domain.UserRole) (*httptest.ResponseRecorder, *shared.RequestContextData) {
 		req := httptest.NewRequest("GET", "/", nil)
-		ctx := context.WithValue(req.Context(),
-			shared.RequestContextDataKey,
-			&shared.RequestContextData{
-				UserUUID: "test-uuid",
-				UserRole: role,
-			},
-		)
+		data := &shared.RequestContextData{
+			UserUUID: "test-uuid",
+			UserRole: role,
+		}
+		ctx := context.WithValue(req.Context(), shared.RequestContextDataKey, data)
 		rr := httptest.NewRecorder()
 		getTestRoleMiddleware().Use(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}),
 		).ServeHTTP(rr, req.WithContext(ctx))
-		return rr
+		return rr, data
 	}
 
 	t.Run("should allow access to users with the required role", func(t *testing.T) {
@@ -55,6 +59,14 @@ func TestRoleMiddleware_Use(t *testing.T) {
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.JSONEq(t, `{"data":null,"error":"auth.forbidden"}`, rr.Body.String())
+	})
+
+	t.Run("error - records the forbidden error when denying access", func(t *testing.T) {
+		_, data := serveWithData(domain.RoleUser)
+
+		var forbiddenErr *domain.ForbiddenError
+		assert.ErrorAs(t, data.Error, &forbiddenErr)
+		assert.EqualError(t, data.Error, "auth.forbidden")
 	})
 
 	t.Run("should deny access when the token carries no role", func(t *testing.T) {

@@ -34,8 +34,6 @@ func (m *RoleMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		api.WriteJSONResponse(w, http.StatusForbidden, api.ResponseBody[any]{
-			Error: "auth.forbidden",
-		})
+		api.HandleError(r.Context(), w, domain.NewForbiddenError("auth.forbidden"))
 	}
 }

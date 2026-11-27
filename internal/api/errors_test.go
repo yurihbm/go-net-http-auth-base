@@ -139,3 +139,34 @@ func TestHandleError(t *testing.T) {
 		})
 	}
 }
+
+func TestRecordError(t *testing.T) {
+	newCtx := func() (context.Context, *shared.RequestContextData) {
+		data := &shared.RequestContextData{}
+		return context.WithValue(context.Background(), shared.RequestContextDataKey, data), data
+	}
+
+	t.Run("success - records the error", func(t *testing.T) {
+		ctx, data := newCtx()
+		err := errors.New("boom")
+
+		api.RecordError(ctx, err)
+
+		assert.Same(t, err, data.Error)
+	})
+
+	t.Run("success - unwraps internal server error to its cause", func(t *testing.T) {
+		ctx, data := newCtx()
+		cause := errors.New("db failure")
+
+		api.RecordError(ctx, domain.NewInternalServerError("internal.error", cause))
+
+		assert.Same(t, cause, data.Error)
+	})
+
+	t.Run("success - no-op without request context data", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			api.RecordError(context.Background(), errors.New("boom"))
+		})
+	})
+}
