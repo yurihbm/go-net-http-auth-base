@@ -183,3 +183,26 @@ CREATE INDEX idx_audit_logs_resource ON audit_logs(resource_type, resource_uuid)
 
 -- Index on actor_uuid
 CREATE INDEX idx_audit_logs_actor ON audit_logs(actor_uuid);
+
+CREATE TABLE feature_flags (
+    uuid uuid DEFAULT uuidv7() NOT NULL PRIMARY KEY,
+    key text NOT NULL UNIQUE,
+    description text NOT NULL DEFAULT '',
+    enabled_globally boolean NOT NULL DEFAULT false,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL
+);
+
+CREATE TRIGGER update_feature_flags_updated_at
+BEFORE UPDATE ON feature_flags
+FOR EACH ROW
+EXECUTE PROCEDURE update_updated_at_column();
+
+CREATE TABLE feature_flag_users (
+    flag_uuid uuid NOT NULL REFERENCES feature_flags (uuid) ON DELETE CASCADE,
+    user_uuid uuid NOT NULL REFERENCES users (uuid) ON DELETE CASCADE,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    PRIMARY KEY (flag_uuid, user_uuid)
+);
+
+CREATE INDEX idx_feature_flag_users_user ON feature_flag_users (user_uuid);

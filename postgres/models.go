@@ -219,6 +219,21 @@ type EmailSendLimit struct {
 	FailuresWindowStart pgtype.Timestamptz
 }
 
+type FeatureFlag struct {
+	Uuid            pgtype.UUID
+	Key             string
+	Description     string
+	EnabledGlobally bool
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type FeatureFlagUser struct {
+	FlagUuid  pgtype.UUID
+	UserUuid  pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+}
+
 type PasswordReset struct {
 	Uuid         pgtype.UUID
 	UserUuid     pgtype.UUID
