@@ -58,7 +58,7 @@ func TestAuditController_ListAuditLogs(t *testing.T) {
 	t.Run("success with defaults", func(t *testing.T) {
 		controller, auditMock, _, _ := newTestAuditController()
 
-		page := &domain.AuditLogPage{
+		page := &domain.Page[domain.AuditLog]{
 			Items:      items,
 			NextCursor: &nextCursor,
 			Total:      1,
@@ -108,7 +108,7 @@ func TestAuditController_ListAuditLogs(t *testing.T) {
 		startDate := startTime.Unix()
 		endDate := endTime.Unix()
 
-		page := &domain.AuditLogPage{Items: items, Total: 1}
+		page := &domain.Page[domain.AuditLog]{Items: items, Total: 1}
 
 		auditMock.On("List", mock.MatchedBy(func(dto domain.ListAuditLogsDTO) bool {
 			return dto.Limit == 10 &&
@@ -229,7 +229,7 @@ func TestAuditController_ListAuditLogs(t *testing.T) {
 		refTime := time.Date(2024, time.June, 7, 14, 25, 13, 0, time.UTC)
 		expectedUnix := refTime.Unix()
 
-		page := &domain.AuditLogPage{Items: []domain.AuditLog{}, Total: 0}
+		page := &domain.Page[domain.AuditLog]{Items: []domain.AuditLog{}, Total: 0}
 		auditMock.On("List", mock.MatchedBy(func(dto domain.ListAuditLogsDTO) bool {
 			return dto.StartDate != nil && *dto.StartDate == expectedUnix
 		})).Return(page, nil)
@@ -252,7 +252,7 @@ func TestAuditController_ListAuditLogs(t *testing.T) {
 		refTime := time.Date(2024, time.June, 7, 14, 25, 13, 0, time.UTC)
 		expectedUnix := refTime.Unix()
 
-		page := &domain.AuditLogPage{Items: []domain.AuditLog{}, Total: 0}
+		page := &domain.Page[domain.AuditLog]{Items: []domain.AuditLog{}, Total: 0}
 		auditMock.On("List", mock.MatchedBy(func(dto domain.ListAuditLogsDTO) bool {
 			return dto.StartDate != nil && *dto.StartDate == expectedUnix
 		})).Return(page, nil)
@@ -326,7 +326,7 @@ func TestAuditController_ListAuditLogs(t *testing.T) {
 	t.Run("empty result", func(t *testing.T) {
 		controller, auditMock, _, _ := newTestAuditController()
 
-		page := &domain.AuditLogPage{
+		page := &domain.Page[domain.AuditLog]{
 			Items: []domain.AuditLog{},
 			Total: 0,
 		}

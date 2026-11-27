@@ -17,6 +17,7 @@ Services implement business logic. Key patterns:
   - Input shape is validated in the controller (`api.DecodeAndValidate`); services enforce business rules (e.g., self-or-admin access through `Actor.CanAccess`, which returns a `ForbiddenError`).
   - Services perform partial updates by fetching existing entities, modifying only provided fields, then calling repository update.
 - Email Normalization: Services always pass emails through the unexported `normalizeEmail` helper (`services/helpers.go`, trim + lowercase) before lookup or write; repositories receive already normalized emails; the database enforces a unique index on `lower(email)`.
+- Pagination: list methods return `domain.Page[T]` built with `domain.NewPage`; the service asks the repository for `limit+1` rows and `NewPage` trims the extra one and sets `NextCursor` only when a next page exists.
 - Clock: services take a `now func() time.Time` as the last constructor parameter and read the time with `s.now()` (ADR-016). The `now()` inside SQL stays database-side.
 - Transactions: Use `domain.Transactor.WithinTx(ctx, func(ctx context.Context) error { ... })` when several repository calls must succeed or fail together; always name the closure parameter `ctx` (details in `.claude/rules/repositories.md`).
 - Error Handling: Services return domain-specific errors with meaningful messages (e.g., `"users.forbidden"`). See `docs/ERRORS.md`.

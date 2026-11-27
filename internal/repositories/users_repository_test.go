@@ -656,6 +656,34 @@ func TestUsersPostgresRepository_List(t *testing.T) {
 		assert.Equal(t, alice.UUID, second[0].UUID)
 	})
 
+	t.Run("success - search with a literal backslash matches nothing", func(t *testing.T) {
+		search := `\`
+
+		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Search: &search})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), total)
+		assert.Empty(t, users)
+	})
+
+	t.Run("success - role, search and cursor combined, including a deleted cursor row", func(t *testing.T) {
+		dora1 := seed("Dora One", "dora1@example.com", domain.RoleAdmin)
+		dora2 := seed("Dora Two", "dora2@example.com", domain.RoleAdmin)
+		dora3 := seed("Dora Three", "dora3@example.com", domain.RoleAdmin)
+		seed("Dora User", "dora4@example.com", domain.RoleUser)
+		role := domain.RoleAdmin
+		search := "dora"
+		cursor := dora3.UUID
+		require.NoError(t, repo.Delete(ctx, dora3.UUID))
+
+		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Role: &role, Search: &search, Cursor: &cursor})
+
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), total)
+		require.Len(t, users, 2)
+		assert.Equal(t, []string{dora2.UUID, dora1.UUID}, []string{users[0].UUID, users[1].UUID})
+	})
+
 	t.Run("error - invalid cursor", func(t *testing.T) {
 		cursor := "not-a-uuid"
 

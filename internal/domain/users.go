@@ -71,12 +71,6 @@ type ListUsersDTO struct {
 	Limit  int
 }
 
-type UsersPage struct {
-	Items      []User
-	NextCursor *string
-	Total      int64
-}
-
 type Actor struct {
 	UUID string
 	Role UserRole
@@ -94,7 +88,7 @@ type UsersService interface {
 	CreateOAuth(context.Context, CreateOAuthUserDTO) (*User, error)
 	Update(context.Context, Actor, string, UserUpdateDTO) (*User, error)
 	Delete(context.Context, Actor, string) error
-	List(ctx context.Context, dto ListUsersDTO) (*UsersPage, error)
+	List(ctx context.Context, dto ListUsersDTO) (*Page[User], error)
 }
 
 type UsersRepository interface {

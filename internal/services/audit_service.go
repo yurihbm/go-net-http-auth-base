@@ -33,21 +33,13 @@ func (s *auditService) Log(ctx context.Context, dto domain.CreateAuditLogDTO) er
 	})
 }
 
-func (s *auditService) List(ctx context.Context, dto domain.ListAuditLogsDTO) (*domain.AuditLogPage, error) {
+func (s *auditService) List(ctx context.Context, dto domain.ListAuditLogsDTO) (*domain.Page[domain.AuditLog], error) {
+	limit := dto.Limit
+	dto.Limit++
 	logs, total, err := s.auditRepository.List(ctx, dto)
 	if err != nil {
 		return nil, err
 	}
 
-	var nextCursor *string
-	if len(logs) == dto.Limit && total > int64(len(logs)) {
-		last := logs[len(logs)-1].UUID
-		nextCursor = &last
-	}
-
-	return &domain.AuditLogPage{
-		Items:      logs,
-		NextCursor: nextCursor,
-		Total:      total,
-	}, nil
+	return domain.NewPage(logs, total, limit, func(l domain.AuditLog) string { return l.UUID }), nil
 }

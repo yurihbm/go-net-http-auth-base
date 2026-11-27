@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewAuditService(t *testing.T) {
@@ -57,11 +58,12 @@ func TestAuditService_List(t *testing.T) {
 		return domain.AuditLog{UUID: id, Action: "LOGIN", Status: "SUCCESS"}
 	}
 
-	dto := domain.ListAuditLogsDTO{Limit: 3}
+	dto := domain.ListAuditLogsDTO{Limit: 2}
+	probeDTO := domain.ListAuditLogsDTO{Limit: 3}
 
-	t.Run("no results - NextCursor is nil", func(t *testing.T) {
+	t.Run("success - no results, NextCursor is nil", func(t *testing.T) {
 		repo := new(mocks.AuditRepositoryMock)
-		repo.On("List", dto).Return([]domain.AuditLog{}, int64(0), nil)
+		repo.On("List", probeDTO).Return([]domain.AuditLog{}, int64(0), nil)
 
 		service := services.NewAuditService(repo)
 		page, err := service.List(context.Background(), dto)
@@ -73,10 +75,27 @@ func TestAuditService_List(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("fewer results than limit - NextCursor is nil", func(t *testing.T) {
+	t.Run("success - more rows than limit, items trimmed and NextCursor is last kept UUID", func(t *testing.T) {
+		logs := []domain.AuditLog{makeLog("uuid-1"), makeLog("uuid-2"), makeLog("uuid-3")}
+		repo := new(mocks.AuditRepositoryMock)
+		repo.On("List", probeDTO).Return(logs, int64(10), nil)
+
+		service := services.NewAuditService(repo)
+		page, err := service.List(context.Background(), dto)
+
+		assert.NoError(t, err)
+		require.Len(t, page.Items, 2)
+		assert.Equal(t, "uuid-2", page.Items[1].UUID)
+		require.NotNil(t, page.NextCursor)
+		assert.Equal(t, "uuid-2", *page.NextCursor)
+		assert.Equal(t, int64(10), page.Total)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("success - exactly limit rows left, NextCursor is nil even when total is larger", func(t *testing.T) {
 		logs := []domain.AuditLog{makeLog("uuid-1"), makeLog("uuid-2")}
 		repo := new(mocks.AuditRepositoryMock)
-		repo.On("List", dto).Return(logs, int64(2), nil)
+		repo.On("List", probeDTO).Return(logs, int64(10), nil)
 
 		service := services.NewAuditService(repo)
 		page, err := service.List(context.Background(), dto)
@@ -84,44 +103,13 @@ func TestAuditService_List(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, page.Items, 2)
 		assert.Nil(t, page.NextCursor)
-		assert.Equal(t, int64(2), page.Total)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("exactly limit results - NextCursor is last UUID", func(t *testing.T) {
-		logs := []domain.AuditLog{makeLog("uuid-1"), makeLog("uuid-2"), makeLog("uuid-3")}
-		repo := new(mocks.AuditRepositoryMock)
-		repo.On("List", dto).Return(logs, int64(10), nil)
-
-		service := services.NewAuditService(repo)
-		page, err := service.List(context.Background(), dto)
-
-		assert.NoError(t, err)
-		assert.Len(t, page.Items, 3)
-		assert.NotNil(t, page.NextCursor)
-		assert.Equal(t, "uuid-3", *page.NextCursor)
 		assert.Equal(t, int64(10), page.Total)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("exactly limit results but total matches - NextCursor is nil", func(t *testing.T) {
-		logs := []domain.AuditLog{makeLog("uuid-1"), makeLog("uuid-2"), makeLog("uuid-3")}
-		repo := new(mocks.AuditRepositoryMock)
-		repo.On("List", dto).Return(logs, int64(3), nil)
-
-		service := services.NewAuditService(repo)
-		page, err := service.List(context.Background(), dto)
-
-		assert.NoError(t, err)
-		assert.Len(t, page.Items, 3)
-		assert.Nil(t, page.NextCursor)
-		assert.Equal(t, int64(3), page.Total)
 		repo.AssertExpectations(t)
 	})
 
 	t.Run("repository error is propagated", func(t *testing.T) {
 		repo := new(mocks.AuditRepositoryMock)
-		repo.On("List", dto).Return(nil, int64(0), assert.AnError)
+		repo.On("List", probeDTO).Return(nil, int64(0), assert.AnError)
 
 		service := services.NewAuditService(repo)
 		page, err := service.List(context.Background(), dto)

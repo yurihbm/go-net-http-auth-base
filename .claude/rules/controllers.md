@@ -15,6 +15,7 @@ Controllers handle HTTP requests and responses. Key patterns:
 - Request Handling:
   - Use `api.DecodeAndValidate[T](r)` to decode (strict JSON parsing, single-object body) and validate DTOs against their `validate` struct tags in one step.
   - Extract path parameters using `r.PathValue("param")`.
+  - The list `limit` query parameter goes through `parseLimit` (`query_helpers.go`).
   - Middlewares and handlers that write an error response without `api.HandleError` call `api.RecordError(ctx, err)` first, so the log line and span carry the error.
   - Read the caller with `actorFromRequest(r)` and the session with `sessionFromRequest(r)` (`actor_helpers.go`).
 - Validation: `internal/api/request.go` wires a single `go-playground/validator` instance used by `DecodeAndValidate`. Decode or validation failures return a `domain.ValidationError` with per-field `details`, mapped to `400` by `internal/api/errors.go`. DTOs declare rules via `validate:"..."` tags (e.g., `validate:"required,email"`) in `internal/domain/*.go`.

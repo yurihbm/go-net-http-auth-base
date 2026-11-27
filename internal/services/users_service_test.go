@@ -513,10 +513,11 @@ func TestUsersService_CreateOAuth(t *testing.T) {
 func TestUsersService_List(t *testing.T) {
 	makeUser := func(id string) domain.User { return domain.User{UUID: id, Name: "Test User"} }
 	dto := domain.ListUsersDTO{Limit: 2}
+	probeDTO := domain.ListUsersDTO{Limit: 3}
 
-	t.Run("no results - NextCursor is nil", func(t *testing.T) {
+	t.Run("success - no results, NextCursor is nil", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		repo.On("List", dto).Return([]domain.User{}, int64(0), nil)
+		repo.On("List", probeDTO).Return([]domain.User{}, int64(0), nil)
 		service := services.NewUserService(repo, newTransactorMock(), testClock)
 
 		page, err := service.List(context.Background(), dto)
@@ -528,35 +529,39 @@ func TestUsersService_List(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("exactly limit results - NextCursor is last UUID", func(t *testing.T) {
+	t.Run("success - more rows than limit, items trimmed and NextCursor is last kept UUID", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		repo.On("List", dto).Return([]domain.User{makeUser("uuid-1"), makeUser("uuid-2")}, int64(5), nil)
+		repo.On("List", probeDTO).Return([]domain.User{makeUser("uuid-1"), makeUser("uuid-2"), makeUser("uuid-3")}, int64(5), nil)
 		service := services.NewUserService(repo, newTransactorMock(), testClock)
 
 		page, err := service.List(context.Background(), dto)
 
 		require.NoError(t, err)
+		require.Len(t, page.Items, 2)
+		assert.Equal(t, "uuid-2", page.Items[1].UUID)
 		require.NotNil(t, page.NextCursor)
 		assert.Equal(t, "uuid-2", *page.NextCursor)
 		assert.Equal(t, int64(5), page.Total)
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("exactly limit results but total matches - NextCursor is nil", func(t *testing.T) {
+	t.Run("success - exactly limit rows left, NextCursor is nil even when total is larger", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		repo.On("List", dto).Return([]domain.User{makeUser("uuid-1"), makeUser("uuid-2")}, int64(2), nil)
+		repo.On("List", probeDTO).Return([]domain.User{makeUser("uuid-1"), makeUser("uuid-2")}, int64(5), nil)
 		service := services.NewUserService(repo, newTransactorMock(), testClock)
 
 		page, err := service.List(context.Background(), dto)
 
 		require.NoError(t, err)
+		assert.Len(t, page.Items, 2)
 		assert.Nil(t, page.NextCursor)
+		assert.Equal(t, int64(5), page.Total)
 		repo.AssertExpectations(t)
 	})
 
 	t.Run("error - repository error is propagated", func(t *testing.T) {
 		repo := new(mocks.UsersRepositoryMock)
-		repo.On("List", dto).Return(nil, int64(0), assert.AnError)
+		repo.On("List", probeDTO).Return(nil, int64(0), assert.AnError)
 		service := services.NewUserService(repo, newTransactorMock(), testClock)
 
 		page, err := service.List(context.Background(), dto)

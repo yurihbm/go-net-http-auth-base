@@ -137,21 +137,13 @@ func (s *usersService) Delete(ctx context.Context, actor domain.Actor, uuid stri
 	return s.repo.Delete(ctx, uuid)
 }
 
-func (s *usersService) List(ctx context.Context, dto domain.ListUsersDTO) (*domain.UsersPage, error) {
+func (s *usersService) List(ctx context.Context, dto domain.ListUsersDTO) (*domain.Page[domain.User], error) {
+	limit := dto.Limit
+	dto.Limit++
 	users, total, err := s.repo.List(ctx, dto)
 	if err != nil {
 		return nil, err
 	}
 
-	var nextCursor *string
-	if len(users) == dto.Limit && total > int64(len(users)) {
-		last := users[len(users)-1].UUID
-		nextCursor = &last
-	}
-
-	return &domain.UsersPage{
-		Items:      users,
-		NextCursor: nextCursor,
-		Total:      total,
-	}, nil
+	return domain.NewPage(users, total, limit, func(u domain.User) string { return u.UUID }), nil
 }

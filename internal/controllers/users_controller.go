@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
 	"go-net-http-auth-base/internal/api"
@@ -446,9 +445,7 @@ func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 func (c *UsersController) ListUsers(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
-	dto := domain.ListUsersDTO{
-		Limit: defaultUsersLimit,
-	}
+	var dto domain.ListUsersDTO
 
 	if v := q.Get("search"); v != "" {
 		dto.Search = &v
@@ -472,20 +469,12 @@ func (c *UsersController) ListUsers(w http.ResponseWriter, r *http.Request) {
 		dto.Role = &role
 	}
 
-	if v := q.Get("limit"); v != "" {
-		limit, err := strconv.Atoi(v)
-		if err != nil || limit < 1 || limit > 100 {
-			api.HandleError(r.Context(), w,
-				domain.NewValidationError("users.list.badRequest",
-					map[string]string{
-						"limit": "limit must be an integer between 1 and 100",
-					},
-				),
-			)
-			return
-		}
-		dto.Limit = limit
+	limit, err := parseLimit(q, defaultUsersLimit, "users.list.badRequest")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
 	}
+	dto.Limit = limit
 
 	page, err := c.userService.List(r.Context(), dto)
 	if err != nil {

@@ -893,7 +893,7 @@ func TestUsersController_ListUsers(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
 		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
 			return dto.Limit == 20 && dto.Search == nil && dto.Role == nil && dto.Cursor == nil
-		})).Return(&domain.UsersPage{Items: items, NextCursor: &nextCursor, Total: 1}, nil)
+		})).Return(&domain.Page[domain.User]{Items: items, NextCursor: &nextCursor, Total: 1}, nil)
 		w, req := getControllerArgs("GET", "/users", nil)
 
 		controller.ListUsers(w, req)
@@ -917,7 +917,7 @@ func TestUsersController_ListUsers(t *testing.T) {
 				dto.Search != nil && *dto.Search == "jan" &&
 				dto.Role != nil && *dto.Role == domain.RoleAdmin &&
 				dto.Cursor != nil && *dto.Cursor == nextCursor
-		})).Return(&domain.UsersPage{Items: items, Total: 1}, nil)
+		})).Return(&domain.Page[domain.User]{Items: items, Total: 1}, nil)
 		w, req := getControllerArgs("GET", "/users", nil)
 		req.URL.RawQuery = url.Values{"search": {"jan"}, "role": {"admin"}, "cursor": {nextCursor}, "limit": {"10"}}.Encode()
 
