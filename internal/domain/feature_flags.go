@@ -32,6 +32,19 @@ type ListFeatureFlagsDTO struct {
 	Limit  int
 }
 
+// An empty userUUID is an anonymous caller, who only gets the globally enabled flags.
+type FeatureFlagsService interface {
+	Create(context.Context, CreateFeatureFlagDTO) (*FeatureFlag, error)
+	GetByUUID(context.Context, string) (*FeatureFlagDetails, error)
+	Update(ctx context.Context, uuid string, dto UpdateFeatureFlagDTO) (*FeatureFlag, error)
+	Delete(context.Context, string) error
+	List(ctx context.Context, dto ListFeatureFlagsDTO) (*Page[FeatureFlag], error)
+	AddUser(ctx context.Context, flagUUID string, userUUID string) error
+	RemoveUser(ctx context.Context, flagUUID string, userUUID string) error
+	ListEnabledKeys(ctx context.Context, userUUID string) ([]string, error)
+	IsEnabled(ctx context.Context, key string, userUUID string) (bool, error)
+}
+
 type FeatureFlagsRepository interface {
 	Create(context.Context, FeatureFlag) (*FeatureFlag, error)
 	FindDetailsByUUID(context.Context, string) (*FeatureFlagDetails, error)
