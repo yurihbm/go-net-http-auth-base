@@ -29,10 +29,10 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 	t.Run("success - serves the spec when the middlewares pass", func(t *testing.T) {
 		router := http.NewServeMux()
 		authMiddleware := new(mocks.AuthMiddlewareMock)
-		roleMiddleware := new(mocks.AuthMiddlewareMock)
+		adminRoleMiddleware := new(mocks.AuthMiddlewareMock)
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		controllers.NewDocsController(authMiddleware, roleMiddleware).RegisterRoutes(router)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		controllers.NewDocsController(authMiddleware, adminRoleMiddleware).RegisterRoutes(router)
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/swagger/doc.json", nil))
@@ -41,16 +41,16 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 		assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
 		assert.Contains(t, w.Body.String(), `"swagger"`)
 		authMiddleware.AssertNumberOfCalls(t, "Use", 1)
-		roleMiddleware.AssertNumberOfCalls(t, "Use", 1)
+		adminRoleMiddleware.AssertNumberOfCalls(t, "Use", 1)
 	})
 
 	t.Run("success - serves the UI when the middlewares pass", func(t *testing.T) {
 		router := http.NewServeMux()
 		authMiddleware := new(mocks.AuthMiddlewareMock)
-		roleMiddleware := new(mocks.AuthMiddlewareMock)
+		adminRoleMiddleware := new(mocks.AuthMiddlewareMock)
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		controllers.NewDocsController(authMiddleware, roleMiddleware).RegisterRoutes(router)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		controllers.NewDocsController(authMiddleware, adminRoleMiddleware).RegisterRoutes(router)
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/swagger/index.html", nil))
@@ -62,10 +62,10 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 	t.Run("success - UI relaxes the CSP for its inline scripts", func(t *testing.T) {
 		router := http.NewServeMux()
 		authMiddleware := new(mocks.AuthMiddlewareMock)
-		roleMiddleware := new(mocks.AuthMiddlewareMock)
+		adminRoleMiddleware := new(mocks.AuthMiddlewareMock)
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		controllers.NewDocsController(authMiddleware, roleMiddleware).RegisterRoutes(router)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		controllers.NewDocsController(authMiddleware, adminRoleMiddleware).RegisterRoutes(router)
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/swagger/index.html", nil))
@@ -76,10 +76,10 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 	t.Run("success - UI injects the logout button and the logout interceptor", func(t *testing.T) {
 		router := http.NewServeMux()
 		authMiddleware := new(mocks.AuthMiddlewareMock)
-		roleMiddleware := new(mocks.AuthMiddlewareMock)
+		adminRoleMiddleware := new(mocks.AuthMiddlewareMock)
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		controllers.NewDocsController(authMiddleware, roleMiddleware).RegisterRoutes(router)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		controllers.NewDocsController(authMiddleware, adminRoleMiddleware).RegisterRoutes(router)
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/swagger/index.html", nil))
@@ -93,10 +93,10 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 	t.Run("success - logout script is not parsed as a call on window.ui", func(t *testing.T) {
 		router := http.NewServeMux()
 		authMiddleware := new(mocks.AuthMiddlewareMock)
-		roleMiddleware := new(mocks.AuthMiddlewareMock)
+		adminRoleMiddleware := new(mocks.AuthMiddlewareMock)
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		controllers.NewDocsController(authMiddleware, roleMiddleware).RegisterRoutes(router)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		controllers.NewDocsController(authMiddleware, adminRoleMiddleware).RegisterRoutes(router)
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/swagger/index.html", nil))
@@ -108,9 +108,9 @@ func TestDocsController_RegisterRoutes(t *testing.T) {
 
 	t.Run("error - rejected when the auth middleware rejects", func(t *testing.T) {
 		router := http.NewServeMux()
-		roleMiddleware := new(mocks.AuthMiddlewareMock)
-		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
-		controllers.NewDocsController(rejectingMiddleware{http.StatusUnauthorized}, roleMiddleware).RegisterRoutes(router)
+		adminRoleMiddleware := new(mocks.AuthMiddlewareMock)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+		controllers.NewDocsController(rejectingMiddleware{http.StatusUnauthorized}, adminRoleMiddleware).RegisterRoutes(router)
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/swagger/doc.json", nil))

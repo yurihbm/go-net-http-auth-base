@@ -51,7 +51,7 @@ Register the route in the controller's `RegisterRoutes` with a Go 1.22 method pa
 
 1. `c.credentialsLimiter.Use(...)` when the route takes credentials, verifies a code or a token from an email, or sends an email (`POST /auth/login`, `POST /users`, `POST /auth/step-up`, the password reset routes). Refresh, logout and the OAuth redirects stay outside it (ADR-015). List the new route in the credential limiter paragraph of `docs/AUTH.md`.
 2. `c.authMiddleware.Use(...)` for any signed-in route.
-3. `c.stepUpMiddleware.Use(...)` for sensitive actions (email or password change, account deletion), or `c.roleMiddleware.Use(...)` for admin-only routes.
+3. `c.stepUpMiddleware.Use(...)` for sensitive actions (email or password change, account deletion), or `c.adminRoleMiddleware.Use(...)` for admin-only routes.
 
 Example: `router.HandleFunc("POST /auth/step-up/verify", c.credentialsLimiter.Use(c.authMiddleware.Use(c.VerifyStepUp)))`.
 

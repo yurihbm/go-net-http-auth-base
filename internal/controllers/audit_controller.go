@@ -13,9 +13,9 @@ import (
 const defaultAuditLogLimit = 20
 
 type AuditController struct {
-	auditService   domain.AuditService
-	authMiddleware middlewares.HandlerMiddleware
-	roleMiddleware middlewares.HandlerMiddleware
+	auditService        domain.AuditService
+	authMiddleware      middlewares.HandlerMiddleware
+	adminRoleMiddleware middlewares.HandlerMiddleware
 }
 
 var _ Controller = (*AuditController)(nil)
@@ -23,17 +23,17 @@ var _ Controller = (*AuditController)(nil)
 func NewAuditController(
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
-	roleMiddleware middlewares.HandlerMiddleware,
+	adminRoleMiddleware middlewares.HandlerMiddleware,
 ) *AuditController {
 	return &AuditController{
-		auditService:   auditService,
-		authMiddleware: authMiddleware,
-		roleMiddleware: roleMiddleware,
+		auditService:        auditService,
+		authMiddleware:      authMiddleware,
+		adminRoleMiddleware: adminRoleMiddleware,
 	}
 }
 
 func (c *AuditController) RegisterRoutes(router *http.ServeMux) {
-	router.HandleFunc("GET /audit-logs", c.authMiddleware.Use(c.roleMiddleware.Use(c.ListAuditLogs)))
+	router.HandleFunc("GET /audit-logs", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.ListAuditLogs)))
 }
 
 // @Summary		List audit logs

@@ -18,22 +18,22 @@ import (
 func newTestAuditController() (*controllers.AuditController, *mocks.AuditServiceMock, *mocks.AuthMiddlewareMock, *mocks.AuthMiddlewareMock) {
 	auditMock := new(mocks.AuditServiceMock)
 	authMiddlewareMock := new(mocks.AuthMiddlewareMock)
-	roleMiddlewareMock := new(mocks.AuthMiddlewareMock)
-	controller := controllers.NewAuditController(auditMock, authMiddlewareMock, roleMiddlewareMock)
-	return controller, auditMock, authMiddlewareMock, roleMiddlewareMock
+	adminRoleMiddlewareMock := new(mocks.AuthMiddlewareMock)
+	controller := controllers.NewAuditController(auditMock, authMiddlewareMock, adminRoleMiddlewareMock)
+	return controller, auditMock, authMiddlewareMock, adminRoleMiddlewareMock
 }
 
 func TestAuditController_RegisterRoutes(t *testing.T) {
 	t.Run("should register routes with auth and role middlewares", func(t *testing.T) {
 		router := http.NewServeMux()
-		controller, _, authMiddleware, roleMiddleware := newTestAuditController()
+		controller, _, authMiddleware, adminRoleMiddleware := newTestAuditController()
 		authMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(1)
-		roleMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(1)
+		adminRoleMiddleware.On("Use", mock.Anything).Return(mock.Anything).Times(1)
 
 		controller.RegisterRoutes(router)
 
 		authMiddleware.AssertNumberOfCalls(t, "Use", 1)
-		roleMiddleware.AssertNumberOfCalls(t, "Use", 1)
+		adminRoleMiddleware.AssertNumberOfCalls(t, "Use", 1)
 	})
 }
 
