@@ -167,6 +167,24 @@ func TestRateLimitMiddleware(t *testing.T) {
 		assert.ErrorAs(t, data.Error, &tooManyErr)
 		assert.EqualError(t, data.Error, "rateLimit.exceeded")
 	})
+
+	t.Run("error - rounds Retry-After up to the next whole second", func(t *testing.T) {
+		now := time.Now()
+		handler := middlewares.NewRateLimitMiddlewareWithClock(t.Context(), rate.Limit(0.5), 1, func() time.Time { return now }).
+			Use(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		serve := func() *httptest.ResponseRecorder {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = "192.168.1.1:1234"
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			return w
+		}
+
+		assert.Equal(t, http.StatusOK, serve().Code)
+		w := serve()
+		assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		assert.Equal(t, "2", w.Header().Get("Retry-After"))
+	})
 }
 
 func TestNewRateLimitMiddleware(t *testing.T) {
