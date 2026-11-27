@@ -138,7 +138,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `user.getMe.unauthorized` | `UnauthorizedError` | `UsersController.GetMe`: no user in the request context |
 | `users.forbidden` | `ForbiddenError` | `Actor.CanAccess` in `UsersService`: not self or admin |
 | `users.notFound` | `NotFoundError` | `UsersRepository` (no rows), `SessionsRepository` (foreign key): the user does not exist |
-| `users.invalidUserUUID` | `ValidationError` | `UsersRepository`: the user UUID is malformed |
+| `users.invalidUserUUID` | `ValidationError` | `UsersRepository`, `UsersController` (via `pathUUID`): the user UUID is malformed |
 | `users.oauthProvider.invalidUUID` | `ValidationError` | `AuthRepository`: the user UUID of a provider link is malformed |
 | `users.invalidCursor` | `ValidationError` | `UsersRepository.List`: the pagination cursor is malformed |
 | `users.list.badRequest` | `ValidationError` | `UsersController.ListUsers`: invalid `limit`, `role` or `search` (invalid UTF-8 or NUL byte) query parameter |

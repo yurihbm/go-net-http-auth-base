@@ -14,7 +14,7 @@ Controllers handle HTTP requests and responses. Key patterns:
 - Middleware Integration: Controllers receive middleware instances and apply them using the `Use()` method on protected routes.
 - Request Handling:
   - Use `api.DecodeAndValidate[T](r)` to decode (strict JSON parsing, single-object body) and validate DTOs against their `validate` struct tags in one step.
-  - Extract path parameters using `r.PathValue("param")`.
+  - Extract path parameters using `r.PathValue("param")`. UUID path parameters go through `pathUUID(r, name, errorKey)` (`path_helpers.go`), which returns the canonical lowercase hyphenated form (so services can compare UUIDs with `==`) or a `400` `ValidationError` when malformed.
   - The list `limit` query parameter goes through `parseLimit` (`query_helpers.go`).
   - Middlewares and handlers that write an error response without `api.HandleError` call `api.RecordError(ctx, err)` first, so the log line and span carry the error.
   - Read the caller with `actorFromRequest(r)` and the session with `sessionFromRequest(r)` (`actor_helpers.go`).

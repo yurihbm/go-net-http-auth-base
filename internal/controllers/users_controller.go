@@ -317,7 +317,11 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
 // @Router			/users/{uuid} [get]
 func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
+	uuid, err := pathUUID(r, "uuid", "users.invalidUserUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 	user, err := c.userService.GetByUUID(r.Context(), actorFromRequest(r), uuid)
 	if err != nil {
 		api.HandleError(r.Context(), w, err)
@@ -345,7 +349,11 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 // @Failure		500		{object}	api.ResponseBody[any]			"Internal server error"
 // @Router			/users/{uuid} [put]
 func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
+	uuid, err := pathUUID(r, "uuid", "users.invalidUserUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 
 	dto, err := api.DecodeAndValidate[domain.UserUpdateDTO](r)
 	if err != nil {
@@ -399,7 +407,11 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 // @Failure		500		{object}	api.ResponseBody[any]	"Internal server error"
 // @Router			/users/{uuid} [delete]
 func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
-	uuid := r.PathValue("uuid")
+	uuid, err := pathUUID(r, "uuid", "users.invalidUserUUID")
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
 	if err := c.userService.Delete(r.Context(), actorFromRequest(r), uuid); err != nil {
 		reason := err.Error()
 		auditLog(r, c.auditService, domain.CreateAuditLogDTO{
@@ -422,7 +434,7 @@ func (c *UsersController) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		Status:       domain.AuditStatusSuccess,
 	})
 
-	if strings.EqualFold(uuid, actorFromRequest(r).UUID) {
+	if uuid == actorFromRequest(r).UUID {
 		api.DeleteAuthCookies(w, c.isSecureCookie)
 	}
 
