@@ -27,6 +27,10 @@ type testDTO struct {
 	Age   int    `json:"age"   validate:"omitempty,min=1"`
 }
 
+type flagKeyDTO struct {
+	Key string `json:"key" validate:"flagkey"`
+}
+
 func TestDecodeAndValidate(t *testing.T) {
 	t.Run("valid body returns decoded value", func(t *testing.T) {
 		body, _ := json.Marshal(testDTO{Name: "Alice", Email: "alice@example.com"})
@@ -172,6 +176,57 @@ func TestDecodeAndValidate(t *testing.T) {
 		assert.True(t, errors.As(err, &valErr))
 		assert.NotEmpty(t, valErr.Details()["name"])
 		assert.NotEmpty(t, valErr.Details()["email"])
+	})
+}
+
+func TestDecodeAndValidate_flagKey(t *testing.T) {
+	decode := func(t *testing.T, key string) error {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{"key": key})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[flagKeyDTO](req)
+		return err
+	}
+
+	for _, key := range []string{"beta", "new-dashboard", "2fa-login", "a", "v2-checkout-flow"} {
+		t.Run("success - "+key, func(t *testing.T) {
+			assert.NoError(t, decode(t, key))
+		})
+	}
+
+	for _, key := range []string{"New-Dashboard", "-leading", "has space", "under_score", "dot.ted", "ação", ""} {
+		t.Run("error - "+key, func(t *testing.T) {
+			err := decode(t, key)
+
+			var valErr *domain.ValidationError
+			require.True(t, errors.As(err, &valErr))
+			assert.Equal(t,
+				"must contain only lowercase letters, digits and hyphens, and start with a letter or digit",
+				valErr.Details()["key"],
+			)
+		})
+	}
+
+	t.Run("error - CreateFeatureFlagDTO rejects an invalid key", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]any{"key": "Not Valid"})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		_, err := api.DecodeAndValidate[domain.CreateFeatureFlagDTO](req)
+
+		var valErr *domain.ValidationError
+		require.True(t, errors.As(err, &valErr))
+		assert.NotEmpty(t, valErr.Details()["key"])
+	})
+
+	t.Run("success - CreateFeatureFlagDTO accepts a kebab-case key", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]any{"key": "new-dashboard"})
+		req := httptest.NewRequest("POST", "/", bytes.NewReader(body))
+
+		dto, err := api.DecodeAndValidate[domain.CreateFeatureFlagDTO](req)
+
+		require.NoError(t, err)
+		assert.Equal(t, "new-dashboard", dto.Key)
 	})
 }
 

@@ -17,7 +17,7 @@ type FeatureFlagDetails struct {
 }
 
 type CreateFeatureFlagDTO struct {
-	Key             string `json:"key"              validate:"required,min=2,max=64"`
+	Key             string `json:"key"              validate:"required,min=2,max=64,flagkey"`
 	Description     string `json:"description"      validate:"max=255"`
 	EnabledGlobally bool   `json:"enabled_globally"`
 }
