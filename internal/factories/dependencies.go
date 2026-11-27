@@ -15,11 +15,12 @@ import (
 type Dependencies struct {
 	Pool *pgxpool.Pool
 
-	UsersService       domain.UsersService
-	EmailChangeService domain.EmailChangeService
-	AuthService        domain.AuthService
-	AuditService       domain.AuditService
-	StepUpService      domain.StepUpService
+	UsersService        domain.UsersService
+	EmailChangeService  domain.EmailChangeService
+	AuthService         domain.AuthService
+	AuditService        domain.AuditService
+	StepUpService       domain.StepUpService
+	FeatureFlagsService domain.FeatureFlagsService
 
 	PendingSignupService domain.PendingSignupService
 	PasswordService      domain.PasswordService
@@ -135,6 +136,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 
 	auditRepository := repositories.NewAuditPostgresRepository(db)
 	auditService := services.NewAuditService(auditRepository)
+	featureFlagsService := services.NewFeatureFlagsService(repositories.NewFeatureFlagsPostgresRepository(db))
 
 	return &Dependencies{
 		Pool:                 pool,
@@ -143,6 +145,7 @@ func NewDependencies(pool *pgxpool.Pool, cfg *config.Config, opts ...Option) (*D
 		AuthService:          authService,
 		AuditService:         auditService,
 		StepUpService:        stepUpService,
+		FeatureFlagsService:  featureFlagsService,
 		PendingSignupService: pendingSignupService,
 		PasswordService:      passwordService,
 		EmailProvider:        emailProvider,

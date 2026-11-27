@@ -764,6 +764,435 @@ const docTemplate = `{
                 }
             }
         },
+        "/feature-flags": {
+            "get": {
+                "description": "Lists feature flags with cursor pagination, newest first. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feature-flags"
+                ],
+                "summary": "List feature flags",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Cursor from meta.next_cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Feature flag page",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_FeatureFlag"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error (featureFlags.list.badRequest, featureFlags.invalidCursor)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role. The key is lowercase letters, digits and hyphens, starting with a letter or digit.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feature-flags"
+                ],
+                "summary": "Create a feature flag",
+                "parameters": [
+                    {
+                        "description": "Feature flag data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.CreateFeatureFlagDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Feature flag created",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_FeatureFlag"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Key already in use (featureFlags.key.conflict)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/feature-flags/{uuid}": {
+            "get": {
+                "description": "Returns the flag and the UUIDs of the users in its allow-list. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feature-flags"
+                ],
+                "summary": "Get a feature flag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feature flag UUID",
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Feature flag",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_FeatureFlagDetails"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Also removes its allow-list. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feature-flags"
+                ],
+                "summary": "Delete a feature flag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feature flag UUID",
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Feature flag deleted"
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Partially updates the description and whether the flag is enabled for everyone. The key cannot change. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feature-flags"
+                ],
+                "summary": "Update a feature flag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feature flag UUID",
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_domain.UpdateFeatureFlagDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Feature flag updated",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_FeatureFlag"
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/feature-flags/{uuid}/users/{userUuid}": {
+            "put": {
+                "description": "Adds the user to the flag's allow-list. Adding a user twice is not an error. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feature-flags"
+                ],
+                "summary": "Enable a feature flag for a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feature flag UUID",
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "userUuid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "User added to the allow-list"
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Feature flag or user not found",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes the user from the flag's allow-list. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feature-flags"
+                ],
+                "summary": "Disable a feature flag for a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Feature flag UUID",
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "userUuid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "User removed from the allow-list"
+                    },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "404": {
+                        "description": "The user is not in the allow-list (featureFlags.users.notFound)",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "produces": [
@@ -1476,6 +1905,32 @@ const docTemplate = `{
                 }
             }
         },
+        "go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_FeatureFlag": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/go-net-http-auth-base_internal_domain.FeatureFlag"
+                    }
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseMeta"
+                }
+            }
+        },
         "go-net-http-auth-base_internal_api.ResponseBody-array_go-net-http-auth-base_internal_domain_User": {
             "type": "object",
             "properties": {
@@ -1484,6 +1939,52 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/go-net-http-auth-base_internal_domain.User"
                     }
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseMeta"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_FeatureFlag": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_domain.FeatureFlag"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseMeta"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_FeatureFlagDetails": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_domain.FeatureFlagDetails"
                 },
                 "details": {
                     "type": "object",
@@ -1648,6 +2149,26 @@ const docTemplate = `{
                 }
             }
         },
+        "go-net-http-auth-base_internal_domain.CreateFeatureFlagDTO": {
+            "type": "object",
+            "required": [
+                "key"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "enabled_globally": {
+                    "type": "boolean"
+                },
+                "key": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 2
+                }
+            }
+        },
         "go-net-http-auth-base_internal_domain.CreateUserDTO": {
             "type": "object",
             "required": [
@@ -1682,6 +2203,58 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_domain.FeatureFlag": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled_globally": {
+                    "type": "boolean"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "integer"
+                },
+                "uuid": {
+                    "type": "string"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_domain.FeatureFlagDetails": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled_globally": {
+                    "type": "boolean"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "integer"
+                },
+                "user_uuids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "uuid": {
                     "type": "string"
                 }
             }
@@ -1744,6 +2317,18 @@ const docTemplate = `{
             "properties": {
                 "token": {
                     "type": "string"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_domain.UpdateFeatureFlagDTO": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "enabled_globally": {
+                    "type": "boolean"
                 }
             }
         },

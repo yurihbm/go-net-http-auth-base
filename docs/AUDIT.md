@@ -97,11 +97,17 @@ The domain package defines type-safe constants for common values:
 - `AuditActionPasswordChange` (`PASSWORD_CHANGE`): Password changed by the signed-in user (`POST /users/me/password`); the actor and the resource are the user
 - `AuditActionStepUpRequest` (`STEP_UP_REQUEST`): Step-up code request (`POST /auth/step-up`)
 - `AuditActionStepUpVerify` (`STEP_UP_VERIFY`): Step-up code verification (`POST /auth/step-up/verify`)
+- `AuditActionFeatureFlagCreate` (`FEATURE_FLAG_CREATE`): Feature flag created (`POST /feature-flags`); the resource is the new flag (empty on failure) and `changes` holds the request body
+- `AuditActionFeatureFlagUpdate` (`FEATURE_FLAG_UPDATE`): Feature flag updated (`PATCH /feature-flags/{uuid}`); `changes` holds the request body
+- `AuditActionFeatureFlagDelete` (`FEATURE_FLAG_DELETE`): Feature flag deleted (`DELETE /feature-flags/{uuid}`)
+- `AuditActionFeatureFlagUserAdd` (`FEATURE_FLAG_USER_ADD`): User added to a flag's allow-list (`PUT /feature-flags/{uuid}/users/{userUuid}`); the resource is the flag and `changes.user_uuid` the user
+- `AuditActionFeatureFlagUserRemove` (`FEATURE_FLAG_USER_REMOVE`): User removed from a flag's allow-list (`DELETE /feature-flags/{uuid}/users/{userUuid}`); the resource is the flag and `changes.user_uuid` the user
 
 **Resources:**
 
 - `AuditResourceUser`: User-related actions
 - `AuditResourceAuth`: Authentication-related actions
+- `AuditResourceFeatureFlag` (`feature_flag`): Feature flag and allow-list actions
 
 ## Listing Audit Logs
 

@@ -16,6 +16,7 @@ func NewHandler(ctx context.Context, deps *Dependencies, cfg *config.Config, tel
 	AuthFactory(deps, cfg, credentialsLimiter).RegisterRoutes(mux)
 	HealthFactory(deps).RegisterRoutes(mux)
 	AuditFactory(deps).RegisterRoutes(mux)
+	FeatureFlagsFactory(deps).RegisterRoutes(mux)
 	DocsFactory(deps).RegisterRoutes(mux)
 
 	rateLimitMiddleware := RateLimitFactory(ctx, cfg.RateLimit)

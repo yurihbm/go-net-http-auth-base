@@ -155,6 +155,7 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `featureFlags.key.conflict` | `ConflictError` | `FeatureFlagsRepository.Create`: the key is already used by another flag |
 | `featureFlags.invalidFlagUUID` | `ValidationError` | `FeatureFlagsRepository`: the feature flag UUID is malformed |
 | `featureFlags.invalidCursor` | `ValidationError` | `FeatureFlagsRepository.List`: the pagination cursor is malformed |
+| `featureFlags.list.badRequest` | `ValidationError` | `FeatureFlagsController.ListFeatureFlags`: invalid `limit` query parameter |
 | `featureFlags.internalServerError` | `InternalServerError` | Unexpected `FeatureFlagsRepository` failures |
 | `request.invalid` | `ValidationError` | `api.DecodeAndValidate`: the body is not valid JSON of the expected shape |
 | `request.validationFailed` | `ValidationError` | `api.DecodeAndValidate`: a field failed validation (details per field) |
