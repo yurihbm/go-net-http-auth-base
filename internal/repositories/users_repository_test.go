@@ -598,7 +598,7 @@ func TestUsersPostgresRepository_List(t *testing.T) {
 		assert.Equal(t, domain.RoleAdmin, users[2].Role)
 	})
 
-	t.Run("filter by role", func(t *testing.T) {
+	t.Run("success - filter by role", func(t *testing.T) {
 		role := domain.RoleAdmin
 
 		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Role: &role})
@@ -609,7 +609,7 @@ func TestUsersPostgresRepository_List(t *testing.T) {
 		assert.Equal(t, alice.UUID, users[0].UUID)
 	})
 
-	t.Run("search matches email prefix case-insensitively", func(t *testing.T) {
+	t.Run("success - search matches email prefix case-insensitively", func(t *testing.T) {
 		search := "BOB@"
 
 		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Search: &search})
@@ -620,7 +620,7 @@ func TestUsersPostgresRepository_List(t *testing.T) {
 		assert.Equal(t, bob.UUID, users[0].UUID)
 	})
 
-	t.Run("search matches name prefix", func(t *testing.T) {
+	t.Run("success - search matches name prefix", func(t *testing.T) {
 		search := "alice"
 
 		users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Search: &search})
@@ -631,7 +631,7 @@ func TestUsersPostgresRepository_List(t *testing.T) {
 		assert.Equal(t, alice.UUID, users[0].UUID)
 	})
 
-	t.Run("search treats LIKE wildcards literally", func(t *testing.T) {
+	t.Run("success - search treats LIKE wildcards literally", func(t *testing.T) {
 		for search, want := range map[string]int{"%": 0, "_": 0, "carol_": 1, "Carol 100%": 1} {
 			users, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 10, Search: &search})
 
@@ -641,7 +641,7 @@ func TestUsersPostgresRepository_List(t *testing.T) {
 		}
 	})
 
-	t.Run("cursor pages through results", func(t *testing.T) {
+	t.Run("success - cursor pages through results", func(t *testing.T) {
 		first, total, err := repo.List(ctx, domain.ListUsersDTO{Limit: 2})
 		require.NoError(t, err)
 		assert.Equal(t, int64(3), total)

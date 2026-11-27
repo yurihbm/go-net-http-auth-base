@@ -55,7 +55,7 @@ func TestAuditController_ListAuditLogs(t *testing.T) {
 	}
 	nextCursor := "019623b0-0000-7000-8000-000000000001"
 
-	t.Run("success with defaults", func(t *testing.T) {
+	t.Run("success - defaults", func(t *testing.T) {
 		controller, auditMock, _, _ := newTestAuditController()
 
 		page := &domain.Page[domain.AuditLog]{
@@ -93,7 +93,7 @@ func TestAuditController_ListAuditLogs(t *testing.T) {
 		auditMock.AssertExpectations(t)
 	})
 
-	t.Run("success with all filters", func(t *testing.T) {
+	t.Run("success - all filters", func(t *testing.T) {
 		controller, auditMock, _, _ := newTestAuditController()
 
 		action := domain.AuditActionLogin

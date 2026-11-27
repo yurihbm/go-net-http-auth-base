@@ -982,7 +982,7 @@ func TestUsersController_ListUsers(t *testing.T) {
 	items := []domain.User{{UUID: "019623b0-0000-7000-8000-000000000001", Name: "Jane Doe", Email: "jane@example.com", Role: domain.RoleUser}}
 	nextCursor := "019623b0-0000-7000-8000-000000000001"
 
-	t.Run("success with defaults", func(t *testing.T) {
+	t.Run("success - defaults", func(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
 		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
 			return dto.Limit == 20 && dto.Search == nil && dto.Role == nil && dto.Cursor == nil
@@ -1003,7 +1003,7 @@ func TestUsersController_ListUsers(t *testing.T) {
 		serviceMock.AssertExpectations(t)
 	})
 
-	t.Run("success with all filters", func(t *testing.T) {
+	t.Run("success - all filters", func(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
 		serviceMock.On("List", mock.MatchedBy(func(dto domain.ListUsersDTO) bool {
 			return dto.Limit == 10 &&
