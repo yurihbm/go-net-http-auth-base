@@ -10,5 +10,6 @@ func FeatureFlagsFactory(deps *Dependencies) controllers.Controller {
 		deps.AuditService,
 		deps.AuthMiddleware,
 		deps.AdminRoleMiddleware,
+		deps.OptionalAuthMiddleware,
 	)
 }

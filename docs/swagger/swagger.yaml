@@ -65,6 +65,23 @@ definitions:
       meta:
         $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
     type: object
+  go-net-http-auth-base_internal_api.ResponseBody-array_string:
+    properties:
+      data:
+        items:
+          type: string
+        type: array
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseMeta'
+    type: object
   go-net-http-auth-base_internal_api.ResponseBody-go-net-http-auth-base_internal_domain_FeatureFlag:
     properties:
       data:
@@ -1193,6 +1210,31 @@ paths:
           schema:
             $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
       summary: Enable a feature flag for a user
+      tags:
+      - feature-flags
+  /feature-flags/enabled:
+    get:
+      description: 'Returns the keys of the flags enabled for the caller: the ones
+        enabled for everyone plus, when the `access_token` cookie is present, the
+        ones that include the user. Without the cookie it only returns the flags enabled
+        for everyone. A token that is present but invalid or expired is a 401, so
+        refresh the session and retry.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Enabled feature flag keys, sorted
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-array_string'
+        "401":
+          description: Invalid or expired access token
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any'
+      summary: List the enabled feature flags
       tags:
       - feature-flags
   /health:

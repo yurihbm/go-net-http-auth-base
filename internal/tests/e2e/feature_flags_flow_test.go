@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"go-net-http-auth-base/internal/api"
 	"go-net-http-auth-base/internal/domain"
 
 	"github.com/google/uuid"
@@ -126,5 +127,73 @@ func TestFeatureFlagsAdmin(t *testing.T) {
 		assert.Equal(t, 1, seen[outcome{domain.AuditActionFeatureFlagUserRemove, domain.AuditStatusFailure}])
 		assert.Equal(t, 1, seen[outcome{domain.AuditActionFeatureFlagUpdate, domain.AuditStatusSuccess}])
 		assert.Equal(t, 1, seen[outcome{domain.AuditActionFeatureFlagDelete, domain.AuditStatusSuccess}])
+	})
+}
+
+func TestFeatureFlagsEnabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e test in short mode")
+	}
+	truncateTables(t, context.Background(), testDB)
+
+	listed, other, admin := seedUser(t), seedUser(t), seedAdmin(t)
+	anonymous, listedClient, otherClient, adminClient := newClient(t), newClient(t), newClient(t), newClient(t)
+	require.Equal(t, http.StatusOK, listedClient.login(listed.Email, listed.Password).Status)
+	require.Equal(t, http.StatusOK, otherClient.login(other.Email, other.Password).Status)
+	require.Equal(t, http.StatusOK, adminClient.login(admin.Email, admin.Password).Status)
+
+	createFlag := func(key string, enabledGlobally bool) domain.FeatureFlag {
+		resp := adminClient.do(http.MethodPost, "/feature-flags", domain.CreateFeatureFlagDTO{Key: key, EnabledGlobally: enabledGlobally})
+		require.Equal(t, http.StatusCreated, resp.Status)
+		var flag domain.FeatureFlag
+		require.NoError(t, json.Unmarshal(resp.Body.Data, &flag))
+		return flag
+	}
+	enabledKeys := func(c *client) []string {
+		resp := c.do(http.MethodGet, "/feature-flags/enabled", nil)
+		require.Equal(t, http.StatusOK, resp.Status)
+		var keys []string
+		require.NoError(t, json.Unmarshal(resp.Body.Data, &keys))
+		return keys
+	}
+
+	createFlag("everyone", true)
+	beta := createFlag("beta", false)
+	hidden := createFlag("hidden", false)
+	require.Equal(t, http.StatusNoContent, adminClient.do(http.MethodPut, "/feature-flags/"+beta.UUID+"/users/"+listed.UUID, nil).Status)
+
+	t.Run("anonymous callers only get the flags enabled for everyone", func(t *testing.T) {
+		assert.Equal(t, []string{"everyone"}, enabledKeys(anonymous))
+	})
+
+	t.Run("a user in the allow-list also gets the flag, sorted by key", func(t *testing.T) {
+		assert.Equal(t, []string{"beta", "everyone"}, enabledKeys(listedClient))
+	})
+
+	t.Run("other users do not get an allow-listed flag", func(t *testing.T) {
+		assert.Equal(t, []string{"everyone"}, enabledKeys(otherClient))
+	})
+
+	t.Run("an invalid access token is unauthorized instead of anonymous", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, serverURL+"/feature-flags/enabled", nil)
+		require.NoError(t, err)
+		req.AddCookie(&http.Cookie{Name: api.AccessTokenCookieName, Value: "not-a-token"})
+
+		resp := send(t, http.DefaultClient, req)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.Status)
+		assert.Equal(t, "auth.unauthorized", resp.Body.Error)
+	})
+
+	t.Run("admin changes take effect on the next read", func(t *testing.T) {
+		require.Equal(t, http.StatusNoContent, adminClient.do(http.MethodDelete, "/feature-flags/"+beta.UUID+"/users/"+listed.UUID, nil).Status)
+		assert.Equal(t, []string{"everyone"}, enabledKeys(listedClient))
+
+		enabled := true
+		require.Equal(t, http.StatusOK, adminClient.do(http.MethodPatch, "/feature-flags/"+hidden.UUID, domain.UpdateFeatureFlagDTO{EnabledGlobally: &enabled}).Status)
+		assert.Equal(t, []string{"everyone", "hidden"}, enabledKeys(anonymous))
+
+		require.Equal(t, http.StatusNoContent, adminClient.do(http.MethodDelete, "/feature-flags/"+hidden.UUID, nil).Status)
+		assert.Equal(t, []string{"everyone"}, enabledKeys(anonymous))
 	})
 }

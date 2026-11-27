@@ -887,6 +887,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/feature-flags/enabled": {
+            "get": {
+                "description": "Returns the keys of the flags enabled for the caller: the ones enabled for everyone plus, when the ` + "`" + `access_token` + "`" + ` cookie is present, the ones that include the user. Without the cookie it only returns the flags enabled for everyone. A token that is present but invalid or expired is a 401, so refresh the session and retry.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feature-flags"
+                ],
+                "summary": "List the enabled feature flags",
+                "responses": {
+                    "200": {
+                        "description": "Enabled feature flag keys, sorted",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-array_string"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or expired access token",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
+                        }
+                    }
+                }
+            }
+        },
         "/feature-flags/{uuid}": {
             "get": {
                 "description": "Returns the flag and the UUIDs of the users in its allow-list. Requires the ` + "`" + `access_token` + "`" + ` cookie set by POST /auth/login and the admin role.",
@@ -1938,6 +1970,32 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/go-net-http-auth-base_internal_domain.User"
+                    }
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseMeta"
+                }
+            }
+        },
+        "go-net-http-auth-base_internal_api.ResponseBody-array_string": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
                     }
                 },
                 "details": {

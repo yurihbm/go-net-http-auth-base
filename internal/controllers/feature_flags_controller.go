@@ -11,10 +11,11 @@ import (
 const defaultFeatureFlagsLimit = 20
 
 type FeatureFlagsController struct {
-	featureFlagsService domain.FeatureFlagsService
-	auditService        domain.AuditService
-	authMiddleware      middlewares.HandlerMiddleware
-	adminRoleMiddleware middlewares.HandlerMiddleware
+	featureFlagsService    domain.FeatureFlagsService
+	auditService           domain.AuditService
+	authMiddleware         middlewares.HandlerMiddleware
+	adminRoleMiddleware    middlewares.HandlerMiddleware
+	optionalAuthMiddleware middlewares.HandlerMiddleware
 }
 
 var _ Controller = (*FeatureFlagsController)(nil)
@@ -24,16 +25,19 @@ func NewFeatureFlagsController(
 	auditService domain.AuditService,
 	authMiddleware middlewares.HandlerMiddleware,
 	adminRoleMiddleware middlewares.HandlerMiddleware,
+	optionalAuthMiddleware middlewares.HandlerMiddleware,
 ) *FeatureFlagsController {
 	return &FeatureFlagsController{
-		featureFlagsService: featureFlagsService,
-		auditService:        auditService,
-		authMiddleware:      authMiddleware,
-		adminRoleMiddleware: adminRoleMiddleware,
+		featureFlagsService:    featureFlagsService,
+		auditService:           auditService,
+		authMiddleware:         authMiddleware,
+		adminRoleMiddleware:    adminRoleMiddleware,
+		optionalAuthMiddleware: optionalAuthMiddleware,
 	}
 }
 
 func (c *FeatureFlagsController) RegisterRoutes(router *http.ServeMux) {
+	router.HandleFunc("GET /feature-flags/enabled", c.optionalAuthMiddleware.Use(c.ListEnabledFeatureFlags))
 	router.HandleFunc("POST /feature-flags", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.CreateFeatureFlag)))
 	router.HandleFunc("GET /feature-flags", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.ListFeatureFlags)))
 	router.HandleFunc("GET /feature-flags/{uuid}", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.GetFeatureFlag)))
@@ -41,6 +45,27 @@ func (c *FeatureFlagsController) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("DELETE /feature-flags/{uuid}", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.DeleteFeatureFlag)))
 	router.HandleFunc("PUT /feature-flags/{uuid}/users/{userUuid}", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.AddFeatureFlagUser)))
 	router.HandleFunc("DELETE /feature-flags/{uuid}/users/{userUuid}", c.authMiddleware.Use(c.adminRoleMiddleware.Use(c.RemoveFeatureFlagUser)))
+}
+
+// @Summary		List the enabled feature flags
+// @Description	Returns the keys of the flags enabled for the caller: the ones enabled for everyone plus, when the `access_token` cookie is present, the ones that include the user. Without the cookie it only returns the flags enabled for everyone. A token that is present but invalid or expired is a 401, so refresh the session and retry.
+// @Tags			feature-flags
+// @Produce		json
+// @Success		200	{object}	api.ResponseBody[[]string]	"Enabled feature flag keys, sorted"
+// @Failure		401	{object}	api.ResponseBody[any]		"Invalid or expired access token"
+// @Failure		500	{object}	api.ResponseBody[any]		"Internal server error"
+// @Router			/feature-flags/enabled [get]
+func (c *FeatureFlagsController) ListEnabledFeatureFlags(w http.ResponseWriter, r *http.Request) {
+	keys, err := c.featureFlagsService.ListEnabledKeys(r.Context(), actorFromRequest(r).UUID)
+	if err != nil {
+		api.HandleError(r.Context(), w, err)
+		return
+	}
+
+	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[[]string]{
+		Data:    keys,
+		Message: "featureFlags.enabled.success",
+	})
 }
 
 // @Summary		Create a feature flag

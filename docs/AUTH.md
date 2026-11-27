@@ -83,6 +83,10 @@ See ADR-007.
 
 Access tokens already issued stay valid until they expire (15 minutes), as with every session revocation.
 
+## Optional Authentication
+
+Decided in [ADR-017](adr/ADR-017-feature-flags.md). `OptionalAuthMiddleware` serves routes that answer both anonymous and signed-in callers (`GET /feature-flags/enabled`). A request without the `access_token` cookie continues as anonymous: `shared.RequestContextData` keeps an empty `UserUUID`. When the cookie is present it goes through `AuthMiddleware` unchanged, so an invalid or expired token is `401 auth.unauthorized` instead of anonymous, and the client refreshes the session and retries. Routes that need a session keep using `AuthMiddleware`.
+
 ## HTTP Edge
 
 Decided in [ADR-015](adr/ADR-015-http-edge-hardening.md). `SecurityHeadersMiddleware` sets `X-Content-Type-Options`, `Cache-Control: no-store`, `Referrer-Policy`, a deny-all CSP and, outside development, HSTS on every response, including 429 and panic 500s; only Swagger UI routes override the CSP. Besides the global per-IP limiter, `POST /auth/login`, `POST /users`, `POST /auth/signup/verify`, `POST /auth/signup/resend`, `POST /auth/password/forgot`, `POST /auth/password/reset`, `POST /users/revert-email-change`, `POST /auth/oauth/revert-link`, `POST /auth/step-up` and `POST /auth/step-up/verify` sit behind a stricter per-IP bucket (`RATE_LIMIT_CREDENTIALS_PER_MINUTE`, `RATE_LIMIT_CREDENTIALS_BURST`), applied before the auth and step-up middlewares and answering the same `429 rateLimit.exceeded`. Refresh, logout and the OAuth login and callback are not covered. Both limiters key IPv6 clients by /64. Every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`, and a `429` also carries `Retry-After` (whole seconds until a token is available); CORS exposes all four so browser clients can read them.
