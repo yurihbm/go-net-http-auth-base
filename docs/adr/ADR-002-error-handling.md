@@ -33,7 +33,9 @@ and map them to HTTP in exactly one place.
   `api.HandleError(ctx, w, err)`, which uses `errors.As` to pick the status, and
   anything unrecognized becomes a 500.
 - **Messages are dot-separated keys** (`users.email.conflict`) so
-  clients can translate them. A 500 never exposes its wrapped cause in the body.
+  clients can translate them. Keys start with the module name (`users.*`,
+  `auth.*`, `audit.*`); cross-cutting packages use their own prefix (`request.*`,
+  `rateLimit.*`). A 500 never exposes its wrapped cause in the body.
 - **Input validation** goes through `api.DecodeAndValidate[T]`: strict JSON
   (unknown fields rejected, exactly one object) plus `validate` struct tags, and
   any failure returns a `ValidationError` with field details.

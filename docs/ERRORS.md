@@ -135,23 +135,23 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `auth.unauthorized` | `UnauthorizedError` | `AuthMiddleware`: missing or invalid access token cookie (the cause is wrapped for the log line) |
 | `auth.forbidden` | `ForbiddenError` | `RoleMiddleware`: the role is not allowed |
 | `rateLimit.exceeded` | `TooManyRequestsError` | `RateLimitMiddleware` and the credentials limiter: the per-IP bucket is empty |
-| `user.getMe.unauthorized` | `UnauthorizedError` | `UsersController.GetMe`: no user in the request context |
+| `users.getMe.unauthorized` | `UnauthorizedError` | `UsersController.GetMe`: no user in the request context |
 | `users.forbidden` | `ForbiddenError` | `Actor.CanAccess` in `UsersService`: not self or admin |
 | `users.notFound` | `NotFoundError` | `UsersRepository` (no rows), `SessionsRepository` (foreign key): the user does not exist |
 | `users.invalidUserUUID` | `ValidationError` | `UsersRepository`, `UsersController` (via `pathUUID`): the user UUID is malformed |
 | `users.oauthProvider.invalidUUID` | `ValidationError` | `AuthRepository`: the user UUID of a provider link is malformed |
 | `users.invalidCursor` | `ValidationError` | `UsersRepository.List`: the pagination cursor is malformed |
 | `users.list.badRequest` | `ValidationError` | `UsersController.ListUsers`: invalid `limit`, `role` or `search` (invalid UTF-8 or NUL byte) query parameter |
-| `user.internalServerError` | `InternalServerError` | `UsersRepository.Delete`: unexpected failure |
+| `users.internalServerError` | `InternalServerError` | `UsersRepository.Delete` and `UsersRepository.List`: unexpected failure |
 | `sessions.invalidUUID` | `ValidationError` | `SessionsRepository`, `SessionChallengeRepository`: the session UUID is malformed |
 | `auth.signup.invalidUUID` | `ValidationError` | `PendingSignupRepository`: the pending sign-up UUID is malformed |
 | `auth.passwordReset.invalidUUID` | `ValidationError` | `PasswordResetRepository.Create`: the reset UUID is malformed |
-| `auditLogs.invalidActorUUID` | `ValidationError` | `AuditRepository`: the actor UUID filter is malformed |
-| `auditLogs.invalidCursor` | `ValidationError` | `AuditRepository`: the pagination cursor is malformed |
-| `auditLogs.internalServerError` | `InternalServerError` | Unexpected `AuditRepository` failures |
+| `audit.invalidActorUUID` | `ValidationError` | `AuditRepository`: the actor UUID filter is malformed |
+| `audit.invalidCursor` | `ValidationError` | `AuditRepository`: the pagination cursor is malformed |
+| `audit.internalServerError` | `InternalServerError` | Unexpected `AuditRepository` failures |
 | `audit.list.badRequest` | `ValidationError` | `AuditController.List`: invalid `limit`, date or cursor query parameter |
 | `request.invalid` | `ValidationError` | `api.DecodeAndValidate`: the body is not valid JSON of the expected shape |
-| `request.validation_failed` | `ValidationError` | `api.DecodeAndValidate`: a field failed validation (details per field) |
+| `request.validationFailed` | `ValidationError` | `api.DecodeAndValidate`: a field failed validation (details per field) |
 
 ## Implementation Details
 
@@ -233,7 +233,7 @@ The `HandleError` function inspects the error type using `errors.As()` and write
 ```json
 {
   "data": null,
-  "error": "request.validation_failed",
+  "error": "request.validationFailed",
   "details": {
     "field_name": "error description"
   }

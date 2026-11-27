@@ -207,7 +207,7 @@ func TestUsersController_CreateUser(t *testing.T) {
 			var response api.ResponseBody[any]
 			assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
 			assert.Equal(t, http.StatusAccepted, w.Code)
-			assert.Equal(t, "user.create.pending", response.Message)
+			assert.Equal(t, "users.create.pending", response.Message)
 			assert.Nil(t, response.Data)
 			cookie := findCookie(w.Result().Cookies(), mode.cookieName)
 			if assert.NotNil(t, cookie) {
@@ -341,7 +341,7 @@ func TestUsersController_GetMe(t *testing.T) {
 		controller, serviceMock, _, _ := newTestUsersController()
 		serviceMock.On("GetByUUID", domain.Actor{UUID: "test-uuid"}, "test-uuid").Return(nil,
 			domain.NewNotFoundError(
-				"user.notFound",
+				"users.notFound",
 			),
 		)
 
@@ -426,7 +426,7 @@ func TestUsersController_GetUserByUUID(t *testing.T) {
 
 		serviceMock.On("GetByUUID", actor, uuid).Return(
 			nil,
-			domain.NewNotFoundError("user.notFound"),
+			domain.NewNotFoundError("users.notFound"),
 		)
 
 		w, req := getActorControllerArgs("GET", "/users/", nil)
@@ -744,7 +744,7 @@ func TestUsersController_RequestEmailChange(t *testing.T) {
 		var response api.ResponseBody[any]
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.Equal(t, http.StatusAccepted, w.Code)
-		assert.Equal(t, "user.emailChange.requested", response.Message)
+		assert.Equal(t, "users.emailChange.requested", response.Message)
 		serviceMock.AssertExpectations(t)
 		auditMock.AssertExpectations(t)
 	})
@@ -800,7 +800,7 @@ func TestUsersController_ConfirmEmailChange(t *testing.T) {
 		var response api.ResponseBody[domain.User]
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "user.emailChange.success", response.Message)
+		assert.Equal(t, "users.emailChange.success", response.Message)
 		assert.Equal(t, *user, response.Data)
 		assertAuthCookiesCleared(t, w)
 		auditMock.AssertExpectations(t)
@@ -882,7 +882,7 @@ func TestUsersController_RevertEmailChange(t *testing.T) {
 		var response api.ResponseBody[any]
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "user.emailChange.reverted", response.Message)
+		assert.Equal(t, "users.emailChange.reverted", response.Message)
 		assertAuthCookiesCleared(t, w)
 		serviceMock.AssertCalled(t, "RevertEmailChange", dto.Token)
 		auditMock.AssertExpectations(t)

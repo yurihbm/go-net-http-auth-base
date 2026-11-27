@@ -22,7 +22,7 @@ Controllers handle HTTP requests and responses. Key patterns:
 - Response Handling:
   - Use `api.WriteJSONResponse()` helper for consistent JSON responses (format defined in `internal/api/response.go`).
   - Include appropriate HTTP status codes (201 for creation, 204 for deletion, etc.).
-  - Use message keys (e.g., `"user.create.success"`) for i18n support.
+  - Use message keys (e.g., `"users.create.success"`) for i18n support.
   - Return error details in the `Error` field of the response body.
 - Error Handling: Map service errors to appropriate HTTP status codes (400 for bad request, 404 for not found, 500 for internal errors).
 - Thin Handlers: Decode input, call one service method, then handle the HTTP concerns (cookies, redirect, audit log).

@@ -910,7 +910,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "202": {
-                        "description": "Code sent (user.create.pending)",
+                        "description": "Code sent (users.create.pending)",
                         "schema": {
                             "$ref": "#/definitions/go-net-http-auth-base_internal_api.ResponseBody-any"
                         }

@@ -25,7 +25,7 @@ func TestSignupAndLogin(t *testing.T) {
 
 	pending := c.do(http.MethodPost, "/users", dto)
 	require.Equal(t, http.StatusAccepted, pending.Status)
-	assert.Equal(t, "user.create.pending", pending.Body.Message)
+	assert.Equal(t, "users.create.pending", pending.Body.Message)
 	pendingCookie := c.cookie(api.OAuthFlowCookieName(api.PendingSignupCookieName, false))
 	require.NotNil(t, pendingCookie)
 	code := mailbox.otpCode(t, dto.Email)

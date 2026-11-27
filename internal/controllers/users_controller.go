@@ -73,7 +73,7 @@ func (c *UsersController) RegisterRoutes(router *http.ServeMux) {
 // @Accept			json
 // @Produce		json
 // @Param			body	body		domain.CreateUserDTO	true	"User data"
-// @Success		202		{object}	api.ResponseBody[any]	"Code sent (user.create.pending)"
+// @Success		202		{object}	api.ResponseBody[any]	"Code sent (users.create.pending)"
 // @Failure		400		{object}	api.ResponseBody[any]	"Validation error"
 // @Failure		409		{object}	api.ResponseBody[any]	"Email already in use (users.email.conflict)"
 // @Failure		429		{object}	api.ResponseBody[any]	"Too many emails to this address (auth.email.sendLimit)"
@@ -111,7 +111,7 @@ func (c *UsersController) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	api.SetPendingSignupCookie(w, pendingUUID, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
-		Message: "user.create.pending",
+		Message: "users.create.pending",
 	})
 }
 
@@ -151,7 +151,7 @@ func (c *UsersController) RequestEmailChange(w http.ResponseWriter, r *http.Requ
 	}
 
 	api.WriteJSONResponse(w, http.StatusAccepted, api.ResponseBody[any]{
-		Message: "user.emailChange.requested",
+		Message: "users.emailChange.requested",
 	})
 }
 
@@ -193,7 +193,7 @@ func (c *UsersController) ConfirmEmailChange(w http.ResponseWriter, r *http.Requ
 	api.DeleteAuthCookies(w, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
-		Message: "user.emailChange.success",
+		Message: "users.emailChange.success",
 	})
 }
 
@@ -268,7 +268,7 @@ func (c *UsersController) RevertEmailChange(w http.ResponseWriter, r *http.Reque
 
 	api.DeleteAuthCookies(w, c.isSecureCookie)
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[any]{
-		Message: "user.emailChange.reverted",
+		Message: "users.emailChange.reverted",
 	})
 }
 
@@ -286,7 +286,7 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 	if !ok || reqContextData.UserUUID == "" {
 		api.HandleError(r.Context(), w,
 			domain.NewUnauthorizedError(
-				"user.getMe.unauthorized",
+				"users.getMe.unauthorized",
 			),
 		)
 		return
@@ -300,7 +300,7 @@ func (c *UsersController) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
-		Message: "user.getMe.success",
+		Message: "users.getMe.success",
 	})
 }
 
@@ -330,7 +330,7 @@ func (c *UsersController) GetUserByUUID(w http.ResponseWriter, r *http.Request) 
 
 	api.WriteJSONResponse(w, http.StatusOK, api.ResponseBody[domain.User]{
 		Data:    *user,
-		Message: "user.get.success",
+		Message: "users.get.success",
 	})
 }
 
@@ -388,7 +388,7 @@ func (c *UsersController) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	api.WriteJSONResponse(w, http.StatusOK,
 		api.ResponseBody[domain.User]{
 			Data:    *updatedUser,
-			Message: "user.update.success",
+			Message: "users.update.success",
 		},
 	)
 }

@@ -222,7 +222,7 @@ func (r *UsersPostgresRepository) Delete(ctx context.Context, uuidStr string) er
 
 	err = r.q.DeleteUser(ctx, *uuid)
 	if err != nil {
-		return domain.NewInternalServerError("user.internalServerError", err)
+		return domain.NewInternalServerError("users.internalServerError", err)
 	}
 	return nil
 }

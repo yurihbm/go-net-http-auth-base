@@ -40,7 +40,7 @@ For new queries, follow the `go-migration-scaffolder` skill and `.claude/rules/r
 
 ## 5. Handler
 
-- One handler method on the controller: `api.DecodeAndValidate[T](r)`, one service call, `api.HandleError(r.Context(), w, err)` on error, `api.WriteJSONResponse` with a message key (`user.emailChange.requested`) on success. Read the caller with `actorFromRequest(r)` and `sessionFromRequest(r)`.
+- One handler method on the controller: `api.DecodeAndValidate[T](r)`, one service call, `api.HandleError(r.Context(), w, err)` on error, `api.WriteJSONResponse` with a message key (`users.emailChange.requested`) on success. Read the caller with `actorFromRequest(r)` and `sessionFromRequest(r)`.
 - Audited actions call `auditResult` (or `auditLog`) from `audit_helpers.go` with a new or existing `domain.AuditAction...` constant from `internal/domain/audit.go`.
 - Swag annotations above the handler, like `RequestEmailChange` in `users_controller.go`: `@Summary`, `@Description` (state the required cookies and step-up), `@Tags`, `@Accept`/`@Produce`, `@Param`, one `@Success` and one `@Failure` per status with its error keys, `@Router`.
 - Controller tests in `<resource>_controller_test.go` (`package controllers_test`) build requests with `getControllerArgs` and cover success, validation error and each service error.

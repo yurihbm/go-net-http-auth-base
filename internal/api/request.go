@@ -63,7 +63,7 @@ func DecodeAndValidate[T any](r *http.Request) (T, error) {
 		for _, fe := range validationErrs {
 			details[fe.Field()] = fieldErrMessage(fe)
 		}
-		return v, domain.NewValidationError("request.validation_failed", details)
+		return v, domain.NewValidationError("request.validationFailed", details)
 	}
 	return v, nil
 }
