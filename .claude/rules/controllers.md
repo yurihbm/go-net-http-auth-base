@@ -11,6 +11,7 @@ Controllers handle HTTP requests and responses. Key patterns:
 - Constructor Pattern: Each controller is initialized with a constructor function (e.g., `NewUsersController`) that accepts dependencies via dependency injection.
 - Interface Implementation: Controllers implement the `Controller` interface which requires a `RegisterRoutes(*http.ServeMux)` method.
 - Route Registration: Routes are registered using Go 1.22+ HTTP method-specific patterns (e.g., `POST /users`, `GET /users/{uuid}`).
+- Update Verb: a route that changes only the fields present in the body is `PATCH /<resources>/{uuid}` with an update DTO of pointer fields; `PUT` is reserved for replacing the whole resource.
 - Middleware Integration: Controllers receive middleware instances and apply them using the `Use()` method on protected routes.
 - Request Handling:
   - Use `api.DecodeAndValidate[T](r)` to decode (strict JSON parsing, single-object body) and validate DTOs against their `validate` struct tags in one step.

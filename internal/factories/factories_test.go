@@ -71,6 +71,12 @@ func TestAuditFactory(t *testing.T) {
 	assert.IsType(t, &controllers.AuditController{}, controller)
 }
 
+func TestFeatureFlagsFactory(t *testing.T) {
+	controller := factories.FeatureFlagsFactory(newTestDependencies(t))
+	assert.NotNil(t, controller)
+	assert.IsType(t, &controllers.FeatureFlagsController{}, controller)
+}
+
 func TestDocsFactory(t *testing.T) {
 	controller := factories.DocsFactory(newTestDependencies(t))
 	assert.NotNil(t, controller)

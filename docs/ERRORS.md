@@ -150,6 +150,13 @@ Defined in `internal/domain/errors.go`, these types represent **what** went wron
 | `audit.invalidCursor` | `ValidationError` | `AuditRepository`: the pagination cursor is malformed |
 | `audit.internalServerError` | `InternalServerError` | Unexpected `AuditRepository` failures |
 | `audit.list.badRequest` | `ValidationError` | `AuditController.List`: invalid `limit`, date or cursor query parameter |
+| `featureFlags.notFound` | `NotFoundError` | `FeatureFlagsRepository` (no rows, or the flag of an allow-list entry does not exist): the feature flag does not exist |
+| `featureFlags.users.notFound` | `NotFoundError` | `FeatureFlagsRepository.RemoveUser`: the user is not in the flag's allow-list |
+| `featureFlags.key.conflict` | `ConflictError` | `FeatureFlagsRepository.Create`: the key is already used by another flag |
+| `featureFlags.invalidFlagUUID` | `ValidationError` | `FeatureFlagsRepository`: the feature flag UUID is malformed |
+| `featureFlags.invalidCursor` | `ValidationError` | `FeatureFlagsRepository.List`: the pagination cursor is malformed |
+| `featureFlags.list.badRequest` | `ValidationError` | `FeatureFlagsController.ListFeatureFlags`: invalid `limit` query parameter |
+| `featureFlags.internalServerError` | `InternalServerError` | Unexpected `FeatureFlagsRepository` failures |
 | `request.invalid` | `ValidationError` | `api.DecodeAndValidate`: the body is not valid JSON of the expected shape |
 | `request.validationFailed` | `ValidationError` | `api.DecodeAndValidate`: a field failed validation (details per field) |
 

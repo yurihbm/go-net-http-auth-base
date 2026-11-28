@@ -1,3 +1,9 @@
+DROP TABLE IF EXISTS feature_flag_users;
+
+DROP TRIGGER IF EXISTS update_feature_flags_updated_at ON feature_flags;
+
+DROP TABLE IF EXISTS feature_flags;
+
 DROP TABLE IF EXISTS audit_logs;
 
 DROP TABLE IF EXISTS email_send_limits;

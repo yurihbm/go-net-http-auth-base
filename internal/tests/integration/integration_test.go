@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 
 func truncateTables(ctx context.Context, db *pgxpool.Pool) {
 	// Add all tables you want to clean up between tests
-	tables := []string{"audit_logs", "email_send_limits", "password_resets", "pending_signups", "session_challenges", "user_sessions", "user_oauth_providers", "users"}
+	tables := []string{"audit_logs", "email_send_limits", "password_resets", "pending_signups", "session_challenges", "user_sessions", "user_oauth_providers", "feature_flag_users", "feature_flags", "users"}
 	for _, table := range tables {
 		if _, err := db.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table)); err != nil {
 			log.Fatalf("Failed to truncate table %s: %v", table, err)

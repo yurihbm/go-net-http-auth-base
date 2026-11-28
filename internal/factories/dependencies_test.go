@@ -39,5 +39,7 @@ func TestNewDependencies(t *testing.T) {
 	assert.NotNil(t, deps.PendingSignupService)
 	assert.NotNil(t, deps.PasswordService)
 	assert.NotNil(t, deps.AuditService)
+	assert.NotNil(t, deps.FeatureFlagsService)
 	assert.NotNil(t, deps.AuthMiddleware)
+	assert.NotNil(t, deps.OptionalAuthMiddleware)
 }

@@ -59,7 +59,7 @@ Sensitive routes (`POST /users/me/email`, `POST /users/me/password`, `DELETE /us
 
 ## Email Change
 
-`PUT /users/{uuid}` never changes the email (`UserUpdateDTO` has only `name`). The flow lives in `EmailChangeService` (`services/email_change_service.go`), separate from `UsersService`; both share the `ensureEmailNotReserved` and `isEmailChangeLocked` helpers.
+`PATCH /users/{uuid}` never changes the email (`UserUpdateDTO` has only `name`). The flow lives in `EmailChangeService` (`services/email_change_service.go`), separate from `UsersService`; both share the `ensureEmailNotReserved` and `isEmailChangeLocked` helpers.
 
 **Request.** `EmailChangeService.RequestEmailChange` backs `POST /users/me/email` (self only, behind step-up; `409` if taken, reserved or `users.emailChange.locked`). In one `WithinTx` it upserts the session's `email_change` row in `session_challenges` (`SessionChallengeRepository.Upsert`: `new_email`, the user's `email_version`, `HMAC-SHA256(JWT_SECRET, "email-change:"+sid:code)`, 10m TTL, one row per session, a new request replaces it, `429 users.emailChange.cooldown` within 60s) and reserves a send for the new address (`EmailSendLimiter.ReserveSend`, `429 auth.email.sendLimit`), then mails the 6-digit code to the new address with `EmailVerificationService.SendEmailChangeCode` (a send failure deletes the challenge and is a `500 users.emailChange.sendFailed`).
 
@@ -82,6 +82,10 @@ See ADR-007.
 **Change.** `POST /users/me/password` (body `ChangePasswordDTO`: `new_password` `min=8,max=64,maxbytes=72`) is behind `authMiddleware.Use(stepUpMiddleware.Use(...))` and does not ask for the current password: the step-up proves the mailbox. After bcrypt (outside the transaction), one `WithinTx` runs `UpdatePassword` (no version check), `SessionsRepository.DeleteOthersByUser` (keeps the current session) and `PasswordResetRepository.DeleteByUser`, then the notice is sent (failure only logged). The answer is `204`.
 
 Access tokens already issued stay valid until they expire (15 minutes), as with every session revocation.
+
+## Optional Authentication
+
+Decided in [ADR-017](adr/ADR-017-feature-flags.md). `OptionalAuthMiddleware` serves routes that answer both anonymous and signed-in callers (`GET /feature-flags/enabled`). A request without the `access_token` cookie continues as anonymous: `shared.RequestContextData` keeps an empty `UserUUID`. When the cookie is present it goes through `AuthMiddleware` unchanged, so an invalid or expired token is `401 auth.unauthorized` instead of anonymous, and the client refreshes the session and retries. Routes that need a session keep using `AuthMiddleware`.
 
 ## HTTP Edge
 

@@ -28,7 +28,7 @@ func New{{Resources}}Controller(
 func (c *{{Resources}}Controller) RegisterRoutes(router *http.ServeMux) {
 	router.HandleFunc("POST /{{resources}}", c.authMiddleware.Use(c.Create))
 	router.HandleFunc("GET /{{resources}}/{uuid}", c.authMiddleware.Use(c.GetByUUID))
-	router.HandleFunc("PUT /{{resources}}/{uuid}", c.authMiddleware.Use(c.Update))
+	router.HandleFunc("PATCH /{{resources}}/{uuid}", c.authMiddleware.Use(c.Update))
 	router.HandleFunc("DELETE /{{resources}}/{uuid}", c.authMiddleware.Use(c.Delete))
 }
 
@@ -106,7 +106,7 @@ func (c *{{Resources}}Controller) GetByUUID(w http.ResponseWriter, r *http.Reque
 // @Failure		404		{object}	api.ResponseBody[any]				"Not found"
 // @Failure		409		{object}	api.ResponseBody[any]				"Conflict"
 // @Failure		500		{object}	api.ResponseBody[any]				"Internal server error"
-// @Router			/{{resources}}/{uuid} [put]
+// @Router			/{{resources}}/{uuid} [patch]
 func (c *{{Resources}}Controller) Update(w http.ResponseWriter, r *http.Request) {
 	uuid, err := pathUUID(r, "uuid", "{{resources}}.invalidUUID")
 	if err != nil {

@@ -22,6 +22,7 @@ Status, Context, Decision and Consequences.
 | [ADR-014](ADR-014-password-reset-and-change.md)             | Password Reset and Change                              | Accepted |
 | [ADR-015](ADR-015-http-edge-hardening.md)                   | HTTP Edge Hardening                                    | Accepted |
 | [ADR-016](ADR-016-injected-clock-in-services.md)            | Injected Clock in Services                             | Accepted |
+| [ADR-017](ADR-017-feature-flags.md)                         | Feature Flags                                          | Accepted |
 
 ## Writing a new ADR
 

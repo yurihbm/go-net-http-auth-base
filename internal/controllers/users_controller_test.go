@@ -90,6 +90,19 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 		adminRoleMiddleware.AssertNumberOfCalls(t, "Use", 1)
 	})
 
+	t.Run("success - updates a user with PATCH and no longer with PUT", func(t *testing.T) {
+		router := http.NewServeMux()
+		controller, _, _, authMiddleware := newTestUsersController()
+		authMiddleware.On("Use", mock.Anything).Return(mock.Anything)
+
+		controller.RegisterRoutes(router)
+
+		_, pattern := router.Handler(httptest.NewRequest("PATCH", "/users/some-uuid", nil))
+		assert.Equal(t, "PATCH /users/{uuid}", pattern)
+		_, pattern = router.Handler(httptest.NewRequest("PUT", "/users/some-uuid", nil))
+		assert.NotEqual(t, "PUT /users/{uuid}", pattern)
+	})
+
 	t.Run("should register routes with auth middleware", func(t *testing.T) {
 		router := http.NewServeMux()
 		controller, _, _, authMiddleware := newTestUsersController()
@@ -130,7 +143,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			{"POST", "/users/me/password", true},
 			{"GET", "/users", false},
 			{"GET", "/users/some-uuid", false},
-			{"PUT", "/users/some-uuid", false},
+			{"PATCH", "/users/some-uuid", false},
 			{"DELETE", "/users/some-uuid", true},
 		} {
 			w := httptest.NewRecorder()
@@ -152,7 +165,7 @@ func TestUsersController_RegisterRoutes(t *testing.T) {
 			"POST /users/revert-email-change": true,
 			"GET /users/me":                   false,
 			"POST /users/me/email/confirm":    false,
-			"PUT /users/some-uuid":            false,
+			"PATCH /users/some-uuid":          false,
 		} {
 			parts := strings.SplitN(route, " ", 2)
 			w := httptest.NewRecorder()
@@ -474,7 +487,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 				d.Status == domain.AuditStatusSuccess
 		})).Return(nil)
 
-		w, req := getActorControllerArgs("PUT", "/users/", dto)
+		w, req := getActorControllerArgs("PATCH", "/users/", dto)
 		req.SetPathValue("uuid", uuid)
 
 		controller.UpdateUser(w, req)
@@ -496,7 +509,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 			return d.ResourceUUID == uuid && d.Status == domain.AuditStatusSuccess
 		})).Return(nil)
 
-		w, req := getActorControllerArgs("PUT", "/users/", dto)
+		w, req := getActorControllerArgs("PATCH", "/users/", dto)
 		req.SetPathValue("uuid", strings.ToUpper(uuid))
 
 		controller.UpdateUser(w, req)
@@ -509,7 +522,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 	t.Run("error - invalid UUID", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		w, req := getActorControllerArgs("PUT", "/users/", dto)
+		w, req := getActorControllerArgs("PATCH", "/users/", dto)
 		req.SetPathValue("uuid", "not-a-uuid")
 
 		controller.UpdateUser(w, req)
@@ -525,7 +538,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 	t.Run("bad request", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		w, req := getActorControllerArgs("PUT", "/users/", struct {
+		w, req := getActorControllerArgs("PATCH", "/users/", struct {
 			Test string
 		}{Test: "test"})
 		req.SetPathValue("uuid", uuid)
@@ -540,7 +553,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 	t.Run("error - email is not updatable", func(t *testing.T) {
 		controller, serviceMock, auditMock, _ := newTestUsersController()
 
-		w, req := getActorControllerArgs("PUT", "/users/", map[string]string{"email": "new@example.com"})
+		w, req := getActorControllerArgs("PATCH", "/users/", map[string]string{"email": "new@example.com"})
 		req.SetPathValue("uuid", uuid)
 
 		controller.UpdateUser(w, req)
@@ -560,7 +573,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 				d.FailureReason != nil
 		})).Return(nil)
 
-		w, req := getActorControllerArgs("PUT", "/users/", dto)
+		w, req := getActorControllerArgs("PATCH", "/users/", dto)
 		req.SetPathValue("uuid", uuid)
 
 		controller.UpdateUser(w, req)
@@ -575,7 +588,7 @@ func TestUsersController_UpdateUser(t *testing.T) {
 		serviceMock.On("Update", actor, uuid, dto).Return(nil, domain.NewForbiddenError("users.forbidden"))
 		auditMock.On("Log", mock.Anything).Return(nil)
 
-		w, req := getActorControllerArgs("PUT", "/users/", dto)
+		w, req := getActorControllerArgs("PATCH", "/users/", dto)
 		req.SetPathValue("uuid", uuid)
 
 		controller.UpdateUser(w, req)
